@@ -1,0 +1,135 @@
+*{
+    margin: 0px;
+    padding: 0px;
+    box-sizing: border-box;
+}
+.sky{
+    height: 100vh;
+    width: auto;
+    background-image: url('SGN_10_14_2021_1634162030424.jpeg');
+    background-size: cover;
+    background-position: center;
+    position: fixed;
+    background-repeat: no-repeat;
+    opacity:0.9;
+    
+}
+nav{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 25px;
+    padding-right: 4%;
+    padding-left: 4%;
+}
+.sky2{
+    color: lime;
+    font-size: 25px;
+    letter-spacing: 1px;
+   
+    cursor: pointer;
+}
+span{
+    color: red;
+}
+nav ul li{
+    list-style-type: none;
+    display: inline-block;
+    padding: 10px 30px;
+    
+}
+nav ul li a{
+    text-decoration: none;
+    color: white;
+}
+nav ul li a:hover{
+    color:lime;
+    transition: .5s;
+    letter-spacing: 4px;
+    
+}
+.btn{
+    background-color: gold;
+    text-decoration: none;
+    color: white;
+    border: 2px solid transparent;
+    border-radius: 30px;
+    font-weight: bold;
+    padding: 10px 25px;
+    transition: transform .4s;
+}
+.btn:hover{
+    transform: scale(1,1);
+    transition: .5s;
+    letter-spacing: 1px;
+}
+
+.sky3{
+   
+    position: absolute;
+    top: 50%;
+    margin-left: 30px;
+   
+}
+h4{
+    color: skyblue;
+    letter-spacing: 1px;
+}
+h1{
+    color:lime;
+    font-size: 35px;
+}
+h3{
+    color: silver;
+}
+
+#mail{
+    width:40vh;
+ 
+    background-color: skyblue;
+    height: 40px;
+    margin-top: 30px;
+    margin-bottom: 30px;
+    border: solid lime;
+    border-radius: 6px;
+}
+#submit{
+    height: 25px;
+    margin-right:70px;
+    color: red; 
+    background-color: lime;
+     top: 6px;
+    right: 60px;
+    font-family: Georgia;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+ right: 60px;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
