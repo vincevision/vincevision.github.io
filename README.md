@@ -1,1 +1,0 @@
-# skyTech-max.github.io
