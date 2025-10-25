@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Prev-Candle Range — Institutional Direction (Deriv Live)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root { --bg:#0f1420; --panel:#161d2e; --muted:#7b8aa3; --text:#e7edf7; --green:#21c77a; --red:#ff5b5b; --yellow:#ffce54; --blue:#3aa3ff; }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{padding:14px 18px;border-bottom:1px solid #202a3f;background:#0f1420d0;backdrop-filter:blur(6px);position:sticky;top:0;z-index:9}
+    h1{margin:0;font-size:18px}
+    .wrap{display:grid;grid-template-columns:360px 1fr;gap:14px;padding:14px} @media(max-width:980px){.wrap{grid-template-columns:1fr}}
+    .panel{background:var(--panel);border:1px solid #202a3f;border-radius:12px;padding:14px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    label{display:block;font-size:12px;color:var(--muted);margin:8px 0 4px}
+    input,select,button{width:100%;padding:8px 10px;background:#0f1420;border:1px solid #26324b;color:var(--text);border-radius:8px;outline:none}
+    input[type="checkbox"]{width:auto;vertical-align:middle;margin-right:6px}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .btn{background:linear-gradient(135deg,#2b8cff,#1e6fe3);border:none;font-weight:600;cursor:pointer}
+    .ghost{background:transparent;border:1px solid #344464;cursor:pointer}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+    .card{background:#0f1420;border:1px dashed #2a3752;border-radius:12px;padding:12px}
+    .card h4{margin:0 0 6px;font-size:12px;color:#a8b6d3}
+    .value{font-size:18px;font-weight:700}
+    .value.buy{color:var(--green)} .value.sell{color:var(--red)} .value.flat{color:#b9c6e2}
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}
+    th,td{border-bottom:1px solid #203050;padding:6px 4px;text-align:left;color:#cfd9ef}
+    th{color:#93a7ca;font-weight:600}
+    .pill{display:inline-block;padding:2px 8px;border:1px solid #2a3752;border-radius:999px;font-size:11px;margin-right:6px}
+    .ok{color:#8af5bf;border-color:rgba(33,199,122,.4)} .bad{color:#ffb1b1;border-color:rgba(255,91,91,.35)}
+    #htfChart{height:440px} #ltfChart{height:200px;margin-top:8px}
+    .hint{font-size:12px;color:#9db2d8;line-height:1.35;margin-top:8px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Prev-Candle Range — Institutional Direction (Deriv Live)</h1>
+  </header>
+
+  <div class="wrap">
+    <div class="panel">
+      <h3>Connection</h3>
+      <label>Deriv App ID</label>
+      <input id="appId" value="1089" />
+      <label>Symbol</label>
+      <input id="symbol" value="frxEURUSD" placeholder="e.g., frxEURUSD, R_100, BOOM300" />
+
+      <div class="row">
+        <div>
+          <label>Range timeframe (HTF)</label>
+          <select id="htf">
+            <option>5m</option><option>15m</option><option>30m</option>
+            <option selected>1h</option><option>2h</option><option>4h</option><option>8h</option><option>1d</option>
+          </select>
+        </div>
+        <div>
+          <label>Trigger timeframe (LTF)</label>
+          <select id="ltf">
+            <option selected>1m</option><option>3m</option><option>5m</option><option>15m</option><option>30m</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div><label>HTF bars</label><input id="limit" type="number" min="200" max="1500" value="700" /></div>
+        <div><label>Auto-refresh (sec)</label><input id="refreshSec" type="number" min="0" value="0" /></div>
+      </div>
+
+      <h3>Institutional confluences</h3>
+      <label><input id="cfTrend" type="checkbox" checked /> HTF trend (EMA fast/slow + price vs fast)</label>
+      <div class="row">
+        <div><label>EMA fast</label><input id="emaFast" type="number" value="50" /></div>
+        <div><label>EMA slow</label><input id="emaSlow" type="number" value="200" /></div>
+      </div>
+      <label><input id="cfDisp" type="checkbox" checked /> LTF displacement BOS (body ≥ ATR×, close beyond)</label>
+      <div class="row">
+        <div><label>Disp ATR×</label><input id="dispAtrMult" type="number" step="0.1" value="0.5" /></div>
+        <div><label>RSI confirm (LTF)</label><input id="rsiLen" type="number" value="14" /></div>
+      </div>
+      <label><input id="cfSess" type="checkbox" checked /> Session filter (London 07–11 UTC, NY 12:30–20 UTC)</label>
+      <div class="row">
+        <div><label>SL buffer (ticks)</label><input id="slBuf" type="number" value="0" /></div>
+        <div><label>TP buffer (ticks)</label><input id="tpBuf" type="number" value="0" /></div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button id="run" class="btn">Run / Refresh</button>
+        <button id="csv" class="ghost">Download trades CSV</button>
+      </div>
+
+      <div class="hint">
+        Logic: Use previous HTF candle as range. If the next candle sweeps one side and closes back inside → reversal bias to the other side; or breaks and closes beyond with displacement → continuation bias. Entry on LTF BOS. TP = unswept range extreme. SL = sweep wick (with buffer). Confluences tighten signals; win rate varies by market/regime.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div id="htfChart"></div>
+      <div id="ltfChart"></div>
+
+      <div class="cards">
+        <div class="card">
+          <h4>Predicted direction</h4>
+          <div id="sigNow" class="value flat">—</div>
+          <div id="sigNote" style="font-size:12px;color:#9eb2d8;margin-top:6px;">Waiting…</div>
+        </div>
+        <div class="card">
+          <h4>Entry / TP / SL</h4>
+          <div id="ets" class="value">—</div>
+          <div id="etsNote" style="font-size:12px;color:#9eb2d8;margin-top:6px;"></div>
+        </div>
+        <div class="card">
+          <h4>Confluences</h4>
+          <div id="conf" class="value">—</div>
+          <div id="confNote" style="font-size:12px;color:#9eb2d8;margin-top:6px;"></div>
+        </div>
+      </div>
+
+      <h3 style="margin-top:12px;">Trades (recent)</h3>
+      <table id="tradesTable">
+        <thead><tr><th>Time</th><th>Side</th><th>Entry</th><th>TP</th><th>SL</th><th>Exit</th><th>Result</th><th>Bars</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // ===== Deriv helpers =====
+    const TF2GRAN = {'1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,'1h':3600,'2h':7200,'4h':14400,'8h':28800,'1d':86400};
+    const toGran = tf => TF2GRAN[tf] ?? 60;
+    const fmtNum = n => n==null||isNaN(n)?'—' : (Math.abs(n)>=1? Number(n).toFixed(4) : Number(n).toFixed(6));
+    const fmtTs = (sec) => new Intl.DateTimeFormat(navigator.language,{year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(new Date(sec*1000));
+
+    async function fetchDerivCandles(symbol, tf, count, appId){
+      return new Promise((resolve, reject)=>{
+        const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+        ws.onopen=()=>ws.send(JSON.stringify({ ticks_history:symbol, end:'latest', count, style:'candles', granularity: toGran(tf) }));
+        ws.onmessage=(e)=>{
+          const m=JSON.parse(e.data);
+          if(m.error){ reject(new Error(m.error.message)); ws.close(); return; }
+          if(m.msg_type==='candles'){
+            const bars=m.candles.map(c=>({ time:+c.epoch, open:+c.open, high:+c.high, low:+c.low, close:+c.close }));
+            ws.close(); resolve(bars);
+          }
+        };
+        ws.onerror=()=>{ reject(new Error('WebSocket error')); ws.close(); };
+        setTimeout(()=>{ try{ws.close()}catch{}; reject(new Error('Timeout')); },15000);
+      });
+    }
+
+    // ===== Indicators =====
+    const ema = (arr, len)=>{ const out=Array(arr.length).fill(null); if(arr.length===0) return out;
+      const k=2/(len+1); let seed=Math.min(len,arr.length), s=0;
+      for(let i=0;i<seed;i++) s+=arr[i]; out[seed-1]=s/seed;
+      for(let i=seed;i<arr.length;i++) out[i]=arr[i]*k + out[i-1]*(1-k);
+      return out;
+    };
+    const atr = (bars, len=14)=>{ const tr=bars.map((b,i)=> i===0 ? (b.high-b.low) : Math.max(b.high-b.low, Math.abs(b.high-bars[i-1].close), Math.abs(b.low-bars[i-1].close))); return ema(tr,len); };
+    function rsi(closes, len=14){
+      const out=Array(closes.length).fill(null); if(closes.length<=len) return out;
+      let gains=0, losses=0; for(let i=1;i<=len;i++){ const ch=closes[i]-closes[i-1]; if(ch>=0) gains+=ch; else losses-=ch; }
+      let ag=gains/len, al=losses/len; out[len]=al===0?100:100-(100/(1+(ag/al)));
+      for(let i=len+1;i<closes.length;i++){ const ch=closes[i]-closes[i-1]; const g=Math.max(ch,0), l=Math.max(-ch,0); ag=(ag*(len-1)+g)/len; al=(al*(len-1)+l)/len; out[i]=al===0?100:100-(100/(1+(ag/al))); }
+      return out;
+    }
+
+    // ===== Strategy =====
+    function detectSignalFromPrevRange(htfBars, emaFastLen, emaSlowLen){
+      // Returns latest signal if the last closed HTF candle swept prev range or broke out
+      if(htfBars.length<3) return null;
+      const i = htfBars.length-1;        // current (forming) — ignore for confirm
+      const k = htfBars.length-2;        // last closed (candidate manipulation/break)
+      const j = htfBars.length-3;        // previous (range)
+      const rangeHigh = htfBars[j].high, rangeLow=htfBars[j].low;
+      const m = htfBars[k];
+
+      const fast = ema(htfBars.map(b=>b.close), emaFastLen);
+      const slow = ema(htfBars.map(b=>b.close), emaSlowLen);
+
+      let side = null, reason='';
+
+      // Reversal: sweep one side and close back inside previous range
+      const sweptLow = (m.low<rangeLow) && (m.close>rangeLow);
+      const sweptHigh= (m.high>rangeHigh) && (m.close<rangeHigh);
+      if(sweptLow){ side='BUY'; reason='Sweep low ↔ close inside'; }
+      else if(sweptHigh){ side='SELL'; reason='Sweep high ↔ close inside'; }
+
+      // Continuation: break & close beyond with displacement body
+      const body = Math.abs(m.close - m.open);
+      const mAtr = atr(htfBars, 14)[k] ?? 0;
+      const dispOK = body > 0 && mAtr>0 && body >= 0.6*mAtr; // HTF displacement
+      if(!side && dispOK){
+        if(m.close>rangeHigh){ side='BUY'; reason='Break & close beyond high (disp)'; }
+        else if(m.close<rangeLow){ side='SELL'; reason='Break & close beyond low (disp)'; }
+      }
+      if(!side) return null;
+
+      // Trend alignment (optional): price vs fast, fast vs slow at bar k
+      const trendOK = (fast[k]!=null && slow[k]!=null) ? (side==='BUY' ? (fast[k]>slow[k] && m.close>fast[k]) : (fast[k]<slow[k] && m.close<fast[k])) : true;
+
+      return {
+        side, reason, kTime: htfBars[k].time,
+        rangeHigh, rangeLow, sweepHigh: m.high, sweepLow: m.low,
+        trendOK
+      };
+    }
+
+    function firstLtfBreak(signal, ltfBars, params){
+      // Find first LTF bar after HTF signal time that breaks manipulation extreme in signal direction
+      const after = signal.kTime;
+      const ltfAtr = atr(ltfBars, 14);
+      const ltfRsi = rsi(ltfBars.map(b=>b.close), params.rsiLen||14);
+
+      for(let i=0;i<ltfBars.length;i++){
+        const b=ltfBars[i]; if(b.time<after) continue;
+
+        // Session filter
+        if(params.cfSess){
+          const d=new Date(b.time*1000), h=d.getUTCHours(), m=d.getUTCMinutes(), minutes=h*60+m;
+          const inLon = minutes>=420 && minutes<=660; // 07:00–11:00
+          const inNy  = minutes>=750 && minutes<=1200;// 12:30–20:00
+          if(!(inLon||inNy)) continue;
+        }
+
+        const broke = signal.side==='BUY' ? (b.high > signal.sweepHigh) : (b.low < signal.sweepLow);
+        if(!broke) continue;
+
+        // Disp/close beyond on LTF
+        if(params.cfDisp){
+          const body = Math.abs(b.close-b.open);
+          const a = ltfAtr[i] ?? 0;
+          const dispOK = a>0 && body >= (params.dispAtrMult||0.5)*a;
+          const closeOK = signal.side==='BUY' ? (b.close>signal.sweepHigh) : (b.close<signal.sweepLow);
+          if(!(dispOK && closeOK)) continue;
+        }
+
+        // RSI agreement
+        if(params.rsiLen && (params.rsiLen>0)){
+          const r = ltfRsi[i];
+          const rOK = signal.side==='BUY' ? (r!=null && r>50) : (r!=null && r<50);
+          if(!rOK) continue;
+        }
+
+        // Entry/SL/TP
+        const e = (params.entryType==='Close') ? b.close : (signal.side==='BUY'? signal.sweepHigh : signal.sweepLow);
+        const sl = signal.side==='BUY' ? (signal.sweepLow - params.slBuf) : (signal.sweepHigh + params.slBuf);
+        const tp = signal.side==='BUY' ? (signal.rangeHigh + params.tpBuf) : (signal.rangeLow - params.tpBuf);
+
+        return { entry:e, sl, tp, time:b.time, i };
+      }
+      return null;
+    }
+
+    function evaluateTrade(ltfBars, entryIdx, side, entry, tp, sl){
+      // Evaluate from entryIdx onward
+      for(let i=entryIdx;i<ltfBars.length;i++){
+        const b=ltfBars[i];
+        // Gap check
+        if(side==='BUY'){
+          if(b.open>=tp) return { exit:tp, exitTime:b.time, result:'WIN', bars:i-entryIdx };
+          if(b.open<=sl) return { exit:sl, exitTime:b.time, result:'LOSS',bars:i-entryIdx };
+          const hitTP = b.high>=tp, hitSL = b.low<=sl;
+          if(hitTP && hitSL){ // tie-break by proximity to open
+            const tpDist=Math.abs(tp-b.open), slDist=Math.abs(b.open-sl);
+            return tpDist<=slDist ? { exit:tp, exitTime:b.time, result:'WIN', bars:i-entryIdx } : { exit:sl, exitTime:b.time, result:'LOSS',bars:i-entryIdx };
+          }
+          if(hitTP) return { exit:tp, exitTime:b.time, result:'WIN', bars:i-entryIdx };
+          if(hitSL) return { exit:sl, exitTime:b.time, result:'LOSS',bars:i-entryIdx };
+        } else {
+          if(b.open<=tp) return { exit:tp, exitTime:b.time, result:'WIN', bars:i-entryIdx };
+          if(b.open>=sl) return { exit:sl, exitTime:b.time, result:'LOSS',bars:i-entryIdx };
+          const hitTP = b.low<=tp, hitSL = b.high>=sl;
+          if(hitTP && hitSL){
+            const tpDist=Math.abs(b.open-tp), slDist=Math.abs(sl-b.open);
+            return tpDist<=slDist ? { exit:tp, exitTime:b.time, result:'WIN', bars:i-entryIdx } : { exit:sl, exitTime:b.time, result:'LOSS',bars:i-entryIdx };
+          }
+          if(hitTP) return { exit:tp, exitTime:b.time, result:'WIN', bars:i-entryIdx };
+          if(hitSL) return { exit:sl, exitTime:b.time, result:'LOSS',bars:i-entryIdx };
+        }
+      }
+      return { exit:null, exitTime:null, result:'OPEN', bars:null };
+    }
+
+    // ===== Charts =====
+    let htfChart, ltfChart, htfSeries, ltfSeries, rangeHighLine, rangeLowLine, pp1Line, pp2Line;
+    function makeCharts(){
+      if(htfChart) return;
+      htfChart = LightweightCharts.createChart(document.getElementById('htfChart'), {
+        layout:{background:{type:'solid',color:'#111729'}, textColor:'#D8E4FF'},
+        grid:{vertLines:{color:'#223250'},horzLines:{color:'#223250'}},
+        rightPriceScale:{borderVisible:false}, timeScale:{borderVisible:false,timeVisible:true}
+      });
+      htfSeries = htfChart.addCandlestickSeries({upColor:'#21c77a',downColor:'#ff5b5b',wickUpColor:'#21c77a',wickDownColor:'#ff5b5b',borderVisible:false});
+      rangeHighLine = htfChart.addLineSeries({ color:'#ffd66b', lineWidth:2, priceLineVisible:false });
+      rangeLowLine  = htfChart.addLineSeries({ color:'#ffd66b', lineWidth:2, priceLineVisible:false });
+
+      ltfChart = LightweightCharts.createChart(document.getElementById('ltfChart'), {
+        layout:{background:{type:'solid',color:'#0f1420'}, textColor:'#cfe2ff'},
+        grid:{vertLines:{color:'#1f2a42'},horzLines:{color:'#1f2a42'}},
+        rightPriceScale:{borderVisible:false}, timeScale:{borderVisible:false,timeVisible:true}
+      });
+      ltfSeries = ltfChart.addCandlestickSeries({upColor:'#21c77a',downColor:'#ff5b5b',wickUpColor:'#21c77a',wickDownColor:'#ff5b5b',borderVisible:false});
+      pp1Line = ltfChart.addLineSeries({ color:'#8af5bf', lineWidth:1, lineStyle:2, priceLineVisible:false });
+      pp2Line = ltfChart.addLineSeries({ color:'#ffd66b', lineWidth:1, lineStyle:2, priceLineVisible:false });
+    }
+
+    function drawRangeLines(htfBars, rangeHigh, rangeLow){
+      const times=htfBars.map(b=>b.time);
+      rangeHighLine.setData(times.map(t=>({time:t,value:rangeHigh})));
+      rangeLowLine.setData(times.map(t=>({time:t,value:rangeLow})));
+    }
+    function drawPartialLines(ltfBars, entry, sl, tp, side){
+      // 0.5R and 1R
+      const risk = side==='BUY' ? (entry - sl) : (sl - entry);
+      if(!(risk>0)){ pp1Line.setData([]); pp2Line.setData([]); return; }
+      const pp1 = side==='BUY' ? Math.min(entry + 0.5*risk, tp) : Math.max(entry - 0.5*risk, tp);
+      const pp2 = side==='BUY' ? Math.min(entry + 1.0*risk, tp) : Math.max(entry - 1.0*risk, tp);
+      const times=ltfBars.map(b=>b.time);
+      pp1Line.setData(times.map(t=>({time:t,value:pp1})));
+      pp2Line.setData(times.map(t=>({time:t,value:pp2})));
+    }
+
+    // ===== UI =====
+    function setSignalUI(sig, entry, rr, conf){
+      const sigEl=document.getElementById('sigNow'), noteEl=document.getElementById('sigNote');
+      const ets=document.getElementById('ets'), etsNote=document.getElementById('etsNote');
+      const confEl=document.getElementById('conf'), confNote=document.getElementById('confNote');
+
+      if(!sig){ sigEl.className='value flat'; sigEl.textContent='—'; noteEl.textContent='Waiting…'; ets.textContent='—'; etsNote.textContent=''; confEl.textContent='—'; confNote.textContent=''; return; }
+
+      sigEl.className='value ' + (sig.side==='BUY'?'buy':'sell');
+      sigEl.textContent = sig.side;
+      noteEl.textContent = `${sig.reason}`;
+
+      if(entry){
+        ets.textContent = `Entry ${fmtNum(entry.entry)} • TP ${fmtNum(entry.tp)} • SL ${fmtNum(entry.sl)}`;
+        etsNote.textContent = `RR ${rr!=null? rr.toFixed(2):'—'} • ${new Date(entry.time*1000).toISOString().slice(11,19)} UTC`;
+      } else {
+        ets.textContent = 'Awaiting LTF break confirmation…';
+        etsNote.textContent = '';
+      }
+
+      if(conf){
+        confEl.textContent = `${conf.score}/4`;
+        const pills = [
+          {ok:conf.trend, label:'Trend'},
+          {ok:conf.disp, label:'Disp'},
+          {ok:conf.rsi, label:'RSI'},
+          {ok:conf.sess, label:'Session'}
+        ].map(x=>`<span class="pill ${x.ok?'ok':'bad'}">${x.label}</span>`).join(' ');
+        confNote.innerHTML = pills;
+      } else { confEl.textContent='—'; confNote.textContent=''; }
+    }
+
+    function updateTradesTable(trades){
+      const tbody=document.querySelector('#tradesTable tbody'); tbody.innerHTML='';
+      trades.slice(-30).reverse().forEach(t=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML = `<td>${fmtTs(t.entryTime)}</td>
+                        <td style="color:${t.side==='BUY'?'#21c77a':'#ff6b6b'}">${t.side}</td>
+                        <td>${fmtNum(t.entry)}</td>
+                        <td>${fmtNum(t.tp)}</td>
+                        <td>${fmtNum(t.sl)}</td>
+                        <td>${t.exitTime? fmtTs(t.exitTime)+' @ '+fmtNum(t.exit) : '—'}</td>
+                        <td>${t.result}</td>
+                        <td>${t.bars ?? '—'}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ===== Run =====
+    let pollTimer=null;
+
+    async function run(){
+      makeCharts();
+      const appId=document.getElementById('appId').value.trim()||'1089';
+      const symbol=document.getElementById('symbol').value.trim()||'frxEURUSD';
+      const htf=document.getElementById('htf').value, ltf=document.getElementById('ltf').value;
+      const limit=+document.getElementById('limit').value||700;
+
+      // Params
+      const params = {
+        emaFast:+document.getElementById('emaFast').value||50,
+        emaSlow:+document.getElementById('emaSlow').value||200,
+        cfDisp: document.getElementById('cfDisp').checked,
+        dispAtrMult:+document.getElementById('dispAtrMult').value||0.5,
+        rsiLen:+document.getElementById('rsiLen').value||14,
+        cfSess: document.getElementById('cfSess').checked,
+        cfTrend: document.getElementById('cfTrend').checked,
+        entryType: document.getElementById('entryType')? document.getElementById('entryType').value : 'Break',
+        slBuf: (+document.getElementById('slBuf').value||0)* (1), // ticks ~ 1
+        tpBuf: (+document.getElementById('tpBuf').value||0)* (1)
+      };
+
+      const [htfBars, ltfBars] = await Promise.all([
+        fetchDerivCandles(symbol, htf, limit, appId),
+        fetchDerivCandles(symbol, ltf, Math.min(2000, limit*60), appId)
+      ]);
+
+      // Paint HTF/LTF
+      htfSeries.setData(htfBars);
+      ltfSeries.setData(ltfBars);
+
+      // Detect latest signal
+      let sig = detectSignalFromPrevRange(htfBars, params.emaFast, params.emaSlow);
+      if(!sig){ setSignalUI(null,null,null,null); rangeHighLine.setData([]); rangeLowLine.setData([]); pp1Line.setData([]); pp2Line.setData([]); updateTradesTable([]); return; }
+
+      // Draw range
+      drawRangeLines(htfBars, sig.rangeHigh, sig.rangeLow);
+
+      // LTF entry
+      const entry = firstLtfBreak(sig, ltfBars, params);
+
+      // RR
+      let rr=null;
+      if(entry){
+        const risk = sig.side==='BUY' ? (entry.entry - entry.sl) : (entry.sl - entry.entry);
+        const reward = sig.side==='BUY' ? (entry.tp - entry.entry) : (entry.entry - entry.tp);
+        rr = (risk>0 && reward>0) ? (reward/risk) : null;
+        drawPartialLines(ltfBars, entry.entry, entry.sl, entry.tp, sig.side);
+      } else { pp1Line.setData([]); pp2Line.setData([]); }
+
+      // Confluences
+      const conf = {
+        trend: !!sig.trendOK,
+        disp: !!entry, // if entry found with disp rules
+        rsi: !!entry,  // entry includes RSI check
+        sess: params.cfSess ? !!entry : true
+      };
+      conf.score = (conf.trend?1:0)+(conf.disp?1:0)+(conf.rsi?1:0)+(conf.sess?1:0);
+
+      setSignalUI(sig, entry, rr, conf);
+
+      // Backtest recent signals (simple)
+      const trades=[];
+      // Iterate signals across history
+      for(let idx=2; idx<htfBars.length-1; idx++){
+        const prevIdx=idx-1, prev2Idx=idx-2;
+        const rangeH=htfBars[prev2Idx].high, rangeL=htfBars[prev2Idx].low;
+        const m=htfBars[prevIdx];
+        let side=null;
+        if(m.low<rangeL && m.close>rangeL) side='BUY';
+        else if(m.high>rangeH && m.close<rangeH) side='SELL';
+        else {
+          const body=Math.abs(m.close-m.open), mAtr=atr(htfBars,14)[prevIdx]??0;
+          if(mAtr>0 && body>=0.6*mAtr){
+            if(m.close>rangeH) side='BUY'; else if(m.close<rangeL) side='SELL';
+          }
+        }
+        if(!side) continue;
+
+        // LTF entry after m.time
+        let eObj=null; for(let i2=0;i2<ltfBars.length;i2++){ if(ltfBars[i2].time<m.time) continue;
+          const b=ltfBars[i2];
+          const broke= side==='BUY'? (b.high>m.high) : (b.low<m.low);
+          if(!broke) continue;
+          // Disp body + close
+          const lAtr=atr(ltfBars,14)[i2]??0; const body=Math.abs(b.close-b.open);
+          if(!(lAtr>0 && body>=(params.dispAtrMult||0.5)*lAtr)) continue;
+          if(side==='BUY' && !(b.close>m.high)) continue; if(side==='SELL' && !(b.close<m.low)) continue;
+
+          const e=(params.entryType==='Close')?b.close:(side==='BUY'?m.high:m.low);
+          const sl= side==='BUY' ? (m.low-params.slBuf) : (m.high+params.slBuf);
+          const tp= side==='BUY' ? (rangeH+params.tpBuf) : (rangeL-params.tpBuf);
+          eObj={entry:e, sl, tp, entryTime:b.time, i2}; break;
+        }
+        if(!eObj) continue;
+        const res = evaluateTrade(ltfBars, eObj.i2, side, eObj.entry, eObj.tp, eObj.sl);
+        trades.push({ side, entry:eObj.entry, tp:eObj.tp, sl:eObj.sl, entryTime:eObj.entryTime, exit:res.exit, exitTime:res.exitTime, result:res.result, bars:res.bars });
+      }
+
+      updateTradesTable(trades);
+    }
+
+    function restartTimer(){
+      clearInterval(pollTimer);
+      const sec=+document.getElementById('refreshSec').value||0;
+      if(sec>0) pollTimer=setInterval(()=>run().catch(console.error), sec*1000);
+    }
+
+    document.getElementById('run').addEventListener('click', ()=>run().catch(console.error));
+    document.getElementById('csv').addEventListener('click', ()=>{
+      const rows=[...document.querySelectorAll('#tradesTable tbody tr')].map(tr=>[...tr.children].map(td=>td.textContent));
+      const header=['Time','Side','Entry','TP','SL','Exit','Result','Bars'];
+      const csv=[header,...rows.reverse()].map(r=>r.join(',')).join('\n');
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='prev_range_trades.csv'; a.click(); URL.revokeObjectURL(url);
+    });
+    document.getElementById('refreshSec').addEventListener('change', restartTimer);
+    ['appId','symbol','htf','ltf','limit','emaFast','emaSlow','dispAtrMult','rsiLen','cfSess','cfDisp','cfTrend','slBuf','tpBuf']
+      .forEach(id=>document.getElementById(id).addEventListener('change', ()=>run().catch(console.error)));
+
+    (async()=>{ await run(); restartTimer(); })().catch(console.error);
+  </script>
+</body>
+</html>
