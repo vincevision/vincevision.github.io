@@ -559,6 +559,7 @@
       candleSeries.setData(htfBars);
       upperSeries.setData(times.map((t,i)=>({time:t,value:htfInd.bb.upper[i]??null})));
       midSeries.setData(times.map((t,i)=>({time:t,value:htfInd.bb.mid[i]??null})));
+      lowerSeries=lowerSeries; // kept to avoid tree-shaking issues
       lowerSeries.setData(times.map((t,i)=>({time:t,value:htfInd.bb.lower[i]??null})));
       ma3Series.setData(times.map((t,i)=>({time:t,value:htfInd.ma3[i]??null})));
       kSeries.setData(times.map((t,i)=>({time:t,value:htfInd.k[i]??null})));
@@ -807,20 +808,19 @@
     (async()=>{ makeCharts(); validateInputs(); requestNotificationPermission(); await runOnce(); connectWs(); restartTimer(); })().catch(console.error);
   </script>
 
-  <!-- Discord: immediate send on confirm + every 10s while tab is visible. Anti-burst on load. -->
+  <!-- Discord: send only signals in selected date window (Backtest range) or todayOnly -->
   <script>
   (function () {
     const cfg = {
       webhook: 'https://discord.com/api/webhooks/1431662464080285736/wiqGZaLuY8gFZ88uH77K6Gj9dEYRiKaHe8X0oBTVZZjoWz5nazb7oteUsv62nPiY55At',
-      tickSec: 1800,               // cadence
+      tickSec: 10,               // cadence
       includeLive: false,        // confirmed only
-      repeatDuplicates: true,    // resend the latest confirmed every tick
-      requireVisible: true,      // send only when tab is visible (set false to send in background)
-      disableRecencyFilter: true,// send even if the signal is older (prevents "no send on load")
+      repeatDuplicates: false,   // don't resend same signal every tick
+      requireVisible: true,      // send only when tab is visible
       sendImmediately: true,     // send right when a signal confirms
-      blockBurstOnBoot: true,    // consolidate initial historical burst into one send
-      bootQuietMs: 1200,         // quiet window to collect latest on first load
-      mention: '@everyone'                // e.g., '@everyone' or '<@&ROLE_ID>'
+      blockBurstOnBoot: true,    // consolidate initial historical burst
+      bootQuietMs: 1200,
+      mention: ''                // e.g., '@everyone' or '<@&ROLE_ID>'
     };
 
     let timer = null;
@@ -833,6 +833,7 @@
     window._vv_lastConfirmed = window._vv_lastConfirmed || null;
     window._vv_lastLive = window._vv_lastLive || null;
 
+    // Helpers
     function fixed(n) { if (n == null || isNaN(n)) return '—'; return Math.abs(n) >= 1 ? Number(n).toFixed(4) : Number(n).toFixed(6); }
     function fmtTime(sec) {
       try {
@@ -846,18 +847,45 @@
         : ((document.getElementById('symbol')?.value || '').trim() || '—');
     }
     function getTf() { return document.getElementById('sigTf')?.value || ''; }
-    function recentEnough(ts) {
-      if (cfg.disableRecencyFilter) return true;
-      let granSec = 3600;
-      try { if (typeof toGran === 'function') granSec = toGran(getTf()) || 3600; } catch {}
-      const windowSec = Math.max(60, Math.min(3*3600, Math.floor(granSec * 1.2)));
-      const nowSec = Math.floor(Date.now()/1000);
-      return ts >= (nowSec - windowSec);
+
+    // Date window filter:
+    // - If Backtest Start/End set => use that range (inclusive, local time)
+    // - Else if "todayOnly" checked => use today (local)
+    // - Else => no filter
+    function parseDateToSec(val, endOfDay = false) {
+      if (!val) return null;
+      const [y,m,d] = val.split('-').map(Number);
+      const dt = endOfDay ? new Date(y, m-1, d, 23,59,59,999) : new Date(y, m-1, d, 0,0,0,0);
+      return Math.floor(dt.getTime()/1000);
     }
+    function getDateWindow() {
+      const sEl = document.getElementById('backtestStart');
+      const eEl = document.getElementById('backtestEnd');
+      const todayOnly = document.getElementById('todayOnly')?.checked;
+      const sVal = sEl?.value || '';
+      const eVal = eEl?.value || '';
+      if (sVal || eVal) {
+        const from = parseDateToSec(sVal, false) ?? parseDateToSec(eVal, false);
+        const to   = parseDateToSec(eVal, true)   ?? parseDateToSec(sVal, true);
+        return { from, to };
+      }
+      if (todayOnly) {
+        const from = (typeof startOfTodaySec === 'function') ? startOfTodaySec() : Math.floor(new Date(new Date().toDateString()).getTime()/1000);
+        return { from, to: null };
+      }
+      return null; // no filter
+    }
+    function isInWindow(ts) {
+      const win = getDateWindow();
+      if (!win) return true;
+      if (win.from && ts < win.from) return false;
+      if (win.to && ts > win.to) return false;
+      return true;
+    }
+
     function keyOf(prefix, sig) {
       return `${prefix}|${getSymbol()}|${getTf()}|${sig.time}|${sig.side}|${sig.price}|${sig.tp}|${sig.sl}`;
     }
-
     function makeEmbed(sig, confirmed) {
       const color = sig.side === 'BUY' ? 3066993 : 15158332;
       return {
@@ -893,6 +921,7 @@
 
     async function sendDiscord(sig, confirmed) {
       if (!cfg.webhook) return;
+      if (!isInWindow(sig.time)) return; // enforce date filter
       const embed = makeEmbed(sig, confirmed);
       const content = makeTradeJson(sig, confirmed);
       const payload = { content: cfg.mention ? cfg.mention + '\n' + content : content, username: 'VinceVision', embeds: [embed] };
@@ -907,17 +936,16 @@
 
     async function tick() {
       if (cfg.requireVisible && document.hidden) return;
-
       const confirmed = window._vv_lastConfirmed;
-      if (confirmed && recentEnough(confirmed.time)) {
+      if (confirmed && isInWindow(confirmed.time)) {
         const key = keyOf('C', confirmed);
         if (cfg.repeatDuplicates || key !== lastSentKey) {
           lastSentKey = key;
           await sendDiscord(confirmed, true);
         }
-        return; // prefer confirmed
+        return;
       }
-      if (cfg.includeLive && window._vv_lastLive && recentEnough(window._vv_lastLive.time)) {
+      if (cfg.includeLive && window._vv_lastLive && isInWindow(window._vv_lastLive.time)) {
         const live = window._vv_lastLive;
         const keyL = keyOf('L', live);
         if (cfg.repeatDuplicates || keyL !== lastLiveSentKey) {
@@ -934,14 +962,16 @@
     const origNotify = window.notifySignal;
     window.notifySignal = function(signal) {
       try { if (typeof origNotify === 'function') origNotify.apply(this, arguments); } catch (e) { console.warn(e); }
-      window._vv_lastConfirmed = signal;
 
       const sinceBoot = Date.now() - bootTs;
+
+      // During boot burst, only remember signals in the selected window
       if (cfg.blockBurstOnBoot && sinceBoot < cfg.bootQuietMs) {
+        if (isInWindow(signal.time)) window._vv_lastConfirmed = signal;
         if (!bootSendTimer) {
           bootSendTimer = setTimeout(() => {
             const s = window._vv_lastConfirmed;
-            if (s && recentEnough(s.time)) {
+            if (s && isInWindow(s.time)) {
               lastSentKey = keyOf('C', s);
               sendDiscord(s, true);
             }
@@ -951,8 +981,10 @@
         return;
       }
 
-      if (cfg.sendImmediately && recentEnough(signal.time)) {
-        lastSentKey = keyOf('C', signal); // prevent double on next tick
+      // Normal path
+      window._vv_lastConfirmed = signal;
+      if (cfg.sendImmediately && isInWindow(signal.time)) {
+        lastSentKey = keyOf('C', signal);
         sendDiscord(signal, true);
       }
     };
@@ -965,14 +997,20 @@
       };
     }
 
+    // If the date window changes, allow sending again
+    ['todayOnly','backtestStart','backtestEnd'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => { lastSentKey = null; lastLiveSentKey = null; });
+    });
+
     window.addEventListener('beforeunload', stopTimer);
 
-    // Manual test from console
+    // Manual test: sends only if "now" is inside the current window
     window.testSendSignal = () => {
       const now = Math.floor(Date.now()/1000);
       const sample = { side:'BUY', price:1.2345, tp:1.2360, sl:1.2300, time: now };
       window._vv_lastConfirmed = sample;
-      if (cfg.sendImmediately) {
+      if (cfg.sendImmediately && isInWindow(sample.time)) {
         lastSentKey = keyOf('C', sample);
         sendDiscord(sample, true);
       }
