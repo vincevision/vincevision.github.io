@@ -1,0 +1,54 @@
+name: VinceVision Signal Bot
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"  # every 5 minutes
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install deps
+        run: npm install
+
+      - name: Run bot
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DERIV_APP_ID: ${{ secrets.DERIV_APP_ID }}
+          SYMBOLS: ${{ secrets.SYMBOLS }}
+          TFS: ${{ secrets.TFS }}
+          # Optional strategy overrides
+          BB_LEN: ${{ secrets.BB_LEN }}
+          BB_MULT: ${{ secrets.BB_MULT }}
+          MA3_LEN: ${{ secrets.MA3_LEN }}
+          RSI_LEN: ${{ secrets.RSI_LEN }}
+          STOCH_LEN: ${{ secrets.STOCH_LEN }}
+          K_LEN: ${{ secrets.K_LEN }}
+          D_LEN: ${{ secrets.D_LEN }}
+          OB: ${{ secrets.OB }}
+          OS: ${{ secrets.OS }}
+          TAP_LOOKBACK: ${{ secrets.TAP_LOOKBACK }}
+          REQUIRE_CROSS: ${{ secrets.REQUIRE_CROSS }}
+          LTF_TF: ${{ secrets.LTF_TF }}
+          LTF_MID_BREAK: ${{ secrets.LTF_MID_BREAK }}
+          LTF_RANGE_ON: ${{ secrets.LTF_RANGE_ON }}
+          LTF_LOOKBACK: ${{ secrets.LTF_LOOKBACK }}
+          USE_ATR: ${{ secrets.USE_ATR }}
+          ATR_LEN: ${{ secrets.ATR_LEN }}
+          ATR_MULT: ${{ secrets.ATR_MULT }}
+          USE_MACD: ${{ secrets.USE_MACD }}
+          LIMIT: ${{ secrets.LIMIT }}
+          # De-dup state (required)
+          GH_GIST_TOKEN: ${{ secrets.GH_GIST_TOKEN }}
+          GIST_ID: ${{ secrets.GIST_ID }}
+          GIST_FILENAME: vincevision-state.json
+        run: npm start
