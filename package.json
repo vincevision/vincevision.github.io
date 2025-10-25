@@ -1,0 +1,12 @@
+{
+  "name": "vincevision-signal-bot",
+  "version": "1.0.0",
+  "private": true,
+  "main": "signal-bot.js",
+  "scripts": {
+    "start": "node signal-bot.js"
+  },
+  "dependencies": {
+    "ws": "^8.17.0"
+  }
+}
