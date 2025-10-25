@@ -807,65 +807,65 @@
     (async()=>{ makeCharts(); validateInputs(); requestNotificationPermission(); await runOnce(); connectWs(); restartTimer(); })().catch(console.error);
   </script>
 
-  <!-- Discord: confirmed signals only, includes TP/SL and machine-readable order JSON -->
+  <!-- Discord: immediate send on confirm + every 10s while tab is visible. Anti-burst on load. -->
   <script>
   (function () {
     const cfg = {
       webhook: 'https://discord.com/api/webhooks/1431662464080285736/wiqGZaLuY8gFZ88uH77K6Gj9dEYRiKaHe8X0oBTVZZjoWz5nazb7oteUsv62nPiY55At',
-      includeLive: false,   // confirmed only
-      sendPast: 'auto',     // ignore historical spam; send only recent signals based on TF
-      mention: ''           // e.g., '@everyone' or '<@&ROLE_ID>' if desired
+      tickSec: 1800,               // cadence
+      includeLive: false,        // confirmed only
+      repeatDuplicates: true,    // resend the latest confirmed every tick
+      requireVisible: true,      // send only when tab is visible (set false to send in background)
+      disableRecencyFilter: true,// send even if the signal is older (prevents "no send on load")
+      sendImmediately: true,     // send right when a signal confirms
+      blockBurstOnBoot: true,    // consolidate initial historical burst into one send
+      bootQuietMs: 1200,         // quiet window to collect latest on first load
+      mention: '@everyone'                // e.g., '@everyone' or '<@&ROLE_ID>'
     };
 
-    const sent = new Set();
+    let timer = null;
+    let lastSentKey = null;
+    let lastLiveSentKey = null;
+    const bootTs = Date.now();
+    let bootSendTimer = null;
 
-    function fixed(n) {
-      if (n == null || isNaN(n)) return '—';
-      return Math.abs(n) >= 1 ? Number(n).toFixed(4) : Number(n).toFixed(6);
-    }
+    // Latest signals captured via wrappers
+    window._vv_lastConfirmed = window._vv_lastConfirmed || null;
+    window._vv_lastLive = window._vv_lastLive || null;
+
+    function fixed(n) { if (n == null || isNaN(n)) return '—'; return Math.abs(n) >= 1 ? Number(n).toFixed(4) : Number(n).toFixed(6); }
     function fmtTime(sec) {
       try {
-        return new Intl.DateTimeFormat(navigator.language, {
-          year:'numeric', month:'short', day:'2-digit',
-          hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
-        }).format(new Date(sec*1000));
-      } catch {
-        const d=new Date(sec*1000); return d.toISOString().replace('T',' ').slice(0,19);
-      }
+        return new Intl.DateTimeFormat(navigator.language, {year:'numeric',month:'short',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false})
+          .format(new Date(sec*1000));
+      } catch { const d=new Date(sec*1000); return d.toISOString().replace('T',' ').slice(0,19); }
     }
     function getSymbol() {
       return (typeof resolvedSymbol !== 'undefined' && resolvedSymbol && resolvedSymbol !== '—')
         ? resolvedSymbol
         : ((document.getElementById('symbol')?.value || '').trim() || '—');
     }
-    function getTf() {
-      return document.getElementById('sigTf')?.value || '';
+    function getTf() { return document.getElementById('sigTf')?.value || ''; }
+    function recentEnough(ts) {
+      if (cfg.disableRecencyFilter) return true;
+      let granSec = 3600;
+      try { if (typeof toGran === 'function') granSec = toGran(getTf()) || 3600; } catch {}
+      const windowSec = Math.max(60, Math.min(3*3600, Math.floor(granSec * 1.2)));
+      const nowSec = Math.floor(Date.now()/1000);
+      return ts >= (nowSec - windowSec);
     }
-    function recentEnough(sigTimeSec) {
-      if (cfg.sendPast === 'auto') {
-        const tf = getTf();
-        let granSec = 3600;
-        try { if (typeof toGran === 'function') granSec = toGran(tf) || 3600; } catch {}
-        const windowSec = Math.max(60, Math.min(3*3600, Math.floor(granSec * 1.2))); // ~1.2x TF
-        const nowSec = Math.floor(Date.now()/1000);
-        return sigTimeSec >= (nowSec - windowSec);
-      } else if (typeof cfg.sendPast === 'number') {
-        const nowSec = Math.floor(Date.now()/1000);
-        return sigTimeSec >= (nowSec - cfg.sendPast * 60);
-      }
-      return true;
+    function keyOf(prefix, sig) {
+      return `${prefix}|${getSymbol()}|${getTf()}|${sig.time}|${sig.side}|${sig.price}|${sig.tp}|${sig.sl}`;
     }
 
-    function makeEmbed(sig) {
-      const symbol = getSymbol();
-      const tf = getTf();
-      const color = sig.side === 'BUY' ? 3066993 /* green */ : 15158332 /* red */;
+    function makeEmbed(sig, confirmed) {
+      const color = sig.side === 'BUY' ? 3066993 : 15158332;
       return {
-        title: 'VinceVision Signal — CONFIRMED',
+        title: `VinceVision Signal — ${confirmed ? 'CONFIRMED' : 'LIVE'}`,
         color,
         fields: [
-          { name: 'Market', value: symbol, inline: true },
-          { name: 'TF', value: tf || '—', inline: true },
+          { name: 'Market', value: getSymbol(), inline: true },
+          { name: 'TF', value: getTf() || '—', inline: true },
           { name: 'Side', value: sig.side || '—', inline: true },
           { name: 'Entry', value: fixed(sig.price), inline: true },
           { name: 'TP', value: fixed(sig.tp), inline: true },
@@ -875,11 +875,10 @@
         timestamp: new Date(sig.time * 1000).toISOString()
       };
     }
-
-    function makeTradeJson(sig) {
+    function makeTradeJson(sig, confirmed) {
       const payload = {
         type: 'signal',
-        status: 'confirmed',
+        status: confirmed ? 'confirmed' : 'live',
         order_type: 'market',
         symbol: getSymbol(),
         tf: getTf(),
@@ -892,52 +891,94 @@
       return '```json\n' + JSON.stringify(payload) + '\n```';
     }
 
-    async function sendDiscord(signal) {
-      if (!cfg.webhook) { console.warn('Discord webhook not set'); return; }
-      const embed = makeEmbed(signal);
-      const content = makeTradeJson(signal);
-      const payload = {
-        content: cfg.mention ? cfg.mention + '\n' + content : content,
-        username: 'VinceVision',
-        embeds: [embed]
-      };
+    async function sendDiscord(sig, confirmed) {
+      if (!cfg.webhook) return;
+      const embed = makeEmbed(sig, confirmed);
+      const content = makeTradeJson(sig, confirmed);
+      const payload = { content: cfg.mention ? cfg.mention + '\n' + content : content, username: 'VinceVision', embeds: [embed] };
       try {
-        const res = await fetch(cfg.webhook, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+        const res = await fetch(cfg.webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
         if (!res.ok) {
           const t = await res.text().catch(()=> '');
           console.warn('Discord webhook error', res.status, t);
         }
-      } catch (e) {
-        console.warn('Discord dispatch failed', e);
+      } catch (e) { console.warn('Discord dispatch failed', e); }
+    }
+
+    async function tick() {
+      if (cfg.requireVisible && document.hidden) return;
+
+      const confirmed = window._vv_lastConfirmed;
+      if (confirmed && recentEnough(confirmed.time)) {
+        const key = keyOf('C', confirmed);
+        if (cfg.repeatDuplicates || key !== lastSentKey) {
+          lastSentKey = key;
+          await sendDiscord(confirmed, true);
+        }
+        return; // prefer confirmed
+      }
+      if (cfg.includeLive && window._vv_lastLive && recentEnough(window._vv_lastLive.time)) {
+        const live = window._vv_lastLive;
+        const keyL = keyOf('L', live);
+        if (cfg.repeatDuplicates || keyL !== lastLiveSentKey) {
+          lastLiveSentKey = keyL;
+          await sendDiscord(live, false);
+        }
       }
     }
 
-    async function handleConfirmed(signal) {
-      if (!signal || !signal.time) return;
-      const key = `${signal.time}|${signal.side}|${signal.price}`;
-      if (sent.has(key)) return;
-      if (!recentEnough(signal.time)) return;
-      sent.add(key); setTimeout(()=>sent.delete(key), 7*24*60*60*1000);
-      await sendDiscord(signal);
+    function startTimer() { stopTimer(); timer = setInterval(tick, Math.max(1, cfg.tickSec) * 1000); }
+    function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
+
+    // Wrap to capture latest confirmed; manage boot burst and immediate send
+    const origNotify = window.notifySignal;
+    window.notifySignal = function(signal) {
+      try { if (typeof origNotify === 'function') origNotify.apply(this, arguments); } catch (e) { console.warn(e); }
+      window._vv_lastConfirmed = signal;
+
+      const sinceBoot = Date.now() - bootTs;
+      if (cfg.blockBurstOnBoot && sinceBoot < cfg.bootQuietMs) {
+        if (!bootSendTimer) {
+          bootSendTimer = setTimeout(() => {
+            const s = window._vv_lastConfirmed;
+            if (s && recentEnough(s.time)) {
+              lastSentKey = keyOf('C', s);
+              sendDiscord(s, true);
+            }
+            bootSendTimer = null;
+          }, cfg.bootQuietMs + 50);
+        }
+        return;
+      }
+
+      if (cfg.sendImmediately && recentEnough(signal.time)) {
+        lastSentKey = keyOf('C', signal); // prevent double on next tick
+        sendDiscord(signal, true);
+      }
+    };
+
+    const origShowLive = window.showLive;
+    if (typeof origShowLive === 'function') {
+      window.showLive = function(live) {
+        try { origShowLive.apply(this, arguments); } catch (e) { console.warn(e); }
+        window._vv_lastLive = live;
+      };
     }
+
+    window.addEventListener('beforeunload', stopTimer);
 
     // Manual test from console
     window.testSendSignal = () => {
       const now = Math.floor(Date.now()/1000);
       const sample = { side:'BUY', price:1.2345, tp:1.2360, sl:1.2300, time: now };
-      sendDiscord(sample);
+      window._vv_lastConfirmed = sample;
+      if (cfg.sendImmediately) {
+        lastSentKey = keyOf('C', sample);
+        sendDiscord(sample, true);
+      }
     };
 
-    // Wrap existing notifySignal (confirmed only)
-    const origNotify = window.notifySignal;
-    window.notifySignal = function(signal) {
-      try { if (typeof origNotify === 'function') origNotify.apply(this, arguments); } catch (e) { console.warn(e); }
-      handleConfirmed(signal).catch(console.warn);
-    };
+    startTimer();
   })();
   </script>
 </body>
