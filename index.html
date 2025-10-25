@@ -428,7 +428,7 @@
         tappedLower = tappedLower || (bb.lower[idx]!=null && htfBars[idx].low <=bb.lower[idx]);
       }
       const closeBelow3=htfBars[i].close<ma3[i], closeAbove3=htfBars[i].close>ma3[i];
-      const crossDown=k[i-1]>d[i-1] && k[i]<d[i], crossUp=k[i-1]<d[i-1] && k[i]>d[i];
+      const crossDown=k[i-1]>d[i-1] && k[i]<d[i], crossUp=k[i-1]<d[i-1] && k[i]>d[i-1];
       const fromOB=(k[i-1]>=p.ob || d[i-1]>=p.ob), fromOS=(k[i-1]<=p.os || d[i-1]<=p.os);
       const crossOKSell=p.requireCross?(crossDown&&fromOB):fromOB;
       const crossOKBuy =p.requireCross?(crossUp  &&fromOS):fromOS;
@@ -805,6 +805,140 @@
 
     // Init
     (async()=>{ makeCharts(); validateInputs(); requestNotificationPermission(); await runOnce(); connectWs(); restartTimer(); })().catch(console.error);
+  </script>
+
+  <!-- Discord: confirmed signals only, includes TP/SL and machine-readable order JSON -->
+  <script>
+  (function () {
+    const cfg = {
+      webhook: 'https://discord.com/api/webhooks/1431662464080285736/wiqGZaLuY8gFZ88uH77K6Gj9dEYRiKaHe8X0oBTVZZjoWz5nazb7oteUsv62nPiY55At',
+      includeLive: false,   // confirmed only
+      sendPast: 'auto',     // ignore historical spam; send only recent signals based on TF
+      mention: ''           // e.g., '@everyone' or '<@&ROLE_ID>' if desired
+    };
+
+    const sent = new Set();
+
+    function fixed(n) {
+      if (n == null || isNaN(n)) return '—';
+      return Math.abs(n) >= 1 ? Number(n).toFixed(4) : Number(n).toFixed(6);
+    }
+    function fmtTime(sec) {
+      try {
+        return new Intl.DateTimeFormat(navigator.language, {
+          year:'numeric', month:'short', day:'2-digit',
+          hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false
+        }).format(new Date(sec*1000));
+      } catch {
+        const d=new Date(sec*1000); return d.toISOString().replace('T',' ').slice(0,19);
+      }
+    }
+    function getSymbol() {
+      return (typeof resolvedSymbol !== 'undefined' && resolvedSymbol && resolvedSymbol !== '—')
+        ? resolvedSymbol
+        : ((document.getElementById('symbol')?.value || '').trim() || '—');
+    }
+    function getTf() {
+      return document.getElementById('sigTf')?.value || '';
+    }
+    function recentEnough(sigTimeSec) {
+      if (cfg.sendPast === 'auto') {
+        const tf = getTf();
+        let granSec = 3600;
+        try { if (typeof toGran === 'function') granSec = toGran(tf) || 3600; } catch {}
+        const windowSec = Math.max(60, Math.min(3*3600, Math.floor(granSec * 1.2))); // ~1.2x TF
+        const nowSec = Math.floor(Date.now()/1000);
+        return sigTimeSec >= (nowSec - windowSec);
+      } else if (typeof cfg.sendPast === 'number') {
+        const nowSec = Math.floor(Date.now()/1000);
+        return sigTimeSec >= (nowSec - cfg.sendPast * 60);
+      }
+      return true;
+    }
+
+    function makeEmbed(sig) {
+      const symbol = getSymbol();
+      const tf = getTf();
+      const color = sig.side === 'BUY' ? 3066993 /* green */ : 15158332 /* red */;
+      return {
+        title: 'VinceVision Signal — CONFIRMED',
+        color,
+        fields: [
+          { name: 'Market', value: symbol, inline: true },
+          { name: 'TF', value: tf || '—', inline: true },
+          { name: 'Side', value: sig.side || '—', inline: true },
+          { name: 'Entry', value: fixed(sig.price), inline: true },
+          { name: 'TP', value: fixed(sig.tp), inline: true },
+          { name: 'SL', value: fixed(sig.sl), inline: true }
+        ],
+        footer: { text: `Time: ${fmtTime(sig.time)}` },
+        timestamp: new Date(sig.time * 1000).toISOString()
+      };
+    }
+
+    function makeTradeJson(sig) {
+      const payload = {
+        type: 'signal',
+        status: 'confirmed',
+        order_type: 'market',
+        symbol: getSymbol(),
+        tf: getTf(),
+        side: sig.side,
+        entry: Number(sig.price),
+        tp: (sig.tp == null ? null : Number(sig.tp)),
+        sl: (sig.sl == null ? null : Number(sig.sl)),
+        timestamp: Number(sig.time)
+      };
+      return '```json\n' + JSON.stringify(payload) + '\n```';
+    }
+
+    async function sendDiscord(signal) {
+      if (!cfg.webhook) { console.warn('Discord webhook not set'); return; }
+      const embed = makeEmbed(signal);
+      const content = makeTradeJson(signal);
+      const payload = {
+        content: cfg.mention ? cfg.mention + '\n' + content : content,
+        username: 'VinceVision',
+        embeds: [embed]
+      };
+      try {
+        const res = await fetch(cfg.webhook, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const t = await res.text().catch(()=> '');
+          console.warn('Discord webhook error', res.status, t);
+        }
+      } catch (e) {
+        console.warn('Discord dispatch failed', e);
+      }
+    }
+
+    async function handleConfirmed(signal) {
+      if (!signal || !signal.time) return;
+      const key = `${signal.time}|${signal.side}|${signal.price}`;
+      if (sent.has(key)) return;
+      if (!recentEnough(signal.time)) return;
+      sent.add(key); setTimeout(()=>sent.delete(key), 7*24*60*60*1000);
+      await sendDiscord(signal);
+    }
+
+    // Manual test from console
+    window.testSendSignal = () => {
+      const now = Math.floor(Date.now()/1000);
+      const sample = { side:'BUY', price:1.2345, tp:1.2360, sl:1.2300, time: now };
+      sendDiscord(sample);
+    };
+
+    // Wrap existing notifySignal (confirmed only)
+    const origNotify = window.notifySignal;
+    window.notifySignal = function(signal) {
+      try { if (typeof origNotify === 'function') origNotify.apply(this, arguments); } catch (e) { console.warn(e); }
+      handleConfirmed(signal).catch(console.warn);
+    };
+  })();
   </script>
 </body>
 </html>
