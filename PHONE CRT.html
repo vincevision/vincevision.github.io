@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CRT 9.5 — Institutional SL + Timelines (FIXED)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root { --bg:#0f1420; --panel:#161d2e; --muted:#7b8aa3; --text:#e7edf7; --green:#21c77a; --red:#ff5b5b; --yellow:#ffce54; --blue:#7acefa; --purple:#c792ea; }
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text)}
+    header{padding:14px 18px;border-bottom:1px solid #202a3f;background:#0f1420d0;backdrop-filter:blur(6px);position:sticky;top:0;z-index:9}
+    h1{margin:0;font-size:18px} .tz{font-size:12px;color:#a8b6d3;margin-left:6px}
+    .wrap{display:grid;grid-template-columns:360px 1fr;gap:14px;padding:14px} @media(max-width:980px){.wrap{grid-template-columns:1fr}}
+    .panel{background:var(--panel);border:1px solid #202a3f;border-radius:12px;padding:14px;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+    label{display:block;font-size:12px;color:var(--muted);margin:10px 0 6px}
+    input,select,button{width:100%;padding:8px 10px;background:#0f1420;border:1px solid #26324b;color:var(--text);border-radius:8px;outline:none}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .btn{background:linear-gradient(135deg,#2b8cff,#1e6fe3);border:none;font-weight:600;cursor:pointer}
+    .ghost{background:transparent;border:1px solid #344464;cursor:pointer}
+
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+    .card{background:#0f1420;border:1px dashed #2a3752;border-radius:12px;padding:12px}
+    .card h4{margin:0 0 6px;font-size:12px;color:#a8b6d3}
+    .value{font-size:18px;font-weight:700}
+    .value.buy{color:var(--green)} .value.sell{color:var(--red)} .value.flat{color:#b9c6e2}
+
+    .perf{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:10px}
+    .metric{background:#0f1420;border:1px solid #2a3752;border-radius:12px;padding:12px}
+    .metric h5{margin:0 0 6px;font-size:12px;color:#a8b6d3}
+    .metric .big{font-size:20px;font-weight:800}
+    .tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px}
+    .tag.win{background:rgba(33,199,122,.15);color:#8af5bf;border:1px solid rgba(33,199,122,.4)}
+    .tag.loss{background:rgba(255,91,91,.12);color:#ffb1b1;border:1px solid rgba(255,91,91,.35)}
+    .tag.open{background:rgba(120,140,170,.15);color:#cbd8f0;border:1px solid rgba(120,140,170,.35)}
+
+    table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}
+    th,td{border-bottom:1px solid #203050;padding:6px 4px;text-align:left;color:#cfd9ef}
+    th{color:#93a7ca;font-weight:600}
+
+    #htfChart{height:440px} #ltfChart{height:240px;margin-top:8px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CRT 9.5 — Institutional SL<span id="tz" class="tz"></span></h1>
+  </header>
+
+  <div class="wrap">
+    <div class="panel">
+      <h3>Connection</h3>
+      <label>Deriv App ID</label><input id="appId" value="1089" />
+      <label>Symbol</label><input id="symbol" value="frxEURUSD" />
+
+      <div class="row">
+        <div><label>HTF</label><select id="htf"><option>5m</option><option>15m</option><option>30m</option><option selected>1h</option><option>2h</option><option>4h</option><option>8h</option><option>1d</option></select></div>
+        <div><label>LTF</label><select id="ltf"><option value="auto" selected>Auto</option><option>1m</option><option>3m</option><option>5m</option><option>15m</option><option>30m</option></select></div>
+      </div>
+      <div class="row"><div><label>HTF bars</label><input id="limit" type="number" min="200" max="1500" value="500" /></div><div><label>Auto-refresh (sec)</label><input id="refreshSec" type="number" min="0" value="0" /></div></div>
+
+      <h3>Strategy</h3>
+      <div class="row"><div><label>Min sweep %</label><input id="minSweepPct" type="number" step="1" value="10" /></div><div><label>Entry type</label><select id="entryType"><option value="break" selected>Break</option><option value="close">Close</option><option value="retest">Retest</option></select></div></div>
+      <div class="row"><div><label>SL buffer (ticks)</label><input id="slBuf" type="number" value="1" /></div><div><label>TP buffer (ticks)</label><input id="tpBuf" type="number" value="1" /></div></div>
+      <div class="row"><div><label>Min R:R</label><input id="minRR" type="number" step="0.1" value="1.0" /></div><div></div></div>
+
+      <div class="row">
+        <div><label>SL inside base?</label>
+          <select id="slInside">
+            <option value="yes" selected>Yes (Institutional)</option>
+            <option value="no">No (Beyond manip wick)</option>
+          </select>
+        </div>
+        <div></div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button id="run" class="btn">Run / Refresh</button>
+        <button id="csv" class="ghost">Download CSV</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div id="htfChart"></div>
+      <div id="ltfChart"></div>
+
+      <div class="cards">
+        <div class="card"><h4>Current setup</h4><div id="curSetup" class="value flat">—</div><div id="curNote" style="font-size:12px;color:#9eb2d8;margin-top:6px;">Waiting…</div></div>
+        <div class="card"><h4>Entry / TP / SL</h4><div id="ets" class="value">—</div><div id="etsNote" style="font-size:12px;color:#9eb2d8;margin-top:6px;"></div></div>
+        <div class="card"><h4>Partials</h4><div id="ppVals" class="value">—</div><div id="ppNote" style="font-size:12px;color:#9eb2d8;margin-top:6px;"></div></div>
+        <div class="card"><h4>Status</h4><div id="info" class="value">—</div><div id="infoNote" style="font-size:12px;color:#9eb2d8;margin-top:6px;"></div></div>
+      </div>
+
+      <div class="perf">
+        <div class="metric"><h5>Total</h5><div id="mTotal" class="big">—</div></div>
+        <div class="metric"><h5>Wins</h5><div id="mWins" class="big">—</div></div>
+        <div class="metric"><h5>Losses</h5><div id="mLosses" class="big">—</div></div>
+        <div class="metric"><h5>Open</h5><div id="mOpen" class="big">—</div></div>
+        <div class="metric"><h5>Win rate</h5><div id="mWR" class="big">—</div></div>
+      </div>
+
+      <h3 style="margin-top:12px;">Trades</h3>
+      <table id="tradesTable"><thead><tr><th>Entry Time</th><th>Side</th><th>Entry</th><th>TP</th><th>SL</th><th>Exit</th><th>Result</th><th>Bars</th><th>HTF</th><th>LTF</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
+  <script>
+    const USER_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    document.getElementById('tz').textContent = ` • ${USER_TZ}`;
+    const fmtTs = (sec) => new Intl.DateTimeFormat(navigator.language, { year:'numeric', month:'short', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false }).format(new Date(sec*1000));
+    const fmtNum = n => n==null||isNaN(n)?'—' : (Math.abs(n)>=1? Number(n).toFixed(4) : Number(n).toFixed(6));
+    const clamp = (x,a,b)=>Math.min(Math.max(x,a),b);
+
+    const TF2GRAN = {'1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,'1h':3600,'2h':7200,'4h':14400,'8h':28800,'1d':86400};
+    const toGran = tf => TF2GRAN[tf] ?? 60;
+    function sanitizeSymbol(s){ return s.replace(/\s/g,'').toUpperCase().replace('/',''); }
+
+    async function fetchDerivCandles(symbol, tf, count, appId){
+      return new Promise((resolve, reject)=>{
+        const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+        ws.onopen=()=>ws.send(JSON.stringify({ ticks_history:symbol, end:'latest', count, style:'candles', granularity: toGran(tf) }));
+        ws.onmessage=(e)=>{
+          const m=JSON.parse(e.data);
+          if(m.error){ reject(new Error(m.error.message)); ws.close(); return; }
+          if(m.msg_type==='candles'){
+            const bars=m.candles.map(c=>({ time:+c.epoch, open:+c.open, high:+c.high, low:+c.low, close:+c.close, volume:+c.volume }));
+            ws.close(); resolve(bars);
+          }
+        };
+        ws.onerror=()=>{ reject(new Error('WebSocket error')); ws.close(); };
+        setTimeout(()=>{ try{ws.close()}catch{}; reject(new Error('Timeout')); },15000);
+      });
+    }
+
+    function subscribeOHLC(symbol, tf, appId, onUpdate){
+      const ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${appId}`);
+      const gran = toGran(tf);
+      ws.onopen=()=>ws.send(JSON.stringify({ ticks_history:symbol, end:'latest', count:300, style:'candles', granularity:gran, subscribe:1 }));
+      ws.onmessage=(e)=>{
+        const m=JSON.parse(e.data);
+        if(m.error){ console.warn('Deriv error', m.error); return; }
+        if(m.msg_type==='ohlc'){
+          const c=m.ohlc;
+          onUpdate({ time:+c.open_time, open:+c.open, high:+c.high, low:+c.low, close:+c.close, volume:+c.volume, completed:c.completed===1 });
+        }
+      };
+      ws.onerror=()=>{}; ws.onclose=()=>{};
+      return ws;
+    }
+
+    // === CHARTS ===
+    let htfChart, ltfChart, htfSeries, ltfSeries, baseHighSeries, baseLowSeries, manipHighSeries, manipLowSeries;
+    let htfZoneSeries=null, ltfZoneSeries=null, pp1Series=null, pp2Series=null;
+    let crtFormedSeries = null, entryConfirmedSeries = null;
+
+    function makeCharts(){
+      if(htfChart) return;
+      htfChart = LightweightCharts.createChart(document.getElementById('htfChart'), {
+        layout:{background:{type:'solid',color:'#111729'}, textColor:'#D8E4FF'},
+        grid:{vertLines:{color:'#223250'},horzLines:{color:'#223250'}},
+        rightPriceScale:{borderVisible:false}, timeScale:{borderVisible:false,timeVisible:true}
+      });
+      htfSeries = htfChart.addCandlestickSeries({ upColor:'#21c77a', downColor:'#ff5b5b', wickUpColor:'#21c77a', wickDownColor:'#ff5b5b', borderVisible:false });
+      baseHighSeries = htfChart.addLineSeries({ color:'#ffd66b', lineWidth:2, priceLineVisible:false });
+      baseLowSeries  = htfChart.addLineSeries({ color:'#ffd66b', lineWidth:2, priceLineVisible:false });
+      manipHighSeries= htfChart.addLineSeries({ color:'#7acefa', lineWidth:1, lineStyle:2, priceLineVisible:false });
+      manipLowSeries = htfChart.addLineSeries({ color:'#7acefa', lineWidth:1, lineStyle:2, priceLineVisible:false });
+
+      ltfChart = LightweightCharts.createChart(document.getElementById('ltfChart'), {
+        layout:{background:{type:'solid',color:'#0f1420'}, textColor:'#cfe2ff'},
+        grid:{vertLines:{color:'#1f2a42'},horzLines:{color:'#1f2a42'}},
+        rightPriceScale:{borderVisible:false}, timeScale:{borderVisible:false,timeVisible:true}
+      });
+      ltfSeries = ltfChart.addCandlestickSeries({ upColor:'#21c77a', downColor:'#ff5b5b', wickUpColor:'#21c77a', wickDownColor:'#ff5b5b', borderVisible:false });
+
+      crtFormedSeries = ltfChart.addLineSeries({
+        color: '#7acefa', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Dashed,
+        priceLineVisible: false, lastValueVisible: false
+      });
+      entryConfirmedSeries = ltfChart.addLineSeries({
+        color: '#ffd66b', lineWidth: 2, lineStyle: LightweightCharts.LineStyle.Solid,
+        priceLineVisible: false, lastValueVisible: false
+      });
+
+      pp1Series = ltfChart.addLineSeries({ color:'#8af5bf', lineWidth:1, lineStyle:2, priceLineVisible:false });
+      pp2Series = ltfChart.addLineSeries({ color:'#ffd66b', lineWidth:1, lineStyle:2, priceLineVisible:false });
+    }
+
+    function addTimelineMarkers(crtTime, entryTime) {
+      if (!ltfBars.length) return;
+      const minPrice = Math.min(...ltfBars.map(b => b.low));
+      const maxPrice = Math.max(...ltfBars.map(b => b.high));
+      const padding = (maxPrice - minPrice) * 0.1;
+
+      crtFormedSeries.setData([]);
+      entryConfirmedSeries.setData([]);
+
+      if (crtTime) {
+        crtFormedSeries.setData([
+          { time: crtTime, value: minPrice - padding },
+          { time: crtTime, value: maxPrice + padding }
+        ]);
+      }
+      if (entryTime && entryTime !== crtTime) {
+        entryConfirmedSeries.setData([
+          { time: entryTime, value: minPrice - padding },
+          { time: entryTime, value: maxPrice + padding }
+        ]);
+      }
+    }
+
+    // === RESTORED: drawLevels ===
+    function drawLevels(htfBars, baseIdx, manipIdx){
+      const times = htfBars.map(b=>b.time);
+      if(baseIdx==null || manipIdx==null){
+        baseHighSeries.setData([]); baseLowSeries.setData([]);
+        manipHighSeries.setData([]); manipLowSeries.setData([]);
+        return;
+      }
+      const base = htfBars[baseIdx], manip = htfBars[manipIdx];
+      baseHighSeries.setData(times.map(t=>({time:t,value:base.high})));
+      baseLowSeries.setData(times.map(t=>({time:t,value:base.low})));
+      manipHighSeries.setData(times.map(t=>({time:t,value:manip.high})));
+      manipLowSeries.setData(times.map(t=>({time:t,value:manip.low})));
+    }
+
+    // === STRATEGY ===
+    function detectSetups(htfBars, params){
+      const out=[]; if(htfBars.length<3) return out;
+      const gran = toGran(document.getElementById('htf').value);
+      for(let i=1;i<htfBars.length;i++){
+        const base = htfBars[i-1], manip = htfBars[i];
+        if(!base||!manip) continue;
+        const inRange = manip.close <= base.high && manip.close >= base.low;
+        if(!inRange) continue;
+        const baseRange = Math.max(base.high - base.low, 1e-12);
+        const minSweep = baseRange * (params.minSweepPct/100);
+
+        const sweptLow = (manip.low < base.low) && (base.low - manip.low >= minSweep);
+        const sweptHigh = (manip.high > base.high) && (manip.high - base.high >= minSweep);
+
+        if(sweptLow){
+          out.push({ side:'BUY', baseIdx:i-1, manipIdx:i, baseHigh:base.high, baseLow:base.low, manipHigh:manip.high, manipLow:manip.low, baseTime: base.time, manipTime: manip.time, gran, manipCloseSec: manip.time + gran });
+        } else if(sweptHigh){
+          out.push({ side:'SELL', baseIdx:i-1, manipIdx:i, baseHigh:base.high, baseLow:base.low, manipHigh:manip.high, manipLow:manip.low, baseTime: base.time, manipTime: manip.time, gran, manipCloseSec: manip.time + gran });
+        }
+      }
+      return out;
+    }
+
+    function augmentSetupsWithDistribution(htfBars, setups){
+      for(const s of setups){
+        for(let j=s.manipIdx+1;j<htfBars.length;j++){
+          if(s.side==='BUY'){ if(htfBars[j].high >= s.baseHigh){ s.distributionIdx = j; break; } }
+          else { if(htfBars[j].low <= s.baseLow){ s.distributionIdx = j; break; } }
+        }
+      }
+    }
+
+    function colorizeHTFBars(htfBars, setups){
+      const bars = htfBars.map(b=>({...b}));
+      const paint=(i,col)=>{ if(!bars[i])return; bars[i]={...bars[i], color: col, wickColor: col, borderColor: col }; };
+      for(const s of setups){
+        paint(s.baseIdx, '#ffd66b');
+        paint(s.manipIdx,'#7acefa');
+        if(s.distributionIdx!=null) paint(s.distributionIdx,'#c792ea');
+      }
+      return bars;
+    }
+
+    function inferTick(bars){
+      if(!bars.length) return 0.0001;
+      const p = bars.at(-1).close;
+      const s = String(p);
+      if(s.includes('e')) return 0.0001;
+      const dec = (s.split('.')[1]||'').length;
+      return Math.pow(10, -clamp(dec,0,8));
+    }
+
+    function computeRR(side, entry, sl, tp){
+      const risk = side==='BUY' ? (entry - sl) : (sl - entry);
+      const reward = side==='BUY' ? (tp - entry) : (entry - tp);
+      if (risk<=0 || reward<=0) return 0;
+      return reward / risk;
+    }
+
+    function theoreticalRRForSetup(setup, ltfBars, params){
+      const tick = inferTick(ltfBars);
+      const slBuf = (params.slBuf||0) * tick;
+      const tpBuf = (params.tpBuf||0) * tick;
+      let entry, sl, tp;
+      if(setup.side==='BUY'){
+        entry = setup.manipHigh;
+        sl = params.slInside ? (setup.baseLow - slBuf) : (setup.manipLow - slBuf);
+        tp = setup.baseHigh + tpBuf;
+      } else {
+        entry = setup.manipLow;
+        sl = params.slInside ? (setup.baseHigh + slBuf) : (setup.manipHigh + slBuf);
+        tp = setup.baseLow - tpBuf;
+      }
+      return computeRR(setup.side, entry, sl, tp);
+    }
+
+    function firstLtfBreak(setup, ltfBars, params){
+      const after = setup.manipCloseSec;
+      let triggerBar=null, entryPrice=null, entryTime=null;
+
+      if(setup.side==='BUY'){
+        for(const b of ltfBars){
+          if(b.time < after) continue;
+          if(b.high > setup.manipHigh){
+            triggerBar = b;
+            entryPrice = (params.entryType==='close') ? b.close : setup.manipHigh;
+            entryTime = b.time;
+            break;
+          }
+        }
+      } else {
+        for(const b of ltfBars){
+          if(b.time < after) continue;
+          if(b.low < setup.manipLow){
+            triggerBar = b;
+            entryPrice = (params.entryType==='close') ? b.close : setup.manipLow;
+            entryTime = b.time;
+            break;
+          }
+        }
+      }
+      if(!triggerBar) return null;
+
+      const tick = inferTick(ltfBars);
+      const slBuf = (params.slBuf||0) * tick;
+      const tpBuf = (params.tpBuf||0) * tick;
+
+      let sl, tp;
+      if(setup.side==='BUY'){
+        sl = params.slInside ? (setup.baseLow - slBuf) : (setup.manipLow - slBuf);
+        tp = setup.baseHigh + tpBuf;
+      } else {
+        sl = params.slInside ? (setup.baseHigh + slBuf) : (setup.manipHigh + slBuf);
+        tp = setup.baseLow - tpBuf;
+      }
+      const rr = computeRR(setup.side, entryPrice, sl, tp);
+
+      return { 
+        entryPrice, entryTime, sl, tp, triggerBar, rr,
+        crtTime: setup.manipCloseSec
+      };
+    }
+
+    function evalTradeOnHistory(side, entryPrice, tp, sl, entryTime, ltfBars, ltfGran) {
+      for (const b of ltfBars) {
+        if (b.time < entryTime) continue;
+        if (side === 'BUY') {
+          if (b.high >= tp) return { exitPrice: tp, exitTime: b.time, result: 'WIN', barsHeld: Math.round((b.time - entryTime) / ltfGran) };
+          if (b.low <= sl) return { exitPrice: sl, exitTime: b.time, result: 'LOSS', barsHeld: Math.round((b.time - entryTime) / ltfGran) };
+        } else {
+          if (b.low <= tp) return { exitPrice: tp, exitTime: b.time, result: 'WIN', barsHeld: Math.round((b.time - entryTime) / ltfGran) };
+          if (b.high >= sl) return { exitPrice: sl, exitTime: b.time, result: 'LOSS', barsHeld: Math.round((b.time - entryTime) / ltfGran) };
+        }
+      }
+      const lastTime = ltfBars.at(-1)?.time ?? entryTime;
+      return { result: 'OPEN', exitPrice: null, exitTime: null, barsHeld: Math.round((lastTime - entryTime) / ltfGran) };
+    }
+
+    function renderHTFZone(setup, htfBars){
+      try{ if(htfZoneSeries){ htfChart.removeSeries(htfZoneSeries); htfZoneSeries=null; } }catch{}
+      if(!setup) return;
+      try{
+        htfZoneSeries = htfChart.addBaselineSeries({
+          baseValue: { type: 'price', price: setup.baseLow },
+          topFillColor: 'rgba(255,214,107,0.18)', bottomFillColor:'rgba(255,214,107,0.18)',
+          topLineColor:'rgba(0,0,0,0)', bottomLineColor:'rgba(0,0,0,0)', priceLineVisible:false
+        });
+        const start = setup.baseIdx;
+        const end   = Math.min(htfBars.length-1, setup.manipIdx + 3);
+        const times = htfBars.slice(start, Math.max(end, start+1)+1).map(b=>b.time);
+        const data  = times.map(t=>({ time:t, value: setup.baseHigh }));
+        htfZoneSeries.setData(data);
+      }catch(e){ console.warn('HTF zone render not supported', e); }
+    }
+
+    function renderLTFManipZone(setup, ltfBars, htf){
+      try{ if(ltfZoneSeries){ ltfChart.removeSeries(ltfZoneSeries); ltfZoneSeries=null; } }catch{}
+      if(!setup) return;
+      try{
+        ltfZoneSeries = ltfChart.addBaselineSeries({
+          baseValue: { type: 'price', price: setup.manipLow },
+          topFillColor: 'rgba(122,206,250,0.15)', bottomFillColor:'rgba(122,206,250,0.15)',
+          topLineColor:'rgba(0,0,0,0)', bottomLineColor:'rgba(0,0,0,0)', priceLineVisible:false
+        });
+        const windowSec = Math.min(3*toGran(htf), 3*3600);
+        const endTime = setup.manipCloseSec + windowSec;
+        const times = ltfBars.filter(b=>b.time>=setup.manipTime && b.time<=endTime).map(b=>b.time);
+        const tArr = times.length ? times : [setup.manipTime, setup.manipTime + toGran(document.getElementById('ltf').value)];
+        const data = tArr.map(t=>({ time:t, value: setup.manipHigh }));
+        ltfZoneSeries.setData(data);
+      }catch(e){ console.warn('LTF zone render not supported', e); }
+    }
+
+    const LTF_ORDER = ['1m','3m','5m','15m','30m'];
+    const AUTO_LTF_MAP = { '1d':'1h', '8h':'30m', '4h':'15m', '2h':'5m', '1h':'5m', '30m':'3m', '15m':'1m', '5m':'1m' };
+    function coarserLTF(ltf){ const i = LTF_ORDER.indexOf(ltf); return (i<0 || i===LTF_ORDER.length-1) ? ltf : LTF_ORDER[i+1]; }
+    function finerLTF(ltf){ const i = LTF_ORDER.indexOf(ltf); return (i<=0) ? ltf : LTF_ORDER[i-1]; }
+    function recommendLTFByHTF(htf){ const m = AUTO_LTF_MAP[htf] || '5m'; return LTF_ORDER.includes(m) ? m : '5m'; }
+    function recommendLTF(htf, setup, htfBars){
+      let ltf = recommendLTFByHTF(htf);
+      if (!setup) return ltf;
+      const base = htfBars[setup.baseIdx];
+      const relRange = Math.abs((setup.baseHigh - setup.baseLow) / Math.max(1e-12, base.close));
+      if (relRange > 0.015) ltf = coarserLTF(coarserLTF(ltf));
+      else if (relRange > 0.007) ltf = coarserLTF(ltf);
+      else if (relRange < 0.002) ltf = finerLTF(ltf);
+      while (toGran(ltf) >= toGran(htf)) ltf = finerLTF(ltf);
+      return ltf;
+    }
+
+    function computePartials(side, entry, sl, tp){
+      const risk = side==='BUY' ? (entry - sl) : (sl - entry);
+      if (risk <= 0) return null;
+      let pp1, pp2;
+      if (side==='BUY'){
+        pp1 = entry + 0.5 * risk;
+        pp2 = entry + 1.0 * risk;
+        pp1 = Math.min(pp1, tp);
+        pp2 = Math.min(pp2, tp);
+      } else {
+        pp1 = entry - 0.5 * risk;
+        pp2 = entry - 1.0 * risk;
+        pp1 = Math.max(pp1, tp);
+        pp2 = Math.max(pp2, tp);
+      }
+      return { pp1, pp2 };
+    }
+    function renderPartialLines(partials){
+      if(!pp1Series || !pp2Series) return;
+      if(!partials || !ltfBars.length){
+        pp1Series.setData([]); pp2Series.setData([]); return;
+      }
+      const times = ltfBars.map(b=>b.time);
+      pp1Series.setData(times.map(t=>({time:t, value: partials.pp1})));
+      pp2Series.setData(times.map(t=>({time:t, value: partials.pp2})));
+    }
+
+    let htfBars=[], ltfBars=[];
+    let htfWS=null, ltfWS=null, pollTimer=null;
+    let lastSetup=null, lastEntry=null;
+    let params={}, activeHTF='1h', activeLTF='auto', effectiveLTF='5m';
+    let trades=[]; const tradeMap=new Map();
+
+    function rebuildHistoryTrades(setups, ltfBars, htf, ltf){
+      trades=[]; tradeMap.clear();
+      const ltfGran = toGran(effectiveLTF);
+      for(const s of setups){
+        const e = firstLtfBreak(s, ltfBars, params);
+        if(!e) continue;
+        if (e.rr < params.minRR) continue;
+        const key = `${s.baseTime}|${s.manipTime}|${s.side}|${e.entryTime}|${effectiveLTF}`;
+        const res = evalTradeOnHistory(s.side, e.entryPrice, e.tp, e.sl, e.entryTime, ltfBars, ltfGran);
+        trades.push({ id:key, side:s.side, entry:e.entryPrice, tp:e.tp, sl:e.sl, entryTime:e.entryTime, exit:res.exitPrice, exitTime:res.exitTime, result:res.result, barsHeld:res.barsHeld, baseHigh:s.baseHigh, baseLow:s.baseLow, manipHigh:s.manipHigh, manipLow:s.manipLow, baseTime:s.baseTime, manipTime:s.manipTime, htf, ltf, crtTime: e.crtTime });
+        tradeMap.set(key, trades.length-1);
+      }
+    }
+
+    async function loadLTF(symbol, ltf, appId, htf, setupsForRR){
+      ltfBars = await fetchDerivCandles(symbol, ltf, Math.min(2000, (+document.getElementById('limit').value||500)*60), appId);
+      ltfSeries.setData(ltfBars);
+      const filteredSetups = setupsForRR.filter(s => theoreticalRRForSetup(s, ltfBars, params) >= params.minRR);
+
+      lastSetup = filteredSetups.at(-1)||null;
+      drawLevels(htfBars, lastSetup?.baseIdx, lastSetup?.manipIdx);
+      renderHTFZone(lastSetup, htfBars);
+      renderLTFManipZone(lastSetup, ltfBars, htf);
+
+      lastEntry = lastSetup ? firstLtfBreak(lastSetup, ltfBars, params) : null;
+      const parts = lastEntry ? computePartials(lastSetup.side, lastEntry.entryPrice, lastEntry.sl, lastEntry.tp) : null;
+      showPartialsUI(lastSetup, lastEntry, parts, !lastEntry);
+
+      paintCards(symbol, htf, ltf, lastSetup, lastEntry);
+
+      rebuildHistoryTrades(filteredSetups, ltfBars, htf, ltf);
+      addTradeMarkers(); updatePerfUI(); updateTradesTable();
+      return filteredSetups;
+    }
+
+    function paintCards(symbol, htf, ltf, setup, entry){
+      const curEl=document.getElementById('curSetup'), noteEl=document.getElementById('curNote');
+      const ets=document.getElementById('ets'), etsNote=document.getElementById('etsNote');
+      if(!setup){
+        curEl.className='value flat'; curEl.textContent='—';
+        noteEl.textContent = `No valid setup (RR ≥ ${params.minRR}). Using ${htf} + ${effectiveLTF}`;
+        ets.textContent='—'; etsNote.textContent='';
+        setInfo('Deriv WebSocket', `Streaming ${symbol} (${htf} + ${effectiveLTF})`);
+        addTimelineMarkers(null, null);
+        return;
+      }
+      curEl.className='value ' + (setup.side==='BUY'?'buy':'sell');
+      curEl.textContent = setup.side + ' setup';
+      const distText = setup.distributionIdx!=null ? ` • Dist @ ${fmtTs(htfBars[setup.distributionIdx].time)}` : '';
+      noteEl.textContent = `Base [H/L] ${fmtNum(setup.baseHigh)} / ${fmtNum(setup.baseLow)} • Manip [H/L] ${fmtNum(setup.manipHigh)} / ${fmtNum(setup.manipLow)} • ${htf}${distText} • LTF ${effectiveLTF}`;
+
+      if(entry){
+        ets.textContent = `Entry ${fmtNum(entry.entryPrice)} • TP ${fmtNum(entry.tp)} • SL ${fmtNum(entry.sl)}`;
+        const rr = entry.rr ?? computeRR(setup.side, entry.entryPrice, entry.sl, entry.tp);
+        etsNote.textContent = `CRT formed: ${fmtTs(entry.crtTime)} • Entry @ ${fmtTs(entry.entryTime)} • RR ${isFinite(rr)?rr.toFixed(2):'—'}`;
+        addTimelineMarkers(entry.crtTime, entry.entryTime);
+      } else {
+        const rrApprox = theoreticalRRForSetup(setup, ltfBars, params);
+        ets.textContent = 'Awaiting LTF break…';
+        etsNote.textContent = `CRT formed @ ${fmtTs(setup.manipCloseSec)} • Est. RR ${isFinite(rrApprox)?rrApprox.toFixed(2):'—'}`;
+        addTimelineMarkers(setup.manipCloseSec, null);
+      }
+      setInfo('Deriv WebSocket', `Streaming ${symbol} (${htf} + ${effectiveLTF})`);
+    }
+
+    function shouldAutoLTF(){ return document.getElementById('ltf').value==='auto'; }
+
+    async function run(){
+      makeCharts();
+      const appId = document.getElementById('appId').value.trim()||'1089';
+      const symbol = sanitizeSymbol(document.getElementById('symbol').value||'frxEURUSD');
+      activeHTF = document.getElementById('htf').value;
+      const ltfSel = document.getElementById('ltf').value;
+
+      params = {
+        minSweepPct: +document.getElementById('minSweepPct').value||10,
+        entryType: document.getElementById('entryType').value,
+        slBuf: +document.getElementById('slBuf').value||1,
+        tpBuf: +document.getElementById('tpBuf').value||1,
+        minRR: +document.getElementById('minRR').value||1.0,
+        slInside: document.getElementById('slInside').value === 'yes'
+      };
+
+      try { htfBars = await fetchDerivCandles(symbol, activeHTF, +document.getElementById('limit').value||500, appId); }
+      catch (e) { setInfo('Error', e.message); return; }
+
+      let setups = detectSetups(htfBars, params);
+      augmentSetupsWithDistribution(htfBars, setups);
+      htfSeries.setData(colorizeHTFBars(htfBars, setups));
+
+      lastSetup = setups.at(-1)||null;
+      effectiveLTF = shouldAutoLTF() ? recommendLTF(activeHTF, lastSetup, htfBars) : ltfSel;
+
+      try {
+        await loadLTF(symbol, effectiveLTF, appId, activeHTF, setups);
+        connectStreams(symbol, activeHTF, effectiveLTF, appId);
+        restartTimer(()=>run(), +document.getElementById('refreshSec').value);
+      } catch (e) { setInfo('Error', e.message); }
+    }
+
+    function connectStreams(symbol, htf, ltf, appId){
+      try{ htfWS?.close(); }catch{} try{ ltfWS?.close(); }catch{}
+      setInfo('Deriv WebSocket', `Streaming ${symbol} (${htf} + ${ltf})`);
+
+      htfWS = subscribeOHLC(symbol, htf, appId, async (bar)=>{
+        if(!htfBars.length){ htfBars=[bar]; htfSeries.setData([bar]); return; }
+        const prevLast = htfBars.at(-1);
+        if(bar.time===prevLast.time){ htfBars[htfBars.length-1]=bar; } else { htfBars.push(bar); }
+        htfSeries.update(bar);
+
+        if(bar.completed){
+          let setups = detectSetups(htfBars, params);
+          augmentSetupsWithDistribution(htfBars, setups);
+          htfSeries.setData(colorizeHTFBars(htfBars, setups));
+
+          const newSetup = setups.at(-1)||null;
+          const newEffective = shouldAutoLTF() ? recommendLTF(htf, newSetup, htfBars) : document.getElementById('ltf').value;
+          const ltfChanged = newEffective !== effectiveLTF;
+
+          if (ltfChanged) {
+            effectiveLTF = newEffective;
+            try {
+              await loadLTF(symbol, effectiveLTF, appId, htf, setups);
+              try{ ltfWS?.close(); }catch{}
+              ltfWS = subscribeOHLC(symbol, effectiveLTF, appId, onLtfBar);
+            } catch (e) { console.warn('LTF reload error', e); }
+          } else {
+            await loadLTF(symbol, effectiveLTF, appId, htf, setups);
+          }
+        }
+      });
+
+      const onLtfBar = (bar)=>{
+        if(!ltfBars.length){ ltfBars=[bar]; ltfSeries.setData([bar]); return; }
+        const prevLast = ltfBars.at(-1);
+        if(bar.time===prevLast.time){ ltfBars[ltfBars.length-1]=bar; } else { ltfBars.push(bar); }
+        ltfSeries.update(bar);
+
+        if(lastSetup && !lastEntry){
+          const e = firstLtfBreak(lastSetup, ltfBars, params);
+          if(e){
+            lastEntry = e;
+            const parts = computePartials(lastSetup.side, e.entryPrice, e.sl, e.tp);
+            renderPartialLines(parts);
+            showPartialsUI(lastSetup, e, parts, false);
+            addTimelineMarkers(e.crtTime, e.entryTime);
+          }
+        }
+
+        if(lastSetup) maybeAddNewTradeFrom(lastSetup, ltfBars, htf, effectiveLTF);
+        updateOpenTradesWithBar(bar);
+
+        addTradeMarkers(); updatePerfUI(); updateTradesTable();
+      };
+      ltfWS = subscribeOHLC(symbol, ltf, appId, onLtfBar);
+    }
+
+    function maybeAddNewTradeFrom(setup, ltfBars, htf, ltf){
+      const e = firstLtfBreak(setup, ltfBars, params);
+      if(!e) return;
+      if (e.rr < params.minRR) return;
+      const key = `${setup.baseTime}|${setup.manipTime}|${setup.side}|${e.entryTime}|${effectiveLTF}`;
+      if(tradeMap.has(key)) return;
+      const t = {
+        id:key, side:setup.side, entry:e.entryPrice, tp:e.tp, sl:e.sl,
+        entryTime:e.entryTime, exit:null, exitTime:null, result:'OPEN', barsHeld:0,
+        baseHigh:setup.baseHigh, baseLow:setup.baseLow, manipHigh:setup.manipHigh, manipLow:setup.manipLow,
+        baseTime:setup.baseTime, manipTime:setup.manipTime, htf, ltf,
+        crtTime: e.crtTime
+      };
+      tradeMap.set(key, trades.length); trades.push(t);
+
+      lastEntry = e;
+      const parts = computePartials(setup.side, e.entryPrice, e.sl, e.tp);
+      renderPartialLines(parts);
+      showPartialsUI(setup, e, parts, false);
+      addTimelineMarkers(e.crtTime, e.entryTime);
+    }
+
+    function addTradeMarkers(){
+      const ms=[];
+      for(const t of trades.slice(-200)){
+        if(t.entryTime){
+          ms.push({ time:t.entryTime, position:t.side==='BUY'?'belowBar':'aboveBar', color:t.side==='BUY'?'#21c77a':'#ff5b5b', shape:t.side==='BUY'?'arrowUp':'arrowDown', text:`Entry ${fmtNum(t.entry)}` });
+        }
+        if(t.exitTime){
+          ms.push({ time:t.exitTime, position:t.side==='BUY'?'aboveBar':'belowBar', color:t.result==='WIN'?'#21c77a':'#ff5b5b', shape:t.result==='WIN'?'diamond':'circle', text:`${t.result} ${fmtNum(t.exit)}` });
+        }
+      }
+      ltfSeries.setMarkers(ms);
+    }
+
+    function updateOpenTradesWithBar(bar){
+      const ltfGran = toGran(effectiveLTF);
+      for(const t of trades){
+        if(t.result!=='OPEN') continue;
+        if(bar.time < t.entryTime) continue;
+        if(t.side==='BUY'){
+          if(bar.high>=t.tp){ t.exit=t.tp; t.exitTime=bar.time; t.result='WIN'; t.barsHeld=Math.round((bar.time - t.entryTime)/ltfGran); continue; }
+          if(bar.low<=t.sl){ t.exit=t.sl; t.exitTime=bar.time; t.result='LOSS';t.barsHeld=Math.round((bar.time - t.entryTime)/ltfGran); continue; }
+        } else {
+          if(bar.low<=t.tp){ t.exit=t.tp; t.exitTime=bar.time; t.result='WIN'; t.barsHeld=Math.round((bar.time - t.entryTime)/ltfGran); continue; }
+          if(bar.high>=t.sl){ t.exit=t.sl; t.exitTime=bar.time; t.result='LOSS';t.barsHeld=Math.round((bar.time - t.entryTime)/ltfGran); continue; }
+        }
+      }
+    }
+
+    function updatePerfUI(){
+      const total = trades.length;
+      const wins  = trades.filter(t=>t.result==='WIN').length;
+      const losses= trades.filter(t=>t.result==='LOSS').length;
+      const open  = trades.filter(t=>t.result==='OPEN').length;
+      document.getElementById('mTotal').textContent = total;
+      document.getElementById('mWins').textContent = wins;
+      document.getElementById('mLosses').textContent = losses;
+      document.getElementById('mOpen').textContent = open;
+      document.getElementById('mWR').textContent = (wins+losses? (wins/(wins+losses)*100).toFixed(1)+'%':'—');
+    }
+
+    function updateTradesTable(){
+      const tbody=document.querySelector('#tradesTable tbody'); tbody.innerHTML='';
+      const rows = trades.slice(-50).reverse();
+      for(const t of rows){
+        const tag = t.result==='WIN'?'win':t.result==='LOSS'?'loss':'open';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${t.entryTime?fmtTs(t.entryTime):'—'}</td>
+          <td style="color:${t.side==='BUY'?'#21c77a':'#ff6b6b'}">${t.side}</td>
+          <td>${fmtNum(t.entry)}</td>
+          <td>${fmtNum(t.tp)}</td>
+          <td>${fmtNum(t.sl)}</td>
+          <td>${t.exitTime? (fmtTs(t.exitTime)+' @ '+fmtNum(t.exit)) : '—'}</td>
+          <td><span class="tag ${tag}">${t.result}</span></td>
+          <td>${t.barsHeld ?? '—'}</td>
+          <td>${t.htf}</td>
+          <td>${t.ltf}</td>
+        `;
+        tbody.appendChild(tr);
+      }
+    }
+
+    function setInfo(main, note){ document.getElementById('info').textContent = main; document.getElementById('infoNote').textContent = note||''; }
+    function restartTimer(fn, sec){ clearInterval(pollTimer); if(sec>0) pollTimer=setInterval(()=>fn().catch?.(console.error), sec*1000); }
+
+    function showPartialsUI(setup, entryObj, partials, projected){
+      const ppVals = document.getElementById('ppVals');
+      const ppNote = document.getElementById('ppNote');
+      if(!setup){
+        ppVals.textContent = '—';
+        ppNote.textContent = '';
+        renderPartialLines(null);
+        return;
+      }
+      if(!entryObj){
+        const tick = inferTick(ltfBars);
+        const slBuf = (params.slBuf||0) * tick;
+        const tpBuf = (params.tpBuf||0) * tick;
+        let entry, sl, tp;
+        if(setup.side==='BUY'){
+          entry = setup.manipHigh;
+          sl = params.slInside ? (setup.baseLow - slBuf) : (setup.manipLow - slBuf);
+          tp = setup.baseHigh + tpBuf;
+        } else {
+          entry = setup.manipLow;
+          sl = params.slInside ? (setup.baseHigh + slBuf) : (setup.manipHigh + slBuf);
+          tp = setup.baseLow - tpBuf;
+        }
+        const parts = computePartials(setup.side, entry, sl, tp);
+        ppVals.textContent = `PP1 (0.5R) ${fmtNum(parts.pp1)} • PP2 (1R) ${fmtNum(parts.pp2)}`;
+        ppNote.textContent = `Projected partials from manipulation break • Side ${setup.side}`;
+        renderPartialLines(parts);
+      } else {
+        ppVals.textContent = `PP1 (0.5R) ${fmtNum(partials.pp1)} • PP2 (1R) ${fmtNum(partials.pp2)}`;
+        const rr = computeRR(setup.side, entryObj.entryPrice, entryObj.sl, entryObj.tp);
+        ppNote.textContent = `Live entry • RR ${isFinite(rr)?rr.toFixed(2):'—'} • Side ${setup.side}`;
+      }
+    }
+
+    function downloadCSV(){
+      const header=['Entry Time','Side','Entry','TP','SL','Exit Time','Exit','Result','Bars','HTF','LTF'];
+      const rows = trades.map(t=>[
+        t.entryTime?fmtTs(t.entryTime):'—',
+        t.side, fmtNum(t.entry), fmtNum(t.tp), fmtNum(t.sl),
+        t.exitTime?fmtTs(t.exitTime):'—', t.exit?fmtNum(t.exit):'—',
+        t.result, t.barsHeld??'—', t.htf, t.ltf
+      ]);
+      const csv=[header, ...rows].map(r=>r.join(',')).join('\n');
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
+      const a=document.createElement('a'); a.href=url; a.download='crt_trades.csv'; a.click(); URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('run').addEventListener('click', ()=>run().catch(console.error));
+    document.getElementById('csv').addEventListener('click', downloadCSV);
+    ['appId','symbol','htf','ltf','limit','minSweepPct','entryType','slBuf','tpBuf','minRR','slInside'].forEach(id=>{
+      document.getElementById(id).addEventListener('change', ()=>run().catch(console.error));
+    });
+
+    run().catch(err=>setInfo('Error', err.message));
+  </script>
+</body>
+</html>
