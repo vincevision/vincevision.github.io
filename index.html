@@ -206,6 +206,28 @@
         </thead>
         <tbody></tbody>
       </table>
+
+      <!-- Live trade and Open trades sections -->
+      <h3 style="margin-top:14px;">Live trade</h3>
+      <div class="card" id="liveTradeCard">
+        <div id="liveTradeSide" class="value flat">—</div>
+        <div id="liveTradeDetails" style="font-size:12px;color:#9eb2d8;margin-top:6px;">No live setup currently</div>
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button id="copyLiveBtn" class="btn-ghost" style="display:none;">Copy live trade</button>
+        </div>
+      </div>
+
+      <h3 style="margin-top:14px;">Open trades (active now)</h3>
+      <div class="hint">These are signals that have not hit TP or SL yet (shown in your local time).</div>
+      <table id="openTradesTable">
+        <thead>
+          <tr>
+            <th>Time</th><th>Side</th><th>Entry</th><th>TP</th><th>SL</th><th>Bars</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <!-- END -->
     </div>
   </div>
 
@@ -441,8 +463,20 @@
       const buyCond =tappedLower && closeAbove3 && crossOKBuy  && ltfOkBuy;
       if(!(sellCond||buyCond)) return null;
 
-      const side=sellCond?'SELL':'BUY', entry=htfBars[i].close, tp=bb.mid[i];
-      const sl=sellCond?Math.max(bb.upper[i], htfBars[i].high):Math.min(bb.lower[i], htfBars[i].low);
+      const side=sellCond?'SELL':'BUY', entry=htfBars[i].close;
+
+      let tp, sl;
+      if (document.getElementById('useATR').checked) {
+        const atrValues = atr(htfBars, +document.getElementById('atrLen').value || 14);
+        const a = atrValues[i];
+        if (a == null || isNaN(a)) return null;
+        const m = +document.getElementById('atrMult').value || 2;
+        if (side === 'BUY') { tp = entry + a*m; sl = entry - a*m*1.5; }
+        else { tp = entry - a*m; sl = entry + a*m*1.5; }
+      } else {
+        tp = bb.mid[i];
+        sl = sellCond?Math.max(bb.upper[i], htfBars[i].high):Math.min(bb.lower[i], htfBars[i].low);
+      }
       return { time: htfBars[i].time, side, price: entry, tp: tp??null, sl: sl??null, provisional:true };
     }
 
@@ -471,7 +505,7 @@
           }
         }
         out.push({ time:s.time, side:s.side, entry:s.price, tp:s.tp, sl:s.sl, exit:exitPrice, result,
-          barsHeld: exitIdx==null?null:(exitIdx-s.index), exitTime: exitIdx==null?null:bars[exitIdx].time });
+          barsHeld: exitIdx==null?null:(exitIdx-s.index), exitTime: exitIdx==null?null:bars[exitIdx]?.time });
       }
       return out;
     }
@@ -556,6 +590,69 @@
         tbody.appendChild(tr);
       });
     }
+
+    // Helpers for Live/Open UI
+    function copyToClipboard(text) {
+      try {
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(text);
+          showError('Copied to clipboard');
+        } else {
+          const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta);
+          ta.select(); document.execCommand('copy'); ta.remove();
+          showError('Copied to clipboard');
+        }
+      } catch {}
+    }
+    function renderLiveUI(live) {
+      const sideEl = document.getElementById('liveTradeSide');
+      const detailsEl = document.getElementById('liveTradeDetails');
+      const btn = document.getElementById('copyLiveBtn');
+      if (!sideEl || !detailsEl || !btn) return;
+      if (!live) {
+        sideEl.className = 'value flat';
+        sideEl.textContent = '—';
+        detailsEl.textContent = 'No live setup currently';
+        btn.style.display = 'none';
+        btn.onclick = null;
+        return;
+      }
+      sideEl.className = 'value ' + (live.side === 'BUY' ? 'buy' : 'sell');
+      sideEl.textContent = `LIVE: ${live.side}`;
+      detailsEl.textContent = `${resolvedSymbol} ${document.getElementById('sigTf').value} • ${fmtTs(live.time)} • Entry ${fmtNum(live.price)} • TP ${fmtNum(live.tp)} • SL ${fmtNum(live.sl)}`;
+      btn.style.display = 'inline-block';
+      btn.onclick = () => {
+        const s = `${resolvedSymbol} ${document.getElementById('sigTf').value} ${live.side}
+Entry: ${fmtNum(live.price)}
+TP: ${fmtNum(live.tp)}
+SL: ${fmtNum(live.sl)}
+Time: ${fmtTs(live.time)}`;
+        copyToClipboard(s);
+      };
+    }
+    function updateOpenTradesUI(trades) {
+      const tbody = document.querySelector('#openTradesTable tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+      const opens = trades.filter(t => t.result === 'OPEN');
+      opens.slice(-50).reverse().forEach(t => {
+        const tr = document.createElement('tr');
+        const copyStr = `${resolvedSymbol} ${document.getElementById('sigTf').value} ${t.side}
+Entry: ${fmtNum(t.entry)} | TP: ${fmtNum(t.tp)} | SL: ${fmtNum(t.sl)} | Time: ${fmtTs(t.time)}`;
+        tr.innerHTML = `
+          <td>${fmtTs(t.time)}</td>
+          <td style="color:${t.side==='BUY'?'#21c77a':'#ff6b6b'}">${t.side}</td>
+          <td>${fmtNum(t.entry)}</td>
+          <td>${fmtNum(t.tp)}</td>
+          <td>${fmtNum(t.sl)}</td>
+          <td>${t.barsHeld==null?'—':t.barsHeld}</td>
+          <td><button class="btn-ghost">Copy</button></td>`;
+        const btn = tr.querySelector('button');
+        btn.onclick = () => copyToClipboard(copyStr);
+        tbody.appendChild(tr);
+      });
+    }
+
     function paint(htfBars, htfInd, signals, trades, tf, infoNote){
       const times=htfBars.map(b=>b.time);
       candleSeries.setData(htfBars);
@@ -570,6 +667,7 @@
       candleSeries.setMarkers(markersCombined(signals, trades));
       updateSignalTable(signals, tf);
       updateTradesUI(trades);
+      updateOpenTradesUI(trades);
 
       const last=signals.at(-1);
       const sigEl=document.getElementById('sigNow'), noteEl=document.getElementById('sigNote');
@@ -586,16 +684,21 @@
       document.getElementById('infoNote').textContent = infoNote;
     }
     function showLive(live){
-      if(!live) return;
+      if(!live){
+        renderLiveUI(null);
+        return;
+      }
       const sigEl=document.getElementById('sigNow'), noteEl=document.getElementById('sigNote');
       sigEl.className='value ' + (live.side==='BUY'?'buy':'sell');
       sigEl.textContent = `LIVE: ${live.side}`;
       noteEl.textContent = `Unconfirmed • ${resolvedSymbol} ${document.getElementById('sigTf').value} • ${fmtTs(live.time)} • Price ${fmtNum(live.price)} • TP ${fmtNum(live.tp)} • SL ${fmtNum(live.sl)}`;
+      renderLiveUI(live);
     }
 
     // ===== App state & driver =====
     let params={}, htfBars=[], ltfBars=[], htfInd=null, ltfInd=null, resolvedSymbol='—';
     let ws=null, pollTimer=null;
+    let lastSignals = [], lastTrades = [];
 
     async function runOnce(){
       makeCharts();
@@ -639,24 +742,41 @@
       ltfInd = (ltfBars.length? indicatorsFor(ltfBars, params) : null);
       const signals = generateHTFSignals(htfBars, htfInd, ltfBars, ltfInd, params);
       const trades  = evaluateTrades(htfBars, signals);
+      lastSignals = signals;
+      lastTrades = trades;
+
+      // Expose open trades getter for Telegram
+      window.vvGetOpenTrades = function() {
+        const t = evaluateTrades(htfBars, lastSignals || []);
+        return t.filter(x => x.result === 'OPEN');
+      };
+
       paint(htfBars, htfInd, signals, trades, sigTf, `Symbol: ${resolvedSymbol}`);
 
       // LIVE preview
       if(document.getElementById('intrabar').checked){
         const live = liveHTFSignal(htfBars, htfInd, ltfBars, ltfInd, params);
-        if(live) showLive(live);
+        if(live) showLive(live); else renderLiveUI(null);
       }
     }
 
+    function parseDateInput(val, endOfDay = false) {
+      if (!val) return null;
+      const [y,m,d] = val.split('-').map(Number);
+      const dt = new Date(y, m-1, d, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0, endOfDay ? 999 : 0);
+      return Math.floor(dt.getTime()/1000);
+    }
+
     async function runBacktest() {
-      const start = new Date(document.getElementById('backtestStart').value).getTime() / 1000;
-      const end = new Date(document.getElementById('backtestEnd').value).getTime() / 1000;
+      const start = parseDateInput(document.getElementById('backtestStart').value, false);
+      const end = parseDateInput(document.getElementById('backtestEnd').value, true);
       const candles = await fetchDerivCandles(resolvedSymbol, document.getElementById('sigTf').value, 1500, document.getElementById('appId').value);
-      const filteredBars = candles.filter(b => b.time >= start && b.time <= end);
+      const filteredBars = candles.filter(b => (!start || b.time >= start) && (!end || b.time <= end));
       const ind = indicatorsFor(filteredBars, params);
       const signals = generateHTFSignals(filteredBars, ind, ltfBars, ltfInd, params);
       const trades = evaluateTrades(filteredBars, signals);
       updateTradesUI(trades);
+      updateOpenTradesUI(trades);
       alert(`Backtest Results: ${trades.length} trades, ${trades.filter(t => t.result === 'WIN').length} wins`);
     }
 
@@ -672,10 +792,16 @@
           htfInd = indicatorsFor(htfBars, params);
           candleSeries.update(bar);
 
+          // Live preview + Open trades refresh
           if(document.getElementById('intrabar').checked){
             const live = liveHTFSignal(htfBars, htfInd, ltfBars, ltfInd, params);
-            if(live) showLive(live);
+            if(live) showLive(live); else renderLiveUI(null);
           }
+          if (lastSignals && lastSignals.length) {
+            const tradesLive = evaluateTrades(htfBars, lastSignals);
+            updateOpenTradesUI(tradesLive);
+          }
+
           if(bar.completed){ runOnce().catch(console.error); }
         });
         ws.onclose = () => {
@@ -699,25 +825,16 @@
       if(sec>0) pollTimer=setInterval(()=>runOnce().catch(console.error), sec*1000);
     }
 
-    // CSV export (signals table)
-    function downloadCSV(){
-      const rows=[...document.querySelectorAll('#signalsTable tbody tr')].map(tr=>[...tr.children].map(td=>td.textContent));
-      if(!rows.length) return;
-      const header=['Time','Side','Price','TP','SL','TF'];
-      const csv=[header,...rows.reverse()].map(r=>r.join(',')).join('\n');
-      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'}); const url=URL.createObjectURL(blob);
-      const a=document.createElement('a'); a.href=url; a.download='signals.csv'; a.click(); URL.revokeObjectURL(url);
-    }
-
+    // CSV export (trade report)
     function downloadTradeReport() {
       const trades = evaluateTrades(htfBars, generateHTFSignals(htfBars, htfInd, ltfBars, ltfInd, params));
       const closed = trades.filter(t => t.result === 'WIN' || t.result === 'LOSS');
       const wins = closed.filter(t => t.result === 'WIN').length;
       const header = ['Time', 'Side', 'Entry', 'TP', 'SL', 'Exit', 'Result', 'Bars Held', 'Win Rate'];
+      const winRate = closed.length ? (wins / closed.length * 100).toFixed(1) + '%' : '—';
       const rows = trades.map(t => [
         fmtTs(t.time), t.side, fmtNum(t.entry), fmtNum(t.tp), fmtNum(t.sl),
-        t.exit ? fmtNum(t.exit) : '—', t.result, t.barsHeld ?? '—',
-        (wins / closed.length * 100).toFixed(1) + '%'
+        t.exit ? fmtNum(t.exit) : '—', t.result, t.barsHeld ?? '—', winRate
       ]);
       const csv = [header, ...rows].map(r => r.join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -731,10 +848,10 @@
 
     function showError(msg) {
       const errDiv = document.createElement('div');
-      errDiv.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#ff5b5b;color:#fff;padding:8px 16px;border-radius:8px;';
+      errDiv.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);background:#ff5b5b;color:#fff;padding:8px 16px;border-radius:8px;z-index:9999;';
       errDiv.textContent = msg;
       document.body.appendChild(errDiv);
-      setTimeout(() => errDiv.remove(), 5000);
+      setTimeout(() => errDiv.remove(), 1800);
     }
 
     function toggleTheme() {
@@ -810,19 +927,19 @@
     (async()=>{ makeCharts(); validateInputs(); requestNotificationPermission(); await runOnce(); connectWs(); restartTimer(); })().catch(console.error);
   </script>
 
-  <!-- Discord: send only signals in selected date window (Backtest range) or todayOnly -->
+  <!-- Discord (unchanged) -->
   <script>
   (function () {
     const cfg = {
       webhook: 'https://discord.com/api/webhooks/1431662464080285736/wiqGZaLuY8gFZ88uH77K6Gj9dEYRiKaHe8X0oBTVZZjoWz5nazb7oteUsv62nPiY55At',
-      tickSec: 10,               // cadence
-      includeLive: false,        // confirmed only
-      repeatDuplicates: false,   // don't resend same signal every tick
-      requireVisible: true,      // send only when tab is visible
-      sendImmediately: true,     // send right when a signal confirms
-      blockBurstOnBoot: true,    // consolidate initial historical burst
+      tickSec: 10,
+      includeLive: false,
+      repeatDuplicates: false,
+      requireVisible: true,
+      sendImmediately: true,
+      blockBurstOnBoot: true,
       bootQuietMs: 1200,
-      mention: ''                // e.g., '@everyone' or '<@&ROLE_ID>'
+      mention: ''
     };
 
     let timer = null;
@@ -831,11 +948,9 @@
     const bootTs = Date.now();
     let bootSendTimer = null;
 
-    // Latest signals captured via wrappers
     window._vv_lastConfirmed = window._vv_lastConfirmed || null;
     window._vv_lastLive = window._vv_lastLive || null;
 
-    // Helpers
     function fixed(n) { if (n == null || isNaN(n)) return '—'; return Math.abs(n) >= 1 ? Number(n).toFixed(4) : Number(n).toFixed(6); }
     function fmtTime(sec) {
       try {
@@ -850,10 +965,6 @@
     }
     function getTf() { return document.getElementById('sigTf')?.value || ''; }
 
-    // Date window filter:
-    // - If Backtest Start/End set => use that range (inclusive, local time)
-    // - Else if "todayOnly" checked => use today (local)
-    // - Else => no filter
     function parseDateToSec(val, endOfDay = false) {
       if (!val) return null;
       const [y,m,d] = val.split('-').map(Number);
@@ -875,7 +986,7 @@
         const from = (typeof startOfTodaySec === 'function') ? startOfTodaySec() : Math.floor(new Date(new Date().toDateString()).getTime()/1000);
         return { from, to: null };
       }
-      return null; // no filter
+      return null;
     }
     function isInWindow(ts) {
       const win = getDateWindow();
@@ -923,7 +1034,7 @@
 
     async function sendDiscord(sig, confirmed) {
       if (!cfg.webhook) return;
-      if (!isInWindow(sig.time)) return; // enforce date filter
+      if (!isInWindow(sig.time)) return;
       const embed = makeEmbed(sig, confirmed);
       const content = makeTradeJson(sig, confirmed);
       const payload = { content: cfg.mention ? cfg.mention + '\n' + content : content, username: 'VinceVision', embeds: [embed] };
@@ -960,14 +1071,10 @@
     function startTimer() { stopTimer(); timer = setInterval(tick, Math.max(1, cfg.tickSec) * 1000); }
     function stopTimer() { if (timer) { clearInterval(timer); timer = null; } }
 
-    // Wrap to capture latest confirmed; manage boot burst and immediate send
     const origNotify = window.notifySignal;
     window.notifySignal = function(signal) {
       try { if (typeof origNotify === 'function') origNotify.apply(this, arguments); } catch (e) { console.warn(e); }
-
       const sinceBoot = Date.now() - bootTs;
-
-      // During boot burst, only remember signals in the selected window
       if (cfg.blockBurstOnBoot && sinceBoot < cfg.bootQuietMs) {
         if (isInWindow(signal.time)) window._vv_lastConfirmed = signal;
         if (!bootSendTimer) {
@@ -982,8 +1089,6 @@
         }
         return;
       }
-
-      // Normal path
       window._vv_lastConfirmed = signal;
       if (cfg.sendImmediately && isInWindow(signal.time)) {
         lastSentKey = keyOf('C', signal);
@@ -999,26 +1104,142 @@
       };
     }
 
-    // If the date window changes, allow sending again
     ['todayOnly','backtestStart','backtestEnd'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.addEventListener('change', () => { lastSentKey = null; lastLiveSentKey = null; });
     });
 
     window.addEventListener('beforeunload', stopTimer);
-
-    // Manual test: sends only if "now" is inside the current window
-    window.testSendSignal = () => {
-      const now = Math.floor(Date.now()/1000);
-      const sample = { side:'BUY', price:1.2345, tp:1.2360, sl:1.2300, time: now };
-      window._vv_lastConfirmed = sample;
-      if (cfg.sendImmediately && isInWindow(sample.time)) {
-        lastSentKey = keyOf('C', sample);
-        sendDiscord(sample, true);
-      }
-    };
-
     startTimer();
+  })();
+  </script>
+
+  <!-- Telegram: ONLY send OPEN trades (active now), not past/closed -->
+  <script>
+  (function () {
+    // WARNING: Exposes bot token client-side. For production, proxy via server.
+    const tgCfg = {
+      enabled: true,
+      botToken: '8335488005:AAG8j-mLVpINGhGGKH4UpACPECjKMZNWIB0',
+      recipients: ['6812351007', '-1003244408726'],  // user + group
+      tickSec: 7,                 // scan cadence
+      sendImmediatelyOnConfirm: true,
+      requireVisible: false,      // send even if tab hidden
+      dedupeLifetimeMs: 24*60*60*1000  // forget sent keys after 24h
+    };
+    if (!tgCfg.enabled) return;
+
+    const sentKeys = new Map(); // key -> ts
+
+    function pruneDedupe() {
+      const now = Date.now();
+      for (const [k, ts] of sentKeys) {
+        if (now - ts > tgCfg.dedupeLifetimeMs) sentKeys.delete(k);
+      }
+    }
+    function openKey(t) {
+      const tf = document.getElementById('sigTf')?.value || '';
+      return `O|${typeof resolvedSymbol==='string'?resolvedSymbol:''}|${tf}|${t.time}|${t.side}|${t.entry}|${t.tp}|${t.sl}`;
+    }
+    function fixed(n) { if (n == null || isNaN(n)) return '—'; return Math.abs(n) >= 1 ? Number(n).toFixed(4) : Number(n).toFixed(6); }
+    function buildOpenText(t) {
+      const tf = document.getElementById('sigTf')?.value || '';
+      return [
+        '<b>VinceVision — OPEN TRADE</b>',
+        `Market: <b>${typeof resolvedSymbol==='string'?resolvedSymbol:'—'}</b>`,
+        `TF: <b>${tf}</b>`,
+        `Side: <b>${t.side}</b>`,
+        `Entry: <code>${fixed(t.entry)}</code>`,
+        `TP: <code>${fixed(t.tp)}</code>`,
+        `SL: <code>${fixed(t.sl)}</code>`,
+        `Time: <code>${fmtTs(t.time)}</code>`
+      ].join('\n');
+    }
+    async function tgSend(text) {
+      const url = `https://api.telegram.org/bot${tgCfg.botToken}/sendMessage`;
+      for (const chat_id of tgCfg.recipients) {
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id, text, parse_mode: 'HTML', disable_web_page_preview: true })
+          });
+          if (!res.ok) {
+            const t = await res.text().catch(()=> '');
+            console.warn('Telegram send error', res.status, t);
+          }
+        } catch (e) { console.warn('Telegram send failed', e); }
+      }
+    }
+
+    // Optional date filter: respect Backtest window or Today-only if set
+    function parseDateToSec(val, endOfDay = false) {
+      if (!val) return null;
+      const [y,m,d] = val.split('-').map(Number);
+      const dt = endOfDay ? new Date(y, m-1, d, 23,59,59,999) : new Date(y, m-1, d, 0,0,0,0);
+      return Math.floor(dt.getTime()/1000);
+    }
+    function inDateWindow(trade) {
+      const sEl = document.getElementById('backtestStart');
+      const eEl = document.getElementById('backtestEnd');
+      const todayOnly = document.getElementById('todayOnly')?.checked;
+      const sVal = sEl?.value || '';
+      const eVal = eEl?.value || '';
+      if (sVal || eVal) {
+        const from = parseDateToSec(sVal, false) ?? parseDateToSec(eVal, false);
+        const to   = parseDateToSec(eVal, true)   ?? parseDateToSec(sVal, true);
+        if (from && trade.time < from) return false;
+        if (to && trade.time > to) return false;
+        return true;
+      }
+      if (todayOnly) {
+        const d=new Date(); d.setHours(0,0,0,0);
+        const from=Math.floor(d.getTime()/1000);
+        if (trade.time < from) return false;
+      }
+      return true;
+    }
+
+    async function scanAndSendOpen() {
+      if (tgCfg.requireVisible && document.hidden) return;
+      pruneDedupe();
+      try {
+        const getOpens = window.vvGetOpenTrades;
+        if (typeof getOpens !== 'function') return;
+        const opens = (getOpens() || []).filter(inDateWindow);
+        for (const t of opens) {
+          const key = openKey(t);
+          if (!sentKeys.has(key)) {
+            sentKeys.set(key, Date.now());
+            await tgSend(buildOpenText(t));
+          }
+        }
+      } catch (e) {
+        console.warn('Open-scan error', e);
+      }
+    }
+
+    // Periodic scan
+    const timer = setInterval(scanAndSendOpen, Math.max(3, tgCfg.tickSec) * 1000);
+    window.addEventListener('beforeunload', () => clearInterval(timer));
+
+    // Send immediately upon signal confirmation (only if still OPEN)
+    if (tgCfg.sendImmediatelyOnConfirm) {
+      const origNotify = window.notifySignal;
+      window.notifySignal = function(signal) {
+        try { if (typeof origNotify === 'function') origNotify.apply(this, arguments); } catch (e) {}
+        setTimeout(scanAndSendOpen, 25); // allow state to update
+      };
+    }
+
+    // Initial scan shortly after load
+    setTimeout(scanAndSendOpen, 800);
+
+    // Re-scan when date filters change
+    ['todayOnly','backtestStart','backtestEnd','sigTf'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('change', () => { sentKeys.clear(); scanAndSendOpen(); });
+    });
   })();
   </script>
 </body>
