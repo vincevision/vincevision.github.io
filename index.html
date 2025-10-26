@@ -58,6 +58,58 @@
       content: attr(data-tooltip); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
       background: #1e2a44; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; white-space: nowrap; z-index: 10;
     }
+    /* Fancy button: only the "CRT V2.html" link */
+header a[href="CRT V2.html"] {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-left: 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2b8cff, #8b5cf6 60%, #22d3ee);
+  color: #fff !important;
+  border: 1px solid rgba(255,255,255,.15);
+  text-decoration: none;
+  letter-spacing: .2px;
+  box-shadow: 0 8px 24px rgba(43,140,255,.35), inset 0 1px 0 rgba(255,255,255,.25);
+  transition: transform .15s ease, box-shadow .25s ease, background .3s ease;
+}
+
+header a[href="CRT V2.html"]::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -150%;
+  width: 50%; height: 100%;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,.35), transparent);
+  transform: skewX(-20deg);
+  transition: left .6s ease;
+}
+
+header a[href="CRT V2.html"]::after {
+  content: '↗';
+  font-size: 12px;
+  opacity: .9;
+}
+
+header a[href="CRT V2.html"]:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px rgba(43,140,255,.45), 0 0 0 3px rgba(58,163,255,.2);
+}
+
+header a[href="CRT V2.html"]:hover::before {
+  left: 150%;
+}
+
+header a[href="CRT V2.html"]:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 18px rgba(43,140,255,.4);
+}
+
+header a[href="CRT V2.html"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(255,255,255,.25), 0 0 0 6px rgba(58,163,255,.45);
+}
   </style>
 </head>
 <body>
