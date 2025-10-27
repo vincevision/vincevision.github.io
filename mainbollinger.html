@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Institutional Signal Engine — Deriv</title>
+<style>
+  :root{
+    --bg:#0d1117; --bg2:#0f1522; --panel:#111827; --panel2:#0b1020;
+    --text:#e6edf3; --muted:#a9b1ba; --accent:#7c3aed; --accent-2:#22d3ee;
+    --up:#22c55e; --down:#ef4444; --warn:#f59e0b; --border:#1f2937; --bb:#00d4ff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family: ui-sans-serif,system-ui,Segoe UI,Roboto; color:var(--text);
+    background:linear-gradient(180deg,var(--bg),var(--bg2));}
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#0b1220, #0a0f1c);position:sticky;top:0;z-index:3;}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px}
+  .badge{font-size:11px;background:rgba(124,58,237,.15);color:#d3bfff;padding:3px 8px;border:1px solid rgba(124,58,237,.35);border-radius:999px}
+  .status{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+  .dot{width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(34,197,94,0.8);transition:.3s}
+  .dot.on{background:#22c55e;animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.7)}70%{box-shadow:0 0 0 12px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  .wrap{max-width:1300px;margin:18px auto;padding:0 14px;display:grid;grid-template-columns:1.2fr .8fr;gap:14px}
+  .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);
+    border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);overflow:hidden}
+  .panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);
+    background:linear-gradient(180deg,#0f1628,#0b1222)}
+  .controls{display:flex;flex-wrap:wrap;gap:10px}
+  select, input[type="number"], input[type="text"]{
+    background:#0b1324;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;outline:none;min-width:110px
+  }
+  .btn{background:linear-gradient(180deg,#2f1f7a,#1e1b4b);border:1px solid rgba(124,58,237,.4);color:#eae2ff;padding:9px 12px;border-radius:10px;
+    cursor:pointer;font-weight:700;letter-spacing:.2px;transition:.25s}
+  .btn.secondary{background:#0c1427;border-color:#334155;color:#cbd5e1}
+  .btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
+  .switch{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+  .legend{display:flex;align-items:center;gap:10px;font-size:12px;color:#93a3b8}
+  .lg{display:inline-flex;align-items:center;gap:6px}
+  .lg b{width:10px;height:3px;border-radius:2px;display:inline-block}
+  .lg .bb{background:var(--bb)} .lg .ma3{background:#f97316} .lg .mid{background:#94a3b8}
+  .small{font-size:12px;color:#9aa9bd}
+  canvas{display:block;width:100%;height:300px;background:#0b1220}
+  .subcanvas{height:120px;border-top:1px solid var(--border)}
+  .section{padding:12px 14px;border-bottom:1px solid var(--border)}
+  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:#0b1324;border:1px solid #1f2a44;color:#9fb3c8;padding:6px 10px;border-radius:999px;font-size:12px}
+  .flag{padding:2px 8px;border-radius:999px;border:1px solid #1f2a44;font-size:11px}
+  .flag.buy{background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.3)}
+  .flag.sell{background:rgba(239,68,68,.12);color:#fecaca;border-color:rgba(239,68,68,.3)}
+  .flag.neutral{background:rgba(148,163,184,.12);color:#cbd5e1;border-color:#334155}
+  .score{font-weight:800;font-size:28px;letter-spacing:.3px}
+  .score.good{color:var(--up)} .score.bad{color:var(--down)} .score.mid{color:var(--warn)}
+  .table{width:100%;border-collapse:collapse;font-size:13px}
+  .table th,.table td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
+  .table th{color:#9fb3c8;font-weight:600;background:#0b1220}
+  .muted{color:var(--muted)} .good{color:var(--up)} .bad{color:var(--down)} .warn{color:var(--warn)}
+  .metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .metric{background:#0b1324;border:1px solid #1f2a44;border-radius:10px;padding:10px}
+  .metric h4{margin:0 0 6px 0;font-size:12px;color:#93a3b8;font-weight:600}
+  .metric .v{font-weight:700;font-size:16px}
+  .footer-note{padding:10px 14px;font-size:12px;color:#94a3b8}
+  .hr{height:1px;background:var(--border);margin:10px 0}
+  .note{font-size:12px;color:#a7b4c7}
+  .kv{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #1e293b}
+  .kv:last-child{border-bottom:0}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span style="display:inline-flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:linear-gradient(135deg, #7c3aed, #22d3ee);box-shadow:0 6px 20px rgba(124,58,237,.35)">⚡</span>
+    <span>Institutional Signal Engine</span>
+    <span class="badge">Deriv LIVE · BB(20,2) · 3MA · StochRSI(3,3,14,16)</span>
+  </div>
+  <div class="status">
+    <span id="ws-dot" class="dot"></span><span id="ws-status">Disconnected</span>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- LEFT: Charts + Planner -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="controls">
+        <select id="symbol"></select>
+        <select id="htf">
+          <option value="14400">HTF: 4H</option>
+          <option value="86400" selected>HTF: 1D</option>
+          <option value="W">HTF: 1W</option>
+        </select>
+        <label class="switch"><input id="useLtf" type="checkbox" checked /> Use LTF confluence</label>
+        <select id="ltf">
+          <option value="900">LTF: 15m</option>
+          <option value="1800">LTF: 30m</option>
+          <option value="3600" selected>LTF: 1H</option>
+        </select>
+        <label class="switch"><input id="autoTrade" type="checkbox" checked /> Auto-trade on signals</label>
+        <select id="slType">
+          <option value="band" selected>SL: Beyond Band</option>
+          <option value="swing">SL: Swing High/Low</option>
+        </select>
+        <button id="start" class="btn">Start</button>
+        <button id="stop" class="btn secondary">Stop</button>
+      </div>
+      <div class="legend">
+        <span class="lg"><b class="bb"></b> Bollinger 20,2</span>
+        <span class="lg"><b class="mid"></b> Midline</span>
+        <span class="lg"><b class="ma3"></b> 3MA</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3 style="margin:0 0 8px 0">Strategy Rules</h3>
+      <div class="grid-3">
+        <label class="switch"><input id="ruleTap" type="checkbox" checked /> Require BB Tap</label>
+        <label class="switch"><input id="ruleMA3" type="checkbox" checked /> Require 3MA body</label>
+        <label class="switch"><input id="ruleStoch" type="checkbox" checked /> Require Stoch RSI</label>
+        <label class="switch"><input id="ruleStochZone" type="checkbox" checked /> Enforce OB/OS at cross</label>
+        <label class="switch"><input id="ruleStochRange" type="checkbox" checked /> Enforce Stoch range</label>
+        <label class="switch"><input id="ruleStochWindow" type="checkbox" checked /> Enforce recent cross</label>
+
+        <div>
+          <div class="small">Tap lookback (bars)</div>
+          <input id="tapLookback" type="number" min="1" step="1" value="3" />
+        </div>
+        <div>
+          <div class="small">Sell K min</div>
+          <input id="sellKMin" type="number" min="0" max="100" step="1" value="65" />
+        </div>
+        <div>
+          <div class="small">Buy K max</div>
+          <input id="buyKMax" type="number" min="0" max="100" step="1" value="50" />
+        </div>
+        <div>
+          <div class="small">OB threshold</div>
+          <input id="stochOB" type="number" min="50" max="100" step="1" value="80" />
+        </div>
+        <div>
+          <div class="small">OS threshold</div>
+          <input id="stochOS" type="number" min="0" max="50" step="1" value="20" />
+        </div>
+        <div>
+          <div class="small">Bars since cross</div>
+          <input id="barsSince" type="number" min="0" max="50" step="1" value="5" />
+        </div>
+
+        <label class="switch"><input id="ltfReqMid" type="checkbox" checked /> LTF: require midline</label>
+        <label class="switch"><input id="ltfReqStruct" type="checkbox" checked /> LTF: require structure</label>
+        <div>
+          <div class="small">Both-hit preference</div>
+          <select id="bothHitPref">
+            <option value="slfirst" selected>SL-first (conservative)</option>
+            <option value="tpfirst">TP-first</option>
+          </select>
+        </div>
+      </div>
+      <div class="small" style="margin-top:6px">Tip: turn off any filter to relax signals. Confidence auto-scales to enabled rules.</div>
+    </div>
+
+    <div class="section">
+      <div class="small">Live snapshot</div>
+      <div class="grid-3">
+        <div class="pill"><b>StochRSI K/D:</b> <span id="kd">–</span></div>
+        <div class="pill"><b>BB Width:</b> <span id="bbwidth">–</span></div>
+        <div class="pill"><b>Last Close:</b> <span id="lastclose">–</span></div>
+      </div>
+      <div class="grid-3" style="margin-top:8px">
+        <div class="pill"><b>3MA:</b> <span id="ma3v">–</span></div>
+        <div class="pill"><b>Updated:</b> <span id="updated">–</span></div>
+        <label class="switch"><input type="checkbox" id="beep" checked /> Audio</label>
+      </div>
+    </div>
+
+    <div class="section">
+      <canvas id="chart"></canvas>
+      <canvas id="osc" class="subcanvas"></canvas>
+      <div class="small" style="padding-top:6px">Signals form on HTF close per your rules. LTF helps entries and tracking.</div>
+    </div>
+
+    <div class="section grid-3">
+      <div class="metric">
+        <h4>Current Bias</h4>
+        <div id="bias" class="v">–</div>
+        <div id="biasreason" class="note"></div>
+      </div>
+      <div class="metric">
+        <h4>Signal Confidence</h4>
+        <div id="conf" class="v score">–</div>
+        <div class="note">Weights scale to enabled rules</div>
+      </div>
+      <div class="metric">
+        <h4>Confluence</h4>
+        <div id="confluence" class="v">–</div>
+        <div class="note">LTF midline + structure (if enabled)</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="grid-2">
+        <div>
+          <div class="kv"><div>Entry suggestion</div><div id="entry">–</div></div>
+          <div class="kv"><div>Take Profit (Midline)</div><div id="tp">–</div></div>
+          <div class="kv"><div>Stop Loss (Band)</div><div id="sl1">–</div></div>
+          <div class="kv"><div>Stop Loss (Swing)</div><div id="sl2">–</div></div>
+          <div class="kv"><div>R:R to Band SL</div><div id="rr1">–</div></div>
+          <div class="kv"><div>R:R to Swing SL</div><div id="rr2">–</div></div>
+          <div style="margin-top:10px"><button id="open" class="btn">Open Trade (manual)</button></div>
+        </div>
+        <div>
+          <div class="kv"><div>Tap condition</div><div id="tapc">–</div></div>
+          <div class="kv"><div>3MA filter</div><div id="ma3c">–</div></div>
+          <div class="kv"><div>StochRSI timing</div><div id="stochc">–</div></div>
+          <div class="kv"><div>LTF midline</div><div id="ltfmid">–</div></div>
+          <div class="kv"><div>LTF structure</div><div id="ltfstr">–</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="grid-2">
+        <div>
+          <h3 style="margin:0 0 10px 0">Risk Manager</h3>
+          <div class="grid-3">
+            <div>
+              <div class="small">Account Size</div>
+              <input id="acct" type="number" step="0.01" value="1000" />
+            </div>
+            <div>
+              <div class="small">Risk %</div>
+              <input id="riskpct" type="number" step="0.1" value="1.0" />
+            </div>
+            <div>
+              <div class="small">Entry</div>
+              <input id="rEntry" type="number" step="0.00001" />
+            </div>
+            <div>
+              <div class="small">Stop</div>
+              <input id="rStop" type="number" step="0.00001" />
+            </div>
+            <div>
+              <div class="small">Take Profit</div>
+              <input id="rTP" type="number" step="0.00001" />
+            </div>
+            <div style="display:flex;align-items:end">
+              <button id="calc" class="btn" style="width:100%">Calc</button>
+            </div>
+          </div>
+        </div>
+        <div class="metrics">
+          <div class="metric"><h4>Risk Amount</h4><div id="rRisk" class="v">–</div><div class="note">Risk $ based on %</div></div>
+          <div class="metric"><h4>Distance to SL</h4><div id="rDist" class="v">–</div><div class="note">Abs(Entry - SL)</div></div>
+          <div class="metric"><h4>R Multiple</h4><div id="rR" class="v">–</div><div class="note">(TP-Entry)/(Entry-SL)</div></div>
+          <div class="metric"><h4>Size (units)</h4><div id="rSize" class="v">–</div><div class="note">Units = Risk/Distance</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-note">Educational use only. Markets carry risk. Use sound risk management.</div>
+  </div>
+
+  <!-- RIGHT: Signals + Trades -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="hstack" style="display:flex;align-items:center;gap:10px">
+        <span style="font-weight:700">Recent Signals</span>
+        <span id="signal-count" class="pill">0</span>
+      </div>
+      <div class="small">Saved last 50</div>
+    </div>
+    <div class="section">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Time</th><th>Symbol</th><th>Side</th><th>Entry</th><th>TP</th><th>SL (Band/Swing)</th><th>Conf</th>
+          </tr>
+        </thead>
+        <tbody id="sigbody"></tbody>
+      </table>
+    </div>
+
+    <div class="panel-header">
+      <div class="hstack" style="display:flex;align-items:center;gap:10px">
+        <span style="font-weight:700">Live Trades</span>
+        <span id="live-count" class="pill">0</span>
+      </div>
+      <div class="small"><button id="closeAll" class="btn secondary" style="padding:6px 10px">Close All</button></div>
+    </div>
+    <div class="section">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Opened</th><th>Symbol</th><th>Side</th><th>Entry</th><th>TP</th><th>SL</th><th>Now</th><th>R</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="livebody"></tbody>
+      </table>
+    </div>
+
+    <div class="panel-header">
+      <div class="hstack" style="display:flex;align-items:center;gap:10px">
+        <span style="font-weight:700">Closed Trades</span>
+        <span id="closed-count" class="pill">0</span>
+      </div>
+      <div class="small" id="stats">Win rate: – · Avg R: –</div>
+    </div>
+    <div class="section">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Closed</th><th>Symbol</th><th>Side</th><th>Entry</th><th>Exit</th><th>R</th><th>Outcome</th>
+          </tr>
+        </thead>
+        <tbody id="closedbody"></tbody>
+      </table>
+    </div>
+
+    <div class="section">
+      <h3 style="margin:0 0 10px 0">Strategy Checklist</h3>
+      <ul class="small">
+        <li>HTF: Tap outer Bollinger Band in direction (toggleable).</li>
+        <li>Body close beyond 3MA (toggleable).</li>
+        <li>Stoch RSI crossover + optional zone/range/time filters (toggleable).</li>
+        <li>TP to Midline; SL beyond Band or swing high/low.</li>
+        <li>Optional: LTF mid-break + structure, both toggleable.</li>
+      </ul>
+      <div class="hr"></div>
+      <div class="note">Weekly candles aggregate Daily. Trades tracked on selected LTF for precise TP/SL hits.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const APP_ID = 1089;
+  const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
+
+  // DOM
+  const el = id => document.getElementById(id);
+  const wsDot = el('ws-dot'), wsStatus = el('ws-status');
+  const selSymbol = el('symbol'), selHTF = el('htf'), selLTF = el('ltf');
+  const chkLTF = el('useLtf'), chkAuto = el('autoTrade'), selSLType = el('slType');
+  const btnStart = el('start'), btnStop = el('stop'), btnCloseAll = el('closeAll'), btnOpen = el('open');
+  const canvas = el('chart'), osc = el('osc');
+  const kdEl = el('kd'), bbwidthEl = el('bbwidth'), ma3El = el('ma3v'), lastCloseEl = el('lastclose'), updatedEl = el('updated');
+  const biasEl = el('bias'), biasReasonEl = el('biasreason'), confEl = el('conf'), confluenceEl = el('confluence');
+  const entryEl = el('entry'), tpEl = el('tp'), sl1El = el('sl1'), sl2El = el('sl2'), rr1El = el('rr1'), rr2El = el('rr2');
+  const tapcEl = el('tapc'), ma3cEl = el('ma3c'), stochcEl = el('stochc'), ltfmidEl = el('ltfmid'), ltfstrEl = el('ltfstr');
+  const sigbody = el('sigbody'), sigCount = el('signal-count');
+  const livebody = el('livebody'), liveCount = el('live-count'), closedbody = el('closedbody'), closedCount = el('closed-count'), statsEl = el('stats');
+  const rAcct = el('acct'), rPct = el('riskpct'), rEntry = el('rEntry'), rStop = el('rStop'), rTP = el('rTP'), rRisk = el('rRisk'), rDist = el('rDist'), rR = el('rR'), rSize = el('rSize'), rCalc = el('calc');
+  const beepCk = el('beep');
+
+  // Rule controls
+  const ruleTap = el('ruleTap');
+  const ruleMA3 = el('ruleMA3');
+  const ruleStoch = el('ruleStoch');
+  const ruleStochZone = el('ruleStochZone');
+  const ruleStochRange = el('ruleStochRange');
+  const ruleStochWindow = el('ruleStochWindow');
+  const tapLookback = el('tapLookback');
+  const sellKMin = el('sellKMin');
+  const buyKMax = el('buyKMax');
+  const stochOB = el('stochOB');
+  const stochOS = el('stochOS');
+  const barsSince = el('barsSince');
+  const ltfReqMid = el('ltfReqMid');
+  const ltfReqStruct = el('ltfReqStruct');
+  const bothHitPref = el('bothHitPref');
+
+  // State
+  let ws=null, isOpen=false;
+  let subs = {};   // subId -> {symbol,gran,onInit,onUpdate}
+  let pending = {}; // key -> meta
+  let dailyMap = {}; // symbol -> daily candles (for weekly)
+  let weeklyStates = {}; // symbol -> {lastEmitted, lastLatestEpoch}
+  let htfCandles = []; let ltfCandles = [];
+  let lastClosedHTFOpenTime = null;
+  let recentSignals = [];
+  let trades = []; // {id,symbol,side,entry,tp,sl,openTime,closeTime,status,exitPrice, rrInit, rrLive, bestRR}
+  let activeSymbol = null;
+
+  // Utils
+  const fmt = (n,d=5)=> (n==null||!isFinite(n))?'–':Number(n).toFixed(d);
+  const niceTime = ts => new Date(ts*1000).toLocaleString();
+  const nowTS = ()=> Math.floor(Date.now()/1000);
+
+  // WebSocket
+  function connect(){
+    ws = new WebSocket(WS_URL);
+    ws.onopen = () => { isOpen=true; wsDot.classList.add('on'); wsStatus.textContent='Connected'; send({active_symbols:'brief', product_type:'basic'}); };
+    ws.onmessage = handleMsg;
+    ws.onclose = ()=>{ isOpen=false; wsDot.classList.remove('on'); wsStatus.textContent='Disconnected — reconnecting...'; setTimeout(connect, 1500); };
+    ws.onerror = ()=>{ wsStatus.textContent='Error'; };
+  }
+  function send(obj){ if(isOpen) ws.send(JSON.stringify(obj)); }
+  function forget(id){ if(!id) return; send({forget:id}); delete subs[id]; }
+  function forgetAll(){ Object.keys(subs).forEach(forget); subs={}; pending={}; }
+
+  function subscribeCandles(symbol, gran, onInit, onUpdate){
+    const key = `${symbol}|${gran}|candles`;
+    pending[key] = {symbol, gran, onInit, onUpdate};
+    send({ticks_history: symbol, style:'candles', granularity: gran, count: 500, end:'latest', adjust_start_time:1, subscribe:1});
+  }
+
+  function handleMsg(e){
+    const msg = JSON.parse(e.data);
+    if(msg.msg_type === 'active_symbols'){
+      populateSymbols(msg.active_symbols || []);
+      return;
+    }
+    if(msg.msg_type === 'candles'){
+      const subId = msg.subscription?.id;
+      const symbol = msg.echo_req?.ticks_history;
+      const gran = Number(msg.echo_req?.granularity || 0);
+      const key = `${symbol}|${gran}|candles`;
+      const arr = (msg.candles || []).map(c=>({epoch:c.epoch||c.open_time, open:+c.open, high:+c.high, low:+c.low, close:+c.close}));
+      if(subId && pending[key]){
+        subs[subId] = pending[key];
+        delete pending[key];
+        subs[subId].onInit && subs[subId].onInit(arr, {symbol,gran,subId});
+      } else if(subId && subs[subId]){
+        subs[subId].onInit && subs[subId].onInit(arr, {symbol,gran,subId});
+      }
+      return;
+    }
+    if(msg.msg_type === 'ohlc'){
+      const subId = msg.subscription?.id;
+      const o = msg.ohlc;
+      if(subId && subs[subId]){
+        subs[subId].onUpdate && subs[subId].onUpdate(o, {subId});
+      }
+      return;
+    }
+    if(msg.error){
+      console.warn('Deriv error:', msg.error);
+    }
+  }
+
+  function populateSymbols(list){
+    const sorted = list.filter(s=>s.is_trading_suspended===0)
+      .sort((a,b)=> a.market_display_name === b.market_display_name ? a.display_order-b.display_order : a.market_display_name.localeCompare(b.market_display_name));
+    selSymbol.innerHTML = '';
+    for(const s of sorted){
+      const opt = document.createElement('option');
+      opt.value = s.symbol;
+      opt.textContent = `${s.display_name} — ${s.market_display_name}`;
+      selSymbol.appendChild(opt);
+    }
+    // preselect common symbols if present
+    const defaults = ['frxEURUSD','frxGBPUSD','R_100'];
+    for(const d of defaults){
+      const o = Array.from(selSymbol.options).find(o=>o.value===d);
+      if(o){ selSymbol.value = d; break; }
+    }
+  }
+
+  // TA functions
+  function SMA(arr, len){
+    const out=new Array(arr.length).fill(null);
+    let sum=0; for(let i=0;i<arr.length;i++){ sum+=arr[i]; if(i>=len) sum-=arr[i-len]; if(i>=len-1) out[i]=sum/len; }
+    return out;
+  }
+  function STDDEV(arr,len){
+    const out=new Array(arr.length).fill(null);
+    let sum=0,sum2=0;
+    for(let i=0;i<arr.length;i++){
+      const v=arr[i]; sum+=v; sum2+=v*v;
+      if(i>=len){ sum-=arr[i-len]; sum2-=arr[i-len]*arr[i-len]; }
+      if(i>=len-1){ const mean=sum/len; const variance=(sum2/len)-mean*mean; out[i]=Math.sqrt(Math.max(0,variance)); }
+    }
+    return out;
+  }
+  function BollingerBands(closes,len=20,mult=2){
+    const basis=SMA(closes,len); const std=STDDEV(closes,len);
+    const upper=basis.map((b,i)=>b!=null&&std[i]!=null?b+mult*std[i]:null);
+    const lower=basis.map((b,i)=>b!=null&&std[i]!=null?b-mult*std[i]:null);
+    return {basis,upper,lower};
+  }
+  function RSI(closes,len=14){
+    const out=new Array(closes.length).fill(null);
+    if(closes.length<len+1) return out;
+    let gain=0,loss=0;
+    for(let i=1;i<=len;i++){ const ch=closes[i]-closes[i-1]; if(ch>=0) gain+=ch; else loss-=ch; }
+    let ag=gain/len, al=loss/len;
+    out[len]=al===0?100:100-(100/(1+(ag/al)));
+    for(let i=len+1;i<closes.length;i++){
+      const ch=closes[i]-closes[i-1]; const g=Math.max(0,ch), l=Math.max(0,-ch);
+      ag=(ag*(len-1)+g)/len; al=(al*(len-1)+l)/len;
+      out[i]=al===0?100:100-(100/(1+(ag/al)));
+    }
+    return out;
+  }
+  function StochRSI(closes, rsiLen=14, stochLen=16, kLen=3, dLen=3){
+    const rsi=RSI(closes,rsiLen), raw=new Array(closes.length).fill(null);
+    for(let i=0;i<closes.length;i++){
+      const from=i-stochLen+1; if(from<0) continue;
+      let lo=Infinity, hi=-Infinity;
+      for(let j=from;j<=i;j++){ const v=rsi[j]; if(v==null){ lo=null; hi=null; break; } if(v<lo) lo=v; if(v>hi) hi=v; }
+      if(lo==null||hi==null||hi===lo){ raw[i]=50; continue; }
+      raw[i]=100*((rsi[i]-lo)/(hi-lo));
+    }
+    const k=SMA(raw.map(v=>v??0),kLen).map((v,i)=> raw[i]==null?null:v);
+    const d=SMA(k.map(v=>v??0),dLen).map((v,i)=> k[i]==null?null:v);
+    return {rsi,raw,k,d};
+  }
+  function lastCrossEx(k,d,ob=80,os=20){
+    for(let i=k.length-1;i>=1;i--){
+      const k1=k[i-1], d1=d[i-1], k2=k[i], d2=d[i]; if([k1,d1,k2,d2].some(x=>x==null)) continue;
+      if(k1<d1 && k2>d2){ const atOS=(k1<=os||d1<=os); return {dir:'up',idx:i,atOS,atOB:false}; }
+      if(k1>d1 && k2<d2){ const atOB=(k1>=ob||d1>=ob); return {dir:'down',idx:i,atOB,atOS:false}; }
+    }
+    return null;
+  }
+  function findPivotHighs(c,lb=3){
+    const idxs=[]; for(let i=lb;i<c.length-lb;i++){ const h=c[i].high; let ok=true; for(let j=1;j<=lb;j++){ if(!(h>c[i-j].high && h>c[i+j].high)){ ok=false; break; } } if(ok) idxs.push(i); }
+    return idxs;
+  }
+  function findPivotLows(c,lb=3){
+    const idxs=[]; for(let i=lb;i<c.length-lb;i++){ const l=c[i].low; let ok=true; for(let j=1;j<=lb;j++){ if(!(l<c[i-j].low && l<c[i+j].low)){ ok=false; break; } } if(ok) idxs.push(i); }
+    return idxs;
+  }
+  function weeklyFromDaily(d){
+    if(!d.length) return [];
+    const res=[]; const startOfWeek = (ts)=>{ const dt=new Date(ts*1000); const day=(dt.getUTCDay()+6)%7; dt.setUTCDate(dt.getUTCDate()-day); dt.setUTCHours(0,0,0,0); return Math.floor(dt.getTime()/1000); };
+    let curKey=null, cur=null;
+    for(const c of d){
+      const key=startOfWeek(c.epoch);
+      if(curKey===null || key!==curKey){ if(cur) res.push(cur); curKey=key; cur={epoch:key, open:c.open, high:c.high, low:c.low, close:c.close}; }
+      else { cur.high=Math.max(cur.high,c.high); cur.low=Math.min(cur.low,c.low); cur.close=c.close; }
+    }
+    if(cur) res.push(cur);
+    return res;
+  }
+  function recentTapUpper(c,upper,look=3){ const n=c.length; for(let i=n-look-1;i<=n-1;i++){ if(i<0||!upper[i]) continue; if(c[i].high>=upper[i]) return true; } return false; }
+  function recentTapLower(c,lower,look=3){ const n=c.length; for(let i=n-look-1;i<=n-1;i++){ if(i<0||!lower[i]) continue; if(c[i].low<=lower[i]) return true; } return false; }
+
+  // Drawing
+  function drawCharts(candles, bb, ma3, stoch){
+    if(!candles.length) return;
+    const ctx=canvas.getContext('2d'), ctx2=osc.getContext('2d');
+    const W=canvas.clientWidth||canvas.offsetWidth||600, H=canvas.clientHeight||300;
+    const W2=osc.clientWidth||canvas.offsetWidth||600, H2=osc.clientHeight||120;
+    canvas.width=W; canvas.height=H; osc.width=W2; osc.height=H2;
+
+    const N=Math.min(candles.length,180), offset=candles.length-N, slice=candles.slice(-N);
+    const highs=slice.map(c=>c.high), lows=slice.map(c=>c.low), closes=slice.map(c=>c.close);
+    const maxP=Math.max(...highs), minP=Math.min(...lows); const pad=(maxP-minP)*0.1 || 1e-9;
+    const top=maxP+pad, bot=minP-pad;
+    const y=v=> Math.round((1-(v-bot)/(top-bot))*H), x=i=> Math.round(i*(W/(N-1)));
+
+    // BG grid
+    ctx.fillStyle='#0b1220'; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='#111a2c'; ctx.lineWidth=1; ctx.beginPath();
+    for(let i=0;i<6;i++){ const yy=Math.round(i*H/5); ctx.moveTo(0,yy); ctx.lineTo(W,yy); } ctx.stroke();
+
+    // BB
+    ctx.lineWidth=1.2; ctx.strokeStyle='#00d4ff';
+    ctx.beginPath(); for(let i=offset;i<bb.upper.length;i++){ const j=i-offset; if(bb.upper[i]==null) continue; const xi=x(j), yi=y(bb.upper[i]); if(j===0) ctx.moveTo(xi,yi); else ctx.lineTo(xi,yi);} ctx.stroke();
+    ctx.beginPath(); for(let i=offset;i<bb.lower.length;i++){ const j=i-offset; if(bb.lower[i]==null) continue; const xi=x(j), yi=y(bb.lower[i]); if(j===0) ctx.moveTo(xi,yi); else ctx.lineTo(xi,yi);} ctx.stroke();
+
+    // Midline
+    ctx.strokeStyle='#94a3b8';
+    ctx.beginPath(); for(let i=offset;i<bb.basis.length;i++){ const j=i-offset; if(bb.basis[i]==null) continue; const xi=x(j), yi=y(bb.basis[i]); if(j===0) ctx.moveTo(xi,yi); else ctx.lineTo(xi,yi);} ctx.stroke();
+
+    // 3MA
+    ctx.strokeStyle='#f97316';
+    ctx.beginPath(); for(let i=offset;i<ma3.length;i++){ const j=i-offset; if(ma3[i]==null) continue; const xi=x(j), yi=y(ma3[i]); if(j===0) ctx.moveTo(xi,yi); else ctx.lineTo(xi,yi);} ctx.stroke();
+
+    // Candles
+    const barW=Math.max(2, Math.floor(W/(N*1.2)));
+    for(let i=0;i<slice.length;i++){
+      const c=slice[i]; const openY=y(c.open), closeY=y(c.close), highY=y(c.high), lowY=y(c.low);
+      const col=c.close>=c.open?'#22c55e':'#ef4444'; const xi=x(i);
+      ctx.strokeStyle=col; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(xi, highY); ctx.lineTo(xi, lowY); ctx.stroke();
+      ctx.fillStyle=col; const topy=Math.min(openY, closeY); const h=Math.max(1, Math.abs(closeY-openY)); ctx.fillRect(xi-Math.floor(barW/2), topy, barW, h);
+    }
+
+    // Osc
+    const y2=v=> Math.round((1-v/100)*H2);
+    ctx2.fillStyle='#0b1220'; ctx2.fillRect(0,0,W2,H2);
+    ctx2.strokeStyle='#132136'; ctx2.beginPath(); for(let i=0;i<5;i++){ const yy=Math.round(i*H2/4); ctx2.moveTo(0,yy); ctx2.lineTo(W2,yy);} ctx2.stroke();
+    ctx2.strokeStyle='#334155'; ctx2.setLineDash([4,4]); ctx2.beginPath(); ctx2.moveTo(0, y2(80)); ctx2.lineTo(W2, y2(80)); ctx2.stroke();
+    ctx2.beginPath(); ctx2.moveTo(0, y2(20)); ctx2.lineTo(W2, y2(20)); ctx2.stroke(); ctx2.setLineDash([]);
+
+    ctx2.lineWidth=1.5; ctx2.strokeStyle='#22d3ee'; ctx2.beginPath();
+    for(let i=offset;i<stoch.k.length;i++){ const j=i-offset; const v=stoch.k[i]; if(v==null) continue; const xi=x(j), yi=y2(v); if(j===0) ctx2.moveTo(xi,yi); else ctx2.lineTo(xi,yi);} ctx2.stroke();
+    ctx2.strokeStyle='#7c3aed'; ctx2.beginPath();
+    for(let i=offset;i<stoch.d.length;i++){ const j=i-offset; const v=stoch.d[i]; if(v==null) continue; const xi=x(j), yi=y2(v); if(j===0) ctx2.moveTo(xi,yi); else ctx2.lineTo(xi,yi);} ctx2.stroke();
+  }
+
+  // Rules
+  function getRules(){
+    return {
+      useTap: ruleTap.checked,
+      useMA3: ruleMA3.checked,
+      useStoch: ruleStoch.checked,
+      stochZone: ruleStochZone.checked,
+      stochRange: ruleStochRange.checked,
+      stochWindow: ruleStochWindow.checked,
+      tapLookback: Math.max(1, parseInt(tapLookback.value||'3',10)),
+      sellKMin: Math.max(0, Math.min(100, parseInt(sellKMin.value||'65',10))),
+      buyKMax: Math.max(0, Math.min(100, parseInt(buyKMax.value||'50',10))),
+      stochOB: Math.max(50, Math.min(100, parseInt(stochOB.value||'80',10))),
+      stochOS: Math.max(0, Math.min(50, parseInt(stochOS.value||'20',10))),
+      barsSince: Math.max(0, parseInt(barsSince.value||'5',10)),
+      useLTF: chkLTF.checked,
+      ltfReqMid: ltfReqMid.checked,
+      ltfReqStruct: ltfReqStruct.checked,
+      bothPref: bothHitPref.value
+    };
+  }
+
+  // Strategy analysis (at full series)
+  function analyzeHTF(c, rules){
+    const n=c.length; if(n<60) return {bias:'NEUTRAL'};
+    const closes=c.map(x=>x.close), bb=BollingerBands(closes,20,2), ma3=SMA(closes,3), stoch=StochRSI(closes,14,16,3,3), last=n-1;
+    const lastClose=closes[last]; const bw=(bb.upper[last]&&bb.lower[last])?(bb.upper[last]-bb.lower[last]):null;
+
+    const tappedUpper=recentTapUpper(c,bb.upper,rules.tapLookback);
+    const tappedLower=recentTapLower(c,bb.lower,rules.tapLookback);
+    const bodyBelow3 = ma3[last]!=null && lastClose<ma3[last];
+    const bodyAbove3 = ma3[last]!=null && lastClose>ma3[last];
+
+    const cross = lastCrossEx(stoch.k, stoch.d, rules.stochOB, rules.stochOS);
+    const Know = stoch.k[last];
+
+    function stochOK(dir){
+      if(!rules.useStoch) return true;
+      if(!cross) return false;
+      if(dir==='SELL' && cross.dir!=='down') return false;
+      if(dir==='BUY'  && cross.dir!=='up') return false;
+      if(rules.stochWindow && (last - cross.idx > rules.barsSince)) return false;
+      if(rules.stochZone){
+        if(dir==='SELL' && !cross.atOB) return false;
+        if(dir==='BUY'  && !cross.atOS) return false;
+      }
+      if(rules.stochRange){
+        if(dir==='SELL' && !(Know!=null && Know>=rules.sellKMin)) return false;
+        if(dir==='BUY'  && !(Know!=null && Know<=rules.buyKMax)) return false;
+      }
+      return true;
+    }
+
+    const sellTapOK = rules.useTap ? tappedUpper : true;
+    const buyTapOK  = rules.useTap ? tappedLower : true;
+    const sellMaOK  = rules.useMA3 ? bodyBelow3 : true;
+    const buyMaOK   = rules.useMA3 ? bodyAbove3 : true;
+    const sellStOK  = stochOK('SELL');
+    const buyStOK   = stochOK('BUY');
+
+    const sellOK = sellTapOK && sellMaOK && sellStOK;
+    const buyOK  = buyTapOK && buyMaOK && buyStOK;
+
+    let bias='NEUTRAL', reasons=[];
+    if(sellOK && !buyOK){ bias='SELL';
+      if(rules.useTap && tappedUpper) reasons.push('Tap upper');
+      if(rules.useMA3 && bodyBelow3) reasons.push('Close<3MA');
+      if(rules.useStoch && sellStOK) reasons.push('StochRSI down');
+    } else if(buyOK && !sellOK){ bias='BUY';
+      if(rules.useTap && tappedLower) reasons.push('Tap lower');
+      if(rules.useMA3 && bodyAbove3) reasons.push('Close>3MA');
+      if(rules.useStoch && buyStOK) reasons.push('StochRSI up');
+    } else {
+      if(rules.useTap && tappedUpper) reasons.push('Tapped upper');
+      if(rules.useTap && tappedLower) reasons.push('Tapped lower');
+      if(rules.useMA3 && bodyBelow3) reasons.push('Close<3MA');
+      if(rules.useMA3 && bodyAbove3) reasons.push('Close>3MA');
+      if(rules.useStoch && (sellStOK||buyStOK)) reasons.push('Stoch timing OK');
+    }
+
+    return {
+      bias,reasons,bb,ma3,stoch,lastClose,bandWidth:bw,
+      comp: {tappedUpper,tappedLower,bodyBelow3,bodyAbove3,stochDir:cross?.dir||null, stochOKsell:sellStOK, stochOKbuy:buyStOK, crossIdx:cross?.idx ?? null}
+    };
+  }
+
+  function analyzeLTF(c){
+    const n=c.length; if(n<40) return {midUp:false,midDown:false,structUp:false,structDown:false};
+    const closes=c.map(x=>x.close), bb=BollingerBands(closes,20,2), last=n-1;
+    const midUp = bb.basis[last]!=null && closes[last]>bb.basis[last];
+    const midDown = bb.basis[last]!=null && closes[last]<bb.basis[last];
+    const pivH=findPivotHighs(c,3), pivL=findPivotLows(c,3), lastPH=pivH.length?pivH[pivH.length-1]:null, lastPL=pivL.length?pivL[pivL.length-1]:null;
+    const close=closes[last];
+    return {midUp,midDown,structUp:lastPH!=null?(close>c[lastPH].high):false, structDown:lastPL!=null?(close<c[lastPL].low):false};
+  }
+
+  // Plan at specific HTF index (closed-candle logic)
+  function planTradeAtIndex(idx){
+    if(!htfCandles.length || idx==null || idx<0 || idx>=htfCandles.length) return null;
+    const rules = getRules();
+    const used = htfCandles.slice(0, idx+1);
+    const a=analyzeHTF(used, rules); if(!a.bb) return null;
+
+    let ltfC={midUp:false,midDown:false,structUp:false,structDown:false}, ltfOk=true;
+    if(ltfCandles.length){
+      ltfC=analyzeLTF(ltfCandles);
+      if(rules.useLTF){
+        const wantDown = (a.bias==='SELL');
+        const wantUp = (a.bias==='BUY');
+        let midOK = true, structOK = true;
+        if(rules.ltfReqMid) midOK = wantDown ? ltfC.midDown : ltfC.midUp;
+        if(rules.ltfReqStruct) structOK = wantDown ? ltfC.structDown : ltfC.structUp;
+        ltfOk = midOK && structOK;
+      }
+    }
+
+    const n=used.length, last=n-1, entry=a.lastClose, mid=a.bb.basis[last], upper=a.bb.upper[last], lower=a.bb.lower[last], bw=(upper!=null && lower!=null)?(upper-lower):null;
+    const pivH=findPivotHighs(used,3), pivL=findPivotLows(used,3);
+    const lastPH=pivH.length?used[pivH[pivH.length-1]].high:null, lastPL=pivL.length?used[pivL[pivL.length-1]].low:null;
+
+    let TP=null, SL_band=null, SL_swing=null, rrBand=null, rrSwing=null;
+    if(a.bias==='SELL'){
+      TP=mid??null; SL_band=(upper!=null && bw!=null)?(upper+bw*0.25):null; SL_swing=lastPH??null;
+      if(TP!=null && SL_band!=null) rrBand=(entry-TP)/(SL_band-entry);
+      if(TP!=null && SL_swing!=null) rrSwing=(entry-TP)/(SL_swing-entry);
+    } else if(a.bias==='BUY'){
+      TP=mid??null; SL_band=(lower!=null && bw!=null)?(lower-bw*0.25):null; SL_swing=lastPL??null;
+      if(TP!=null && SL_band!=null) rrBand=(TP-entry)/(entry-SL_band);
+      if(TP!=null && SL_swing!=null) rrSwing=(TP-entry)/(entry-SL_swing);
+    }
+
+    // Confidence with scaling to enabled rules
+    const weights = {tap:35, ma:25, st:35, ltf:15};
+    let denom = 0, scoreRaw = 0;
+    if(rules.useTap) denom += weights.tap;
+    if(rules.useMA3) denom += weights.ma;
+    if(rules.useStoch) denom += weights.st;
+    if(rules.useLTF) denom += weights.ltf;
+
+    const tapOK = (a.bias==='SELL' ? (rules.useTap ? a.comp.tappedUpper : true) : (a.bias==='BUY' ? (rules.useTap ? a.comp.tappedLower : true) : false));
+    const maOK = (a.bias==='SELL' ? (rules.useMA3 ? (a.lastClose < a.ma3[last]) : true) : (a.bias==='BUY' ? (rules.useMA3 ? (a.lastClose > a.ma3[last]) : true) : false));
+    const stOK = (a.bias==='SELL' ? (rules.useStoch ? a.comp.stochOKsell : true) : (a.bias==='BUY' ? (rules.useStoch ? a.comp.stochOKbuy : true) : false));
+
+    if(tapOK && rules.useTap) scoreRaw += weights.tap;
+    if(maOK && rules.useMA3) scoreRaw += weights.ma;
+    if(stOK && rules.useStoch) scoreRaw += weights.st;
+    if(rules.useLTF && ltfOk) scoreRaw += weights.ltf;
+
+    const score = denom>0 ? Math.round(scoreRaw/denom*100) : 100;
+
+    return {...a, ltfC, ltfOk, entry, TP, SL_band, SL_swing, rrBand, rrSwing, score, rules};
+  }
+
+  // Plan for UI (latest bar)
+  function planTrade(){
+    return planTradeAtIndex(htfCandles.length-1);
+  }
+
+  // UI update
+  function updateUI(){
+    const plan=planTrade(); if(!plan) return;
+    drawCharts(htfCandles, plan.bb, plan.ma3, plan.stoch);
+
+    const lastIdx=htfCandles.length-1;
+    kdEl.textContent = plan.stoch.k[lastIdx]!=null ? `${fmt(plan.stoch.k[lastIdx],1)} / ${fmt(plan.stoch.d[lastIdx],1)}` : '–';
+    bbwidthEl.textContent = plan.bandWidth ? fmt(plan.bandWidth,5) : '–';
+    ma3El.textContent = plan.ma3[lastIdx]!=null ? fmt(plan.ma3[lastIdx],5) : '–';
+    lastCloseEl.textContent = fmt(plan.lastClose,5);
+    updatedEl.textContent = htfCandles[lastIdx] ? niceTime(htfCandles[lastIdx].epoch) : '–';
+
+    biasEl.innerHTML=''; const span=document.createElement('span');
+    span.className='flag ' + (plan.bias==='BUY'?'buy':(plan.bias==='SELL'?'sell':'neutral')); span.textContent=plan.bias; biasEl.appendChild(span);
+    biasReasonEl.textContent = plan.reasons.join(' • ');
+
+    confluenceEl.textContent = plan.rules.useLTF ? (plan.ltfOk?'OK':'Waiting') + ` (Mid: ${(plan.ltfC.midUp||plan.ltfC.midDown)?'✓':'–'}, Struct: ${(plan.ltfC.structUp||plan.ltfC.structDown)?'✓':'–'})` : 'Not required';
+
+    confEl.className='v score '+(plan.score>=75?'good':plan.score>=50?'mid':'bad'); confEl.textContent=plan.score;
+
+    // components status
+    const tapOK = (plan.bias==='SELL' && plan.comp.tappedUpper) || (plan.bias==='BUY' && plan.comp.tappedLower);
+    tapcEl.innerHTML = plan.rules.useTap ? (tapOK?'<span class="good">✓ Tap confirmed</span>':'<span class="warn">–</span>') : '<span class="muted">Off</span>';
+    const maOK = (plan.bias==='SELL' && (plan.lastClose < plan.ma3[lastIdx])) || (plan.bias==='BUY' && (plan.lastClose > plan.ma3[lastIdx]));
+    ma3cEl.innerHTML = plan.rules.useMA3 ? (maOK?'<span class="good">✓ Body rule</span>':'<span class="warn">–</span>') : '<span class="muted">Off</span>';
+
+    const lc = lastCrossEx(plan.stoch.k, plan.stoch.d, plan.rules.stochOB, plan.rules.stochOS);
+    const stOK = (plan.bias==='SELL' && plan.comp.stochOKsell) || (plan.bias==='BUY' && plan.comp.stochOKbuy);
+    stochcEl.innerHTML = plan.rules.useStoch
+      ? (stOK?`<span class="good">✓ Cross${plan.rules.stochZone?' · Zone':''}${plan.rules.stochRange?' · Range':''}${plan.rules.stochWindow?' · Recent':''}</span>`:`<span class="warn">–</span>`)
+      : '<span class="muted">Off</span>';
+
+    ltfmidEl.innerHTML = plan.rules.useLTF
+      ? ((plan.bias==='SELL'?plan.ltfC.midDown:plan.ltfC.midUp)?'<span class="good">✓</span>':'<span class="warn">–</span>')
+      : '<span class="muted">n/a</span>';
+    ltfstrEl.innerHTML = plan.rules.useLTF
+      ? ((plan.bias==='SELL'?plan.ltfC.structDown:plan.ltfC.structUp)?'<span class="good">✓</span>':'<span class="warn">–</span>')
+      : '<span class="muted">n/a</span>';
+
+    entryEl.textContent = plan.entry?fmt(plan.entry,5):'–';
+    tpEl.textContent = plan.TP?fmt(plan.TP,5):'–';
+    sl1El.textContent = plan.SL_band?fmt(plan.SL_band,5):'–';
+    sl2El.textContent = plan.SL_swing?fmt(plan.SL_swing,5):'–';
+    rr1El.textContent = (plan.rrBand!=null && isFinite(plan.rrBand))?plan.rrBand.toFixed(2):'–';
+    rr2El.textContent = (plan.rrSwing!=null && isFinite(plan.rrSwing))?plan.rrSwing.toFixed(2):'–';
+
+    rEntry.value = plan.entry?fmt(plan.entry,5):'';
+    const stopPick = selSLType.value==='band'?plan.SL_band:plan.SL_swing;
+    rStop.value = stopPick?fmt(stopPick,5):'';
+    rTP.value = plan.TP?fmt(plan.TP,5):'';
+  }
+
+  // Signals
+  function emitSignalAtIndex(onHTFCloseEpoch, idx){
+    if(lastClosedHTFOpenTime === onHTFCloseEpoch) return; // throttle
+    const plan = planTradeAtIndex(idx);
+    if(!plan) return;
+    if(!(plan.bias==='BUY'||plan.bias==='SELL')) return;
+    if(plan.rules.useLTF && !plan.ltfOk) return;
+
+    lastClosedHTFOpenTime = onHTFCloseEpoch;
+
+    const row = {
+      time: onHTFCloseEpoch, symbol: activeSymbol, side: plan.bias, entry: plan.entry, tp: plan.TP, slBand: plan.SL_band, slSwing: plan.SL_swing, conf: plan.score
+    };
+    recentSignals.unshift(row); recentSignals = recentSignals.slice(0,50); renderSignals();
+
+    if(beepCk.checked) beep(plan.bias==='BUY'?900:420, 0.12);
+
+    if(chkAuto.checked){
+      const sl = selSLType.value==='band' ? plan.SL_band : plan.SL_swing;
+      if(plan.entry!=null && plan.TP!=null && sl!=null){
+        openTrade(activeSymbol, plan.bias, plan.entry, plan.TP, sl, onHTFCloseEpoch);
+      }
+    }
+  }
+  function emitSignalForLastClosed(epoch){
+    const idx = htfCandles.length-1; emitSignalAtIndex(epoch, idx);
+  }
+
+  function renderSignals(){
+    sigbody.innerHTML='';
+    for(const s of recentSignals){
+      const tr=document.createElement('tr');
+      tr.innerHTML = `
+        <td class="muted">${niceTime(s.time)}</td>
+        <td>${selSymbol.selectedOptions[0]?.textContent?.split('—')[0]?.trim() || s.symbol}</td>
+        <td>${s.side==='BUY'?'<span class="good">BUY</span>':'<span class="bad">SELL</span>'}</td>
+        <td>${fmt(s.entry,5)}</td>
+        <td>${fmt(s.tp,5)}</td>
+        <td>${fmt(s.slBand,5)} / ${fmt(s.slSwing,5)}</td>
+        <td>${s.conf}</td>`;
+      sigbody.appendChild(tr);
+    }
+    sigCount.textContent = recentSignals.length;
+  }
+
+  // Trades
+  function openTrade(symbol, side, entry, tp, sl, openTime){
+    const id = `${symbol}_${openTime}_${Math.random().toString(36).slice(2,7)}`;
+    const risk = side==='BUY' ? (entry - sl) : (sl - entry);
+    const tpr = side==='BUY' ? (tp - entry) : (entry - tp);
+    const rr = (risk>0 && isFinite(risk)) ? (tpr/risk) : null;
+    const t = {id,symbol,side,entry,tp,sl,openTime,closeTime:null,status:'live',exitPrice:null, rrInit:rr, rrLive:0, bestRR:0};
+    trades.unshift(t);
+    renderTrades();
+  }
+
+  function closeTrade(id, status, exitPrice, closeTime){
+    const t = trades.find(x=>x.id===id); if(!t || t.status!=='live') return;
+    t.status = status; t.exitPrice = exitPrice; t.closeTime = closeTime;
+    const risk = t.side==='BUY' ? (t.entry - t.sl) : (t.sl - t.entry);
+    const prof = t.side==='BUY' ? (exitPrice - t.entry) : (t.entry - exitPrice);
+    t.rr = (risk>0)?(prof/risk):null;
+    renderTrades();
+    if(beepCk.checked) beep(status==='won'?1200:300, 0.15);
+  }
+
+  function updateTradesWithLTF(ohlc){
+    if(!trades.some(t=>t.status==='live')) return;
+    const rules = getRules();
+    const cur = {high:+ohlc.high, low:+ohlc.low, close:+ohlc.close, epoch: ohlc.open_time};
+    const curPrice = +ohlc.close;
+    for(const t of trades){
+      if(t.status!=='live' || t.symbol!==activeSymbol) continue;
+      const risk = t.side==='BUY' ? (t.entry - t.sl) : (t.sl - t.entry);
+      if(risk>0){
+        const rrLive = t.side==='BUY' ? ((curPrice - t.entry)/risk) : ((t.entry - curPrice)/risk);
+        t.rrLive = rrLive; t.bestRR = Math.max(t.bestRR, rrLive);
+      }
+      const hitSL = t.side==='BUY' ? (cur.low <= t.sl) : (cur.high >= t.sl);
+      const hitTP = t.side==='BUY' ? (cur.high >= t.tp) : (cur.low <= t.tp);
+
+      if(hitSL && hitTP){
+        if(rules.bothPref === 'tpfirst'){
+          closeTrade(t.id,'won', t.tp, nowTS());
+        } else {
+          closeTrade(t.id,'lost', t.sl, nowTS());
+        }
+        continue;
+      }
+      if(hitSL){ closeTrade(t.id,'lost', t.sl, nowTS()); continue; }
+      if(hitTP){ closeTrade(t.id,'won', t.tp, nowTS()); continue; }
+    }
+    renderTrades();
+  }
+
+  function renderTrades(){
+    // Live
+    livebody.innerHTML='';
+    const live = trades.filter(t=>t.status==='live');
+    for(const t of live){
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td class="muted">${niceTime(t.openTime)}</td>
+        <td>${t.symbol}</td>
+        <td>${t.side==='BUY'?'<span class="good">BUY</span>':'<span class="bad">SELL</span>'}</td>
+        <td>${fmt(t.entry,5)}</td>
+        <td>${fmt(t.tp,5)}</td>
+        <td>${fmt(t.sl,5)}</td>
+        <td>${fmt(currentPrice(),5)}</td>
+        <td>${t.rrLive!=null && isFinite(t.rrLive)? t.rrLive.toFixed(2) : '–'}</td>
+        <td><button class="btn secondary" data-close="${t.id}" style="padding:4px 8px">Close</button></td>`;
+      livebody.appendChild(tr);
+    }
+    liveCount.textContent = live.length;
+    Array.from(livebody.querySelectorAll('[data-close]')).forEach(btn=>{
+      btn.onclick=()=> closeTrade(btn.getAttribute('data-close'), 'manual', currentPrice(), nowTS());
+    });
+
+    // Closed
+    closedbody.innerHTML='';
+    const closed = trades.filter(t=>t.status!=='live');
+    for(const t of closed){
+      const tr=document.createElement('tr');
+      tr.innerHTML=`
+        <td class="muted">${t.closeTime?niceTime(t.closeTime):'–'}</td>
+        <td>${t.symbol}</td>
+        <td>${t.side==='BUY'?'<span class="good">BUY</span>':'<span class="bad">SELL</span>'}</td>
+        <td>${fmt(t.entry,5)}</td>
+        <td>${fmt(t.exitPrice,5)}</td>
+        <td>${t.rr!=null && isFinite(t.rr)? t.rr.toFixed(2) : '–'}</td>
+        <td>${t.status==='won'?'<span class="good">WON</span>': t.status==='lost'?'<span class="bad">LOST</span>':'<span class="warn">MANUAL</span>'}</td>`;
+      closedbody.appendChild(tr);
+    }
+    closedCount.textContent = closed.length;
+
+    // Stats
+    const basic = closed.filter(t=>t.status==='won'||t.status==='lost');
+    const wins = basic.filter(t=>t.status==='won').length;
+    const losses = basic.filter(t=>t.status==='lost').length;
+    const wr = (wins+losses)>0 ? ((wins/(wins+losses))*100).toFixed(1)+'%' : '–';
+    const rList = basic.map(t=>t.rr).filter(x=>isFinite(x));
+    const avgR = rList.length>0 ? (rList.reduce((a,b)=>a+b,0)/rList.length).toFixed(2) : '–';
+    statsEl.textContent = `Win rate: ${wr} · Avg R: ${avgR}`;
+  }
+
+  function currentPrice(){
+    if(!ltfCandles.length) return NaN;
+    return ltfCandles[ltfCandles.length-1].close;
+  }
+
+  // Risk calc
+  rCalc.addEventListener('click', ()=>{
+    const acct = parseFloat(rAcct.value||'0'), rpct = parseFloat(rPct.value||'0')/100;
+    const e = parseFloat(rEntry.value||'0'), s = parseFloat(rStop.value||'0'), t = parseFloat(rTP.value||'0');
+    if(![acct,rpct,e,s,t].every(Number.isFinite) || e===0 || s===0){ alert('Fill all fields for risk calc'); return; }
+    const riskMoney = acct*rpct, dist = Math.abs(e-s), rMult = dist===0?null:Math.abs((t-e)/dist), units = dist===0?null:(riskMoney/dist);
+    rRisk.textContent = '$'+riskMoney.toFixed(2); rDist.textContent=fmt(dist,5);
+    rR.textContent = (rMult!=null && isFinite(rMult))?rMult.toFixed(2):'–';
+    rSize.textContent = (units!=null && isFinite(units))?units.toFixed(4):'–';
+  });
+
+  // Beep
+  let audioCtx;
+  function beep(freq=600,dur=0.08){
+    try{
+      audioCtx = audioCtx || new (window.AudioContext||window.webkitAudioContext)();
+      const o=audioCtx.createOscillator(), g=audioCtx.createGain();
+      o.type='sine'; o.frequency.value=freq; o.connect(g); g.connect(audioCtx.destination);
+      g.gain.setValueAtTime(0.0001,audioCtx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.2,audioCtx.currentTime+0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001,audioCtx.currentTime+dur);
+      o.start(); o.stop(audioCtx.currentTime+dur+0.02);
+    }catch(e){}
+  }
+
+  // App flow
+  function start(){
+    const symbol = selSymbol.value; if(!symbol){ alert('Select a symbol'); return; }
+    activeSymbol = symbol;
+    const htf = selHTF.value, ltf = parseInt(selLTF.value,10);
+    forgetAll(); htfCandles=[]; ltfCandles=[];
+    dailyMap[symbol] = dailyMap[symbol] || [];
+    weeklyStates[symbol] = weeklyStates[symbol] || {lastEmitted:null, lastLatestEpoch:null};
+
+    // LTF subscription (always for tracking)
+    subscribeCandles(symbol, ltf, (arr)=>{
+      ltfCandles = arr; updateUI(); renderTrades();
+    }, (o)=>{
+      const candle = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+      mergeCandle(ltfCandles, candle);
+      updateUI();
+      updateTradesWithLTF(o);
+    });
+
+    // HTF subscription
+    if(htf==='W'){
+      subscribeCandles(symbol, 86400, (arr)=>{
+        dailyMap[symbol] = arr.slice();
+        const weekly = weeklyFromDaily(dailyMap[symbol]);
+        htfCandles = weekly;
+        weeklyStates[symbol].lastLatestEpoch = weekly[weekly.length-1]?.epoch || null;
+        updateUI();
+      }, (o)=>{
+        const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+        mergeCandle(dailyMap[symbol], c);
+        const weekly = weeklyFromDaily(dailyMap[symbol]);
+        const prevLatest = weeklyStates[symbol].lastLatestEpoch;
+        const newLatest = weekly[weekly.length-1]?.epoch || null;
+        htfCandles = weekly;
+        updateUI();
+        if(o.is_closed === 1){
+          if(newLatest !== prevLatest){
+            const closedIdx = weekly.length-2;
+            if(closedIdx>=0){
+              const closedEpoch = weekly[closedIdx].epoch;
+              if(weeklyStates[symbol].lastEmitted !== closedEpoch){
+                emitSignalAtIndex(closedEpoch, closedIdx);
+                weeklyStates[symbol].lastEmitted = closedEpoch;
+              }
+            }
+            weeklyStates[symbol].lastLatestEpoch = newLatest;
+          }
+        }
+      });
+    } else {
+      const gran = parseInt(htf,10);
+      subscribeCandles(symbol, gran, (arr)=>{
+        htfCandles = arr; updateUI();
+      }, (o)=>{
+        const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+        mergeCandle(htfCandles, c);
+        updateUI();
+        if(o.is_closed === 1){ emitSignalForLastClosed(o.open_time); }
+      });
+    }
+  }
+
+  function stop(){ forgetAll(); }
+
+  function mergeCandle(arr, c){
+    const idx = arr.findIndex(x=>x.epoch===c.epoch);
+    if(idx>=0) arr[idx]=c; else { arr.push(c); arr.sort((a,b)=>a.epoch-b.epoch); if(arr.length>1500) arr.splice(0, arr.length-1500); }
+  }
+
+  // Events
+  btnStart.addEventListener('click', start);
+  btnStop.addEventListener('click', stop);
+  [ruleTap, ruleMA3, ruleStoch, ruleStochZone, ruleStochRange, ruleStochWindow,
+   tapLookback, sellKMin, buyKMax, stochOB, stochOS, barsSince,
+   chkLTF, ltfReqMid, ltfReqStruct, selSLType, bothHitPref
+  ].forEach(ctrl => ctrl.addEventListener('change', updateUI));
+  selHTF.addEventListener('change', ()=>{ stop(); start(); });
+  selLTF.addEventListener('change', ()=>{ stop(); start(); });
+  btnCloseAll.addEventListener('click', ()=>{
+    const live = trades.filter(t=>t.status==='live'); const p=currentPrice(); const ts=nowTS();
+    for(const t of live){ closeTrade(t.id,'manual',p,ts); }
+  });
+  btnOpen.addEventListener('click', ()=>{
+    const plan = planTrade();
+    if(!plan || !(plan.bias==='BUY'||plan.bias==='SELL')){ alert('No valid bias to open'); return; }
+    const sl = selSLType.value==='band' ? plan.SL_band : plan.SL_swing;
+    if(plan.entry==null || plan.TP==null || sl==null){ alert('Entry/TP/SL not ready'); return; }
+    openTrade(activeSymbol || selSymbol.value, plan.bias, plan.entry, plan.TP, sl, nowTS());
+    if(beepCk.checked) beep(700,0.1);
+  });
+
+  // Boot
+  connect();
+})();
+</script>
+</body>
+</html>
