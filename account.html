@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>VinceVision Accounts Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#0f172a;
+      --panel:#111827;
+      --muted:#6b7280;
+      --accent:#22c55e;
+      --accent-2:#38bdf8;
+      --warn:#f59e0b;
+      --danger:#ef4444;
+      --text:#e5e7eb;
+      --soft:#1f2937;
+      --chip:#0ea5e9;
+      --good:#10b981;
+      --bad:#ef4444;
+      --shadow: 0 10px 30px rgba(0,0,0,.25);
+      --radius:14px;
+    }
+    *{box-sizing: border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: system-ui, -apple-system, Inter, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1000px 600px at 10% -10%, #0b1223 0%, var(--bg) 50%) fixed, var(--bg);
+      color:var(--text);
+    }
+
+    header{
+      position: sticky; top:0; z-index: 3;
+      backdrop-filter: blur(6px);
+      background: linear-gradient(180deg, rgba(15,23,42,.75), rgba(15,23,42,.35));
+      border-bottom:1px solid rgba(255,255,255,.06);
+    }
+    .wrap{
+      max-width: 1180px; margin: 0 auto; padding: 16px 18px;
+    }
+    .row{display:flex; align-items:center; gap:16px; flex-wrap: wrap;}
+    .brand{
+      display:flex; align-items:center; gap:12px; font-weight: 700; letter-spacing:.35px;
+      font-size: 18px;
+    }
+    .logo{
+      width:34px;height:34px;border-radius:10px;background:
+        conic-gradient(from 200deg at 50% 50%, #22c55e 0 40%, #38bdf8 0 70%, #a78bfa 0 100%);
+      box-shadow: inset 0 0 0 3px rgba(255,255,255,.07), var(--shadow);
+    }
+    .meta{margin-left:auto; display:flex; align-items:center; gap:12px; color:var(--muted); font-size: 13px;}
+    .pill{padding:6px 10px;border-radius: 999px; background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); color: #d1d5db}
+    .btn{
+      padding:10px 14px; border-radius: 10px; border:1px solid rgba(255,255,255,.08);
+      color:#e5e7eb; background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.03));
+      cursor:pointer;
+    }
+    .btn:active{transform: translateY(1px)}
+    .btn.primary{background: linear-gradient(180deg, #1a2f22, #13281b); border-color:#1f5b3c}
+    .btn.warn{background: linear-gradient(180deg, #452c18, #3a2414); border-color:#8a5a2e}
+    .btn.danger{background: linear-gradient(180deg, #3a1717, #2d1010); border-color:#7a2f2f}
+
+    main{padding: 20px 18px 90px}
+    section{max-width:1180px; margin: 18px auto;}
+
+    .grid{
+      display:grid; grid-template-columns: repeat(12, 1fr); gap:16px;
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
+      border:1px solid rgba(255,255,255,.08); border-radius: var(--radius); box-shadow: var(--shadow);
+      padding:16px;
+    }
+    .kpi .label{font-size: 12px; color: var(--muted)}
+    .kpi .value{font-size: 28px; font-weight: 800; letter-spacing: .2px; margin-top:6px}
+    .kpi .sub{font-size: 12px; color: var(--muted); margin-top:6px}
+    .kpi.good .value{color: var(--good)}
+    .kpi.bad .value{color: var(--bad)}
+    .kpi.accent .value{color: var(--accent)}
+    .kpi.info .value{color: var(--accent-2)}
+    .split{display:flex; justify-content: space-between; align-items: center; gap: 10px}
+
+    .title{font-weight: 700; letter-spacing:.3px}
+    .title.sm{font-size: 14px; color: #d1d5db}
+    .title.lg{font-size: 18px}
+    .muted{color: var(--muted)}
+
+    .table{
+      width:100%; border-collapse: collapse; font-size: 14px;
+    }
+    .table th, .table td{
+      padding: 10px 10px; border-bottom: 1px solid rgba(255,255,255,.06); vertical-align: middle;
+    }
+    .table th{color:#9ca3af; font-weight:600; text-align:left; position: sticky; top:0; background: rgba(17,24,39,.9); backdrop-filter: blur(4px)}
+    .chip{
+      font-size: 12px; padding: 6px 8px; border-radius: 999px; color:white; display:inline-flex; gap:6px; align-items:center;
+    }
+    .chip.in{background: linear-gradient(180deg, #0a3a2a, #072a1f); border:1px solid #146d4b}
+    .chip.out{background: linear-gradient(180deg, #412121, #2b1515); border:1px solid #7d3737}
+    .chip.paypal{background: linear-gradient(180deg, #0c2b43, #0a2438); border:1px solid #265b86}
+    .chip.mpesa{background: linear-gradient(180deg, #0b3b1b, #072c14); border:1px solid #2b7a44}
+    .chip.bank{background: linear-gradient(180deg, #1c1d2e, #141522); border:1px solid #3e436f}
+    .right{text-align:right}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+    .nowrap{white-space: nowrap}
+    .scroll{max-height: 380px; overflow: auto; border-radius: 10px}
+
+    .channels{display:flex; gap:12px; flex-wrap:wrap}
+    .channel{
+      flex:1 1 220px; min-width: 240px; background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+      border:1px solid rgba(255,255,255,.08); border-radius: 14px; padding: 12px;
+    }
+    .channel .h{display:flex; align-items:center; gap:10px}
+    .dot{width:10px;height:10px;border-radius:50%}
+    .dot.green{background:#22c55e}
+    .dot.blue{background:#38bdf8}
+    .dot.purple{background:#a78bfa}
+
+    .grid-2{display:grid; grid-template-columns: 1fr 1fr; gap:16px}
+    @media (max-width: 960px){ .grid { grid-template-columns: repeat(6, 1fr) } .grid-2{grid-template-columns:1fr} }
+    @media (max-width: 560px){ .grid { grid-template-columns: repeat(2, 1fr) } }
+
+    .login-backdrop{
+      position: fixed; inset: 0; background: radial-gradient(800px 400px at 30% -10%, rgba(34,197,94,.2), transparent 35%),
+                                   radial-gradient(900px 500px at 80% 110%, rgba(56,189,248,.15), transparent 35%),
+                                   rgba(2,6,23,.9);
+      display: none; place-items: center; z-index: 999;
+    }
+    .login{
+      width: 100%; max-width: 460px; background: rgba(17,24,39,.7); border: 1px solid rgba(255,255,255,.08);
+      border-radius: 16px; box-shadow: var(--shadow); padding: 22px;
+    }
+    .login h2{margin:0 0 6px 0}
+    .login .sub{color: var(--muted); margin-bottom:18px}
+    .field{display:grid; gap:6px; margin:10px 0}
+    .field label{font-size: 13px; color: #d1d5db}
+    .field input{
+      width:100%; padding:12px 12px; border-radius: 10px; border:1px solid rgba(255,255,255,.12);
+      background: rgba(2,6,23,.3); color: #eef2ff; outline: none;
+    }
+    .error{color: #fecaca; font-size: 13px; min-height: 18px}
+
+    .statusbar{
+      position: fixed; right: 18px; bottom: 18px; display:flex; gap:8px; z-index: 4;
+    }
+    .toast{
+      background: rgba(17,24,39,.9); border: 1px solid rgba(255,255,255,.08); border-radius: 12px; padding: 10px 12px; color: #dbeafe;
+      box-shadow: var(--shadow); font-size: 13px;
+    }
+
+    .badge{ border:1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.06); padding: 4px 8px; border-radius: 999px; font-size: 12px; color:#e5e7eb}
+    .mutelist{display:flex; gap: 8px; flex-wrap: wrap}
+    .divider{height:1px; background: rgba(255,255,255,.08); margin: 8px 0 10px}
+    .small{font-size: 12px; color: var(--muted)}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap row">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div>VINCEVISION • Accounts Dashboard</div>
+        <span class="badge">Safaricom Till: <b class="mono">8341212</b></span>
+        <span class="badge">Accountant/HR: <b>Nicole Andreas</b></span>
+      </div>
+      <div class="meta">
+        <span class="pill">IP: <span id="ipAddr">detecting…</span></span>
+        <span class="pill">TZ: Africa/Nairobi</span>
+        <button id="toggleAuto" class="btn">Pause Updates</button>
+        <button id="logoutBtn" class="btn warn">🔒 Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="grid">
+        <div class="card kpi accent" style="grid-column: span 3;">
+          <div class="label">Company Account Balance</div>
+          <div class="value" id="kpiBalance">KES 2,350,000.00</div>
+          <div class="sub">Running balance after all transactions</div>
+        </div>
+        <div class="card kpi info" style="grid-column: span 3;">
+          <div class="label">Today's Revenue</div>
+          <div class="value" id="kpiRevenue">KES 23,000.00</div>
+          <div class="sub">Sum of all incoming payments</div>
+        </div>
+        <div class="card kpi bad" style="grid-column: span 3;">
+          <div class="label">Today's Expenses</div>
+          <div class="value" id="kpiExpenses">KES 0.00</div>
+          <div class="sub">Costs, salaries, purchases</div>
+        </div>
+        <div class="card kpi" style="grid-column: span 3;">
+          <div class="label">Today's Profit</div>
+          <div class="value" id="kpiProfit">KES 23,000.00</div>
+          <div class="sub">Revenue - Expenses</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card" style="grid-column: span 8;">
+        <div class="split">
+          <div class="title lg">Transactions</div>
+          <div class="mutelist">
+            <span class="badge">Filter:
+              <select id="filterType" class="mono" style="background: transparent; color:#d1d5db; border:none; outline:none;">
+                <option value="all">All</option>
+                <option value="income">Income</option>
+                <option value="expense">Expense</option>
+                <option value="salary">Salary</option>
+                <option value="loan">Loan</option>
+              </select>
+            </span>
+            <button id="genNow" class="btn primary">⚡ Add Entry</button>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div class="scroll">
+          <table class="table" id="txTable">
+            <thead>
+            <tr>
+              <th class="nowrap">When (EAT)</th>
+              <th>Type</th>
+              <th>Channel</th>
+              <th>Description</th>
+              <th>Counterparty</th>
+              <th class="right">Amount</th>
+              <th class="right">Balance</th>
+            </tr>
+            </thead>
+            <tbody id="txBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: span 4;">
+        <div class="title lg">Channels</div>
+        <div class="divider"></div>
+        <div class="channels">
+          <div class="channel">
+            <div class="h">
+              <span class="dot green"></span>
+              <div>
+                <div class="title sm">M‑Pesa Till</div>
+                <div class="small mono">8341212</div>
+              </div>
+              <span class="chip mpesa mono" style="margin-left:auto">Active</span>
+            </div>
+            <div style="margin-top:10px">
+              <div class="muted small">Received Today</div>
+              <div class="title lg" id="mpesaToday">KES 0.00</div>
+            </div>
+          </div>
+          <div class="channel">
+            <div class="h">
+              <span class="dot blue"></span>
+              <div>
+                <div class="title sm">PayPal</div>
+                <div class="small">client@paypal</div>
+              </div>
+              <span class="chip paypal mono" style="margin-left:auto">Active</span>
+            </div>
+            <div style="margin-top:10px">
+              <div class="muted small">Received Today</div>
+              <div class="title lg" id="paypalToday">KES 0.00</div>
+            </div>
+          </div>
+          <div class="channel">
+            <div class="h">
+              <span class="dot purple"></span>
+              <div>
+                <div class="title sm">Bank</div>
+                <div class="small mono">KCB/NCBA (various)</div>
+              </div>
+              <span class="chip bank mono" style="margin-left:auto">Active</span>
+            </div>
+            <div style="margin-top:10px">
+              <div class="muted small">Outflows Today</div>
+              <div class="title lg" id="bankToday">KES 0.00</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card" style="grid-column: span 6;">
+        <div class="split">
+          <div class="title lg">Today's Services (Income)</div>
+          <span class="small">Newest first</span>
+        </div>
+        <div class="divider"></div>
+        <div id="servicesList" class="scroll"></div>
+      </div>
+
+      <div class="card" style="grid-column: span 6;">
+        <div class="split">
+          <div class="title lg">Loans & Advances</div>
+          <span class="small">Employees support fund</span>
+        </div>
+        <div class="divider"></div>
+        <div class="grid-2">
+          <div class="card">
+            <div class="label">Loan Fund Set Aside</div>
+            <div class="value" id="loanFund">KES 300,000.00</div>
+            <div class="sub">For employee advances and emergencies</div>
+          </div>
+          <div class="card">
+            <div class="label">Disbursed from Fund</div>
+            <div class="value" id="loanDisbursed">KES 0.00</div>
+            <div class="sub">Outstanding: <span id="loanOutstanding">KES 300,000.00</span></div>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <div class="title sm">Pending</div>
+          <div class="divider"></div>
+          <div id="loanPending"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid">
+      <div class="card" style="grid-column: span 6;">
+        <div class="split">
+          <div class="title lg">Automated Payroll</div>
+          <span class="small">Salaries credited automatically</span>
+        </div>
+        <div class="divider"></div>
+        <div id="payrollInfo" class="small"></div>
+        <div class="divider"></div>
+        <div class="scroll">
+          <table class="table" id="empTable">
+            <thead>
+              <tr>
+                <th>Employee</th>
+                <th>Role</th>
+                <th class="right">Monthly Salary</th>
+              </tr>
+            </thead>
+            <tbody id="empBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="grid-column: span 6;">
+        <div class="split">
+          <div class="title lg">Quick Actions</div>
+          <span class="small">Finance tools</span>
+        </div>
+        <div class="divider"></div>
+        <div class="mutelist">
+          <button id="addIncomeBtn" class="btn">➕ Record Income</button>
+          <button id="addExpenseBtn" class="btn">➖ Record Expense</button>
+          <button id="runPayrollBtn" class="btn">💸 Run Payroll</button>
+          <button id="saveBtn" class="btn primary">💾 Save State</button>
+          <button id="resetDayBtn" class="btn warn">🗓️ New Day</button>
+        </div>
+        <div class="divider"></div>
+        <div class="small">Background updates active. Data persists on this device and is linked to your current IP so the dashboard continues from where you left off.</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Login Modal -->
+  <div id="loginBackdrop" class="login-backdrop">
+    <div class="login">
+      <div class="row" style="justify-content:space-between">
+        <div class="brand" style="font-size: 20px">
+          <div class="logo"></div>
+          <div>VINCEVISION • Secure Access</div>
+        </div>
+        <span class="pill">HR/Accounts: Nicole Andreas</span>
+      </div>
+      <h2>Login Required</h2>
+      <div class="sub">Use your credentials to view the financial data.</div>
+      <div class="field">
+        <label>Username</label>
+        <input id="userInput" placeholder="Enter username" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input id="passInput" type="password" placeholder="Enter password" autocomplete="current-password" />
+      </div>
+      <div class="error" id="loginError"></div>
+      <div class="row" style="justify-content: flex-end">
+        <button id="loginBtn" class="btn primary">Unlock Dashboard</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="statusbar" id="statusbar"></div>
+
+  <script>
+    // -------------- Utilities
+    const TZ = 'Africa/Nairobi';
+    const fmtKES = (n) => 'KES\u00A0' + (n||0).toLocaleString('en-KE', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const nowKE = () => {
+      const s = new Date().toLocaleString('sv-SE', {timeZone: TZ});
+      return new Date(s.replace(' ', 'T'));
+    };
+    const ymd = (d) => d.toLocaleDateString('sv-SE',{timeZone:TZ});
+    const ymo = (d) => d.toLocaleString('sv-SE',{timeZone:TZ, year:'numeric', month:'2-digit'});
+    const timeStr = (d) => d.toLocaleString('en-KE',{timeZone:TZ, hour:'2-digit', minute:'2-digit', second:'2-digit', year:'numeric', month:'short', day:'2-digit'});
+
+    const rand = (min, max) => Math.floor(Math.random()*(max-min+1))+min;
+    const pick = (arr) => arr[Math.floor(Math.random()*arr.length)];
+    const uid = () => Math.random().toString(36).slice(2)+Date.now().toString(36);
+
+    const toast = (msg) => {
+      const bar = document.getElementById('statusbar');
+      const t = document.createElement('div');
+      t.className = 'toast';
+      t.textContent = msg;
+      bar.appendChild(t);
+      setTimeout(()=>{ t.style.opacity='0'; t.style.transform='translateY(6px)'; }, 2600);
+      setTimeout(()=>{ bar.removeChild(t); }, 3200);
+    };
+
+    // -------------- Random Generators (presentation-safe)
+    const firstNames = ["Brian","Kevin","Joan","Mercy","Stephen","Anita","Victor","Nancy","Moses","Janet","George","Diana","Eric","Pauline","Peter","Faith","James","Carol","Collins","Ivy","Brenda","Martin","Alex","Gloria","Evans","Denis","Naomi","Lydia","Felix"];
+    const lastNames = ["Wanjiru","Otieno","Mwangi","Kimani","Ouma","Muthoni","Kariuki","Ochieng","Njoroge","Odhiambo","Mutiso","Kiplagat","Gichuki","Achieng","Limo","Cherono","Omondi","Ndungu","Wamae","Wekesa","Gathoni","Mutua","Chebet","Okoth"];
+    const neighborhoods = ["Westlands","Karen","Upper Hill","Kilimani","Thika Rd","Ruiru","Kisumu CBD","Mombasa Nyali","Nakuru CBD","Eldoret","Kikuyu","Rongai","Syokimau","Lang'ata","Parklands","Eastleigh","Juja","Kitengela"];
+    const serviceBase = [
+      "Wedding Photography","Corporate Event Coverage","Drone Aerial Filming","Studio Portraits","Video Editing Package",
+      "Logo Design","Social Media Content Bundle","Livestream Setup","Product Photography","Music Video Shoot",
+      "Documentary Filming Day","Real Estate Walkthrough","Training Workshop","TV Commercial Concept",
+      "Voiceover Recording","Poster & Flyer Design","Camera Rental","Lighting Kit Rental","Web Promo Edit","Virtual Tour Capture"
+    ];
+    const serviceMods = ["Express","Deluxe","Pro","Premium","Plus","Signature","On‑site","Weekend","Half‑Day","Full‑Day","Gold","Elite","Series","Starter","Advanced"];
+    const expenseCats = [
+      "Equipment maintenance","Transport & fuel","Office rent","Utilities","Internet & hosting","Marketing & ads",
+      "Insurance","Snacks for crew","Props & set design","Licenses & permits","Cleaning","Cloud storage","Software subscriptions"
+    ];
+
+    const randomName = () => `${pick(firstNames)} ${pick(lastNames)}`;
+    const randomPhoneKE = () => '07' + rand(0,9)+rand(0,9)+rand(0,9)+rand(0,9)+rand(0,9)+rand(0,9)+rand(0,9)+rand(0,9);
+    const randomPaypal = () => {
+      const fn = pick(firstNames).toLowerCase(), ln = pick(lastNames).toLowerCase();
+      const nn = rand(1,89);
+      const dom = pick(["gmail.com","yahoo.com","outlook.com","proton.me","icloud.com"]);
+      return `${fn}.${ln}${nn}@${dom}`;
+    };
+    const randomBankAcc = () => `ACC-${rand(10,99)}${rand(1000000,9999999)}`;
+    const randomMpesaRef = () => `MP${rand(100,999)}${rand(100000,999999)}`;
+
+    const randomServiceName = (() => {
+      const recent = [];
+      return () => {
+        let name = '';
+        let tries = 0;
+        do{
+          const base = pick(serviceBase);
+          const mod = Math.random()<0.7 ? ` ${pick(serviceMods)}` : '';
+          const loc = Math.random()<0.6 ? ` • ${pick(neighborhoods)}` : '';
+          const tag = Math.random()<0.35 ? ` #${rand(10,99)}` : '';
+          name = `${base}${mod}${loc}${tag}`.trim();
+          tries++;
+        } while (recent.includes(name) && tries < 10);
+        recent.push(name);
+        if (recent.length>14) recent.shift();
+        return name;
+      }
+    })();
+    const randomExpenseName = () => `${pick(expenseCats)}${Math.random()<0.35?' • '+pick(neighborhoods):''}`;
+
+    const weightedChannel = () => {
+      const r = Math.random();
+      if (r < 0.68) return 'MPESA';
+      if (r < 0.93) return 'PAYPAL';
+      return 'BANK';
+    };
+
+    const fmtChannelChip = (ch) => {
+      if (ch==='MPESA') return `<span class="chip mpesa mono">M‑Pesa</span>`;
+      if (ch==='PAYPAL') return `<span class="chip paypal mono">PayPal</span>`;
+      return `<span class="chip bank mono">Bank</span>`;
+    };
+
+    // Payroll schedule helper: 28th of the month at 17:30 EAT
+    function nextPayrollTimestamp(){
+      const d = nowKE();
+      const y = d.getFullYear();
+      const m = d.getMonth() + 1; // 1..12
+      const day = d.getDate();
+      let targetY = y, targetM = m;
+      if (day >= 28){
+        if (m === 12){ targetM = 1; targetY = y + 1; }
+        else { targetM = m + 1; targetY = y; }
+      }
+      const ts = Date.parse(`${targetY}-${String(targetM).padStart(2,'0')}-28T17:30:00+03:00`);
+      return ts;
+    }
+
+    // -------------- Default State
+    const DEFAULT_STATE = () => ({
+      ip: 'local',
+      accountBalance: 2350000,
+      openingBalanceToday: 2350000,
+      daily: {
+        date: ymd(nowKE()),
+        revenue: 23000,
+        expenses: 0,
+        profit: 23000,
+        mpesaIn: 0,
+        paypalIn: 0,
+        bankOut: 0
+      },
+      channels: {
+        mpesaTill: '8341212'
+      },
+      transactions: [],
+      servicesToday: [],
+      employees: [
+        {name:'Nicole Andreas', role:'Accountant / HR', salary: 135000},
+        {name:'Vince Muchiri', role:'Founder / Director', salary: 180000},
+        {name:'John Kamau', role:'Senior Photographer', salary: 120000},
+        {name:'Mary Achieng', role:'Videographer', salary: 110000},
+        {name:'Peter Njoroge', role:'Video Editor', salary: 100000},
+        {name:'Faith Wambui', role:'Social Media Manager', salary: 85000},
+        {name:'Samuel Otieno', role:'Drone Pilot', salary: 105000}
+      ],
+      payroll: {
+        lastRunYM: null,
+        nextRunAt: nextPayrollTimestamp()
+      },
+      loans: {
+        fund: 300000,
+        disbursed: 0,
+        pending: [
+          {id: uid(), name:'Sharon Wacheke', phone:'0793022244', amount: 15000, status:'pending', createdAt: Date.now()}
+        ],
+        active: []
+      },
+      auto: { running: true },
+      lastUpdate: Date.now(),
+      login: { loggedIn: false, username: null, lastLoginAt: null }
+    });
+
+    // -------------- Persistence
+    let SESSION_KEY = 'vv_session_local';
+    const saveState = () => {
+      localStorage.setItem(SESSION_KEY, JSON.stringify(state));
+    };
+    const loadState = () => {
+      const raw = localStorage.getItem(SESSION_KEY);
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch(e){ return null; }
+    };
+
+    // -------------- Global State
+    let state = DEFAULT_STATE();
+
+    // -------------- Login
+    const loginBackdrop = document.getElementById('loginBackdrop');
+    const loginBtn = document.getElementById('loginBtn');
+    const userInput = document.getElementById('userInput');
+    const passInput = document.getElementById('passInput');
+    const loginError = document.getElementById('loginError');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    const REQUIRED_USER = 'vincevisionbank';
+    const REQUIRED_PASS = '07987654321';
+
+    function showLogin(show=true){
+      loginBackdrop.style.display = show ? 'grid' : 'none';
+    }
+
+    loginBtn.addEventListener('click', () => {
+      const u = (userInput.value||'').trim();
+      const p = (passInput.value||'').trim();
+      if (u===REQUIRED_USER && p===REQUIRED_PASS){
+        state.login = { loggedIn:true, username:u, lastLoginAt: Date.now() };
+        saveState();
+        showLogin(false);
+        toast('Login successful.');
+        if (!state.ip || state.ip === 'local') detectIP();
+        renderAll();
+      } else {
+        loginError.textContent = 'Invalid credentials';
+      }
+    });
+
+    logoutBtn.addEventListener('click', () => {
+      state.login.loggedIn = false;
+      saveState();
+      showLogin(true);
+      toast('You have been logged out.');
+    });
+
+    // -------------- IP Detection and session binding
+    async function detectIP(){
+      try{
+        const res = await fetch('https://api.ipify.org?format=json', {cache:'no-store'});
+        const data = await res.json();
+        const ip = data.ip || 'local';
+        state.ip = ip;
+        document.getElementById('ipAddr').textContent = ip;
+        // Bind to per-IP session key. If existing session, load and merge.
+        const newKey = `vv_session_${ip}`;
+        if (SESSION_KEY !== newKey){
+          SESSION_KEY = newKey;
+          const existing = loadState();
+          if (existing){
+            state = existing;
+          } else {
+            const prevLogin = state.login;
+            state = DEFAULT_STATE();
+            state.login = prevLogin;
+            seedStartOfDay();
+            saveState();
+          }
+        }
+      } catch(e){
+        document.getElementById('ipAddr').textContent = 'unavailable';
+        SESSION_KEY = 'vv_session_local';
+        if (!loadState()) { seedStartOfDay(); saveState(); }
+      }
+      renderAll();
+    }
+
+    // -------------- Seeding to match requirements
+    function seedStartOfDay(){
+      // Opening balance set so that after KES 23,000 income we land at 2,350,000
+      const opening = 2350000 - 23000;
+      state.accountBalance = opening;
+      state.openingBalanceToday = opening;
+
+      // Seed 4 services that sum to 23,000
+      const parts = [9500, 6000, 4000, 3500];
+      const channels = ['MPESA', 'PAYPAL', 'MPESA', 'MPESA'];
+
+      let mpesaSum = 0, paypalSum = 0, total = 0;
+
+      for (let i=0; i<parts.length; i++){
+        const amount = parts[i];
+        const ch = channels[i];
+        total += amount;
+        if (ch==='MPESA') mpesaSum += amount;
+        if (ch==='PAYPAL') paypalSum += amount;
+
+        addIncome({
+          amount,
+          channel: ch,
+          service: i===0?'Wedding Photography • Karen':
+                   i===1?'Logo Design Premium • Westlands':
+                   i===2?'Drone Aerial Filming • Ruiru':
+                         'Studio Portraits Express • Kilimani',
+          counterparty: ch==='PAYPAL' ? randomPaypal() : randomPhoneKE(),
+          reference: ch==='PAYPAL' ? ('PP-'+uid().slice(0,8).toUpperCase()) : randomMpesaRef(),
+          seed:true,
+          noToast:true,
+          timestamp: nowKE().getTime() - (parts.length-i)*60_000 // a few minutes earlier
+        });
+      }
+
+      // Reflect seed totals in KPIs
+      state.daily.revenue = total; // 23,000
+      state.daily.mpesaIn = mpesaSum;
+      state.daily.paypalIn = paypalSum;
+      state.daily.profit = state.daily.revenue - (state.daily.expenses||0);
+    }
+
+    // -------------- Transactions
+    function addTx(tx){
+      state.transactions.unshift(tx);
+      state.lastUpdate = Date.now();
+      saveState();
+      renderKPIs();
+      renderTable();
+    }
+
+    function addServiceCard(svc){
+      const el = document.getElementById('servicesList');
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="split">
+          <div>
+            <div class="title">${svc.service}</div>
+            <div class="small">${new Date(svc.time).toLocaleString('en-KE',{timeZone:TZ})} • ${svc.ref} • ${svc.payer}</div>
+          </div>
+          <div style="text-align:right">
+            <div>${fmtChannelChip(svc.channel)}</div>
+            <div class="title lg">${fmtKES(svc.amount)}</div>
+          </div>
+        </div>
+      `;
+      el.prepend(card);
+      while (el.children.length > 20) el.removeChild(el.lastChild);
+    }
+
+    function addIncome(opts={}){
+      const t = opts.timestamp || Date.now();
+      const channel = opts.channel || weightedChannel();
+      const service = opts.service || randomServiceName();
+      const amount = opts.amount ?? rand(1800, 48000);
+      const payerName = randomName();
+      const counterpartyAcct =
+        channel==='PAYPAL' ? (opts.counterparty || randomPaypal()) :
+        channel==='MPESA'  ? (opts.counterparty || randomPhoneKE()) :
+                             (opts.counterparty || randomBankAcc());
+      const reference =
+        channel==='PAYPAL' ? ('PP-'+uid().slice(0,8).toUpperCase()) :
+        channel==='MPESA'  ? (opts.reference || randomMpesaRef()) :
+                             ('BNK-'+uid().slice(0,7).toUpperCase());
+
+      state.accountBalance += amount;
+      if (!opts.seed){
+        state.daily.revenue += amount;
+        if (channel==='MPESA') state.daily.mpesaIn += amount;
+        if (channel==='PAYPAL') state.daily.paypalIn += amount;
+      }
+      state.daily.profit = state.daily.revenue - state.daily.expenses;
+
+      const tx = {
+        id: uid(),
+        timestamp: t,
+        type: 'income',
+        channel,
+        description: service,
+        counterpartyName: payerName,
+        counterpartyAcct,
+        reference,
+        amount,
+        postBalance: state.accountBalance
+      };
+      addTx(tx);
+
+      addServiceCard({time: t, service, amount, channel, payer: `${payerName} (${counterpartyAcct})`, ref: reference});
+
+      if (!opts.noToast) toast(`Payment received: ${fmtKES(amount)} • ${service}`);
+      return tx;
+    }
+
+    function addExpense(opts={}){
+      const t = opts.timestamp || Date.now();
+      const desc = opts.description || randomExpenseName();
+      const amount = opts.amount ?? rand(500, 20000);
+      const channel = opts.channel || pick(['BANK','MPESA']);
+      const payee = randomName();
+      const acct = channel==='BANK' ? randomBankAcc() : randomPhoneKE();
+      const ref = channel==='BANK' ? ('TR-'+uid().slice(0,8).toUpperCase()) : randomMpesaRef();
+
+      state.accountBalance -= amount;
+      state.daily.expenses += amount;
+      if (channel==='BANK') state.daily.bankOut += amount;
+      state.daily.profit = state.daily.revenue - state.daily.expenses;
+
+      const tx = {
+        id: uid(),
+        timestamp: t,
+        type: 'expense',
+        channel,
+        description: desc,
+        counterpartyName: payee,
+        counterpartyAcct: acct,
+        reference: ref,
+        amount: -Math.abs(amount),
+        postBalance: state.accountBalance
+      };
+      addTx(tx);
+      toast(`Expense paid: ${fmtKES(amount)} • ${desc}`);
+      return tx;
+    }
+
+    function runPayroll(manual=false){
+      const d = nowKE();
+      const ym = ymo(d);
+      if (!manual && state.payroll.lastRunYM === ym) return; // already ran this month
+
+      let total = 0;
+      const t = Date.now();
+      state.employees.forEach(emp => {
+        const amt = emp.salary;
+        total += amt;
+        state.accountBalance -= amt;
+        state.daily.expenses += amt;
+        state.daily.profit = state.daily.revenue - state.daily.expenses;
+        const tx = {
+          id: uid(),
+          timestamp: t + rand(0,4000),
+          type: 'salary',
+          channel: 'BANK',
+          description: `Salary • ${emp.name} (${emp.role})`,
+          counterpartyName: emp.name,
+          counterpartyAcct: randomBankAcc(),
+          reference: 'PAY-'+uid().slice(0,7).toUpperCase(),
+          amount: -Math.abs(amt),
+          postBalance: state.accountBalance
+        };
+        addTx(tx);
+      });
+      state.payroll.lastRunYM = ym;
+      state.payroll.nextRunAt = nextPayrollTimestamp(); // schedule for next month
+      saveState();
+      toast(`Payroll executed: ${state.employees.length} employees • ${fmtKES(total)}`);
+      renderKPIs();
+      renderTable();
+      renderPayroll();
+    }
+
+    // -------------- Rendering
+    function renderKPIs(){
+      document.getElementById('kpiBalance').textContent = fmtKES(state.accountBalance);
+      document.getElementById('kpiRevenue').textContent = fmtKES(state.daily.revenue);
+      document.getElementById('kpiExpenses').textContent = fmtKES(state.daily.expenses);
+      document.getElementById('kpiProfit').textContent = fmtKES(state.daily.profit);
+      document.getElementById('mpesaToday').textContent = fmtKES(state.daily.mpesaIn);
+      document.getElementById('paypalToday').textContent = fmtKES(state.daily.paypalIn);
+      document.getElementById('bankToday').textContent = fmtKES(state.daily.bankOut);
+      // Loans
+      document.getElementById('loanFund').textContent = fmtKES(state.loans.fund);
+      document.getElementById('loanDisbursed').textContent = fmtKES(state.loans.disbursed);
+      document.getElementById('loanOutstanding').textContent = fmtKES(state.loans.fund - state.loans.disbursed);
+      renderLoans();
+    }
+
+    function renderTable(){
+      const filter = document.getElementById('filterType').value;
+      const body = document.getElementById('txBody');
+      body.innerHTML = '';
+      const rows = state.transactions.filter(tx => filter==='all' ? true : tx.type===filter);
+      for (const tx of rows){
+        const tr = document.createElement('tr');
+        const typeChip = tx.type==='income'
+          ? `<span class="chip in">Income</span>`
+          : tx.type==='salary'
+          ? `<span class="chip out">Salary</span>`
+          : tx.type==='loan'
+          ? `<span class="chip out">Loan</span>`
+          : `<span class="chip out">Expense</span>`;
+        tr.innerHTML = `
+          <td class="nowrap">${timeStr(new Date(tx.timestamp))}</td>
+          <td>${typeChip}</td>
+          <td>${fmtChannelChip(tx.channel)}</td>
+          <td>${tx.description}<div class="small mono">${tx.reference}</div></td>
+          <td>${tx.counterpartyName}<div class="small mono">${tx.counterpartyAcct}</div></td>
+          <td class="right mono" style="color:${tx.amount>=0?'#10b981':'#ef4444'}">${fmtKES(tx.amount)}</td>
+          <td class="right mono">${fmtKES(tx.postBalance)}</td>
+        `;
+        body.appendChild(tr);
+      }
+    }
+
+    function renderServicesFromTx(){
+      const today = ymd(nowKE());
+      const el = document.getElementById('servicesList');
+      el.innerHTML = '';
+      const todaysIncomes = state.transactions.filter(t => t.type==='income' && ymd(new Date(t.timestamp))===today);
+      todaysIncomes.slice(0,20).forEach(t => {
+        addServiceCard({time: t.timestamp, service: t.description, amount: t.amount, channel: t.channel, payer: `${t.counterpartyName} (${t.counterpartyAcct})`, ref: t.reference});
+      });
+    }
+
+    function renderLoans(){
+      const holder = document.getElementById('loanPending');
+      holder.innerHTML = '';
+      state.loans.pending.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.innerHTML = `
+          <div class="split">
+            <div>
+              <div class="title">${p.name} • <span class="mono">${p.phone}</span></div>
+              <div class="small">Requested: ${new Date(p.createdAt).toLocaleString('en-KE',{timeZone:TZ})}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="title lg">${fmtKES(p.amount)}</div>
+              <div class="small" style="color:#fbbf24">Status: Pending</div>
+            </div>
+          </div>
+        `;
+        holder.appendChild(div);
+      });
+    }
+
+    function renderEmployees(){
+      const body = document.getElementById('empBody');
+      body.innerHTML = '';
+      state.employees.forEach(e => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${e.name}</td>
+          <td>${e.role}</td>
+          <td class="right mono">${fmtKES(e.salary)}</td>
+        `;
+        body.appendChild(tr);
+      });
+    }
+
+    function renderPayroll(){
+      const info = document.getElementById('payrollInfo');
+      const d = nowKE();
+      const ym = ymo(d);
+      const status = state.payroll.lastRunYM === ym ? 'Completed this month' : 'Pending this month';
+      const nextAt = state.payroll.nextRunAt ? new Date(state.payroll.nextRunAt).toLocaleString('en-KE',{timeZone:TZ}) : 'End of month';
+      info.innerHTML = `
+        <div><b>Status:</b> ${status}</div>
+        <div><b>Last run:</b> ${state.payroll.lastRunYM || '—'}</div>
+        <div><b>Next automatic run:</b> ${nextAt}</div>
+      `;
+    }
+
+    function renderAll(){
+      renderKPIs();
+      renderTable();
+      renderEmployees();
+      renderPayroll();
+      renderServicesFromTx();
+      if (state.login?.loggedIn) showLogin(false); else showLogin(true);
+      document.getElementById('ipAddr').textContent = state.ip || 'local';
+      document.getElementById('toggleAuto').textContent = state.auto.running ? 'Pause Updates' : 'Resume Updates';
+    }
+
+    // -------------- Daily rollover
+    function ensureDay(){
+      const today = ymd(nowKE());
+      if (state.daily.date !== today){
+        state.daily.date = today;
+        state.openingBalanceToday = state.accountBalance;
+        state.daily.revenue = 0;
+        state.daily.expenses = 0;
+        state.daily.profit = 0;
+        state.daily.mpesaIn = 0;
+        state.daily.paypalIn = 0;
+        state.daily.bankOut = 0;
+        document.getElementById('servicesList').innerHTML = '';
+        saveState();
+        renderKPIs();
+        toast('New day started.');
+      }
+    }
+
+    // -------------- Automation loop (business hours cadence)
+    let loopTimer = null;
+    function startLoop(){
+      if (loopTimer) clearInterval(loopTimer);
+      loopTimer = setInterval(() => {
+        if (!state.auto.running) return;
+        ensureDay();
+        const hr = nowKE().getHours();
+        if (hr >= 8 && hr <= 19){
+          const r = Math.random();
+          if (r < 0.60){
+            addIncome();
+          } else if (r < 0.85){
+            addExpense();
+          } else {
+            // no new activity this tick
+          }
+        } else {
+          // Off-hours: occasional small outflows (e.g., utilities, hosting)
+          if (Math.random() < 0.15){
+            addExpense({amount: rand(400,3500), description: pick(["Internet & hosting","Cloud storage","Software subscriptions"])});
+          }
+        }
+        // Payroll auto schedule
+        if (Date.now() >= (state.payroll.nextRunAt || Infinity)){
+          runPayroll();
+        }
+      }, rand(25_000, 55_000)); // slower cadence for realism
+    }
+
+    // -------------- Controls
+    document.getElementById('toggleAuto').addEventListener('click', () => {
+      state.auto.running = !state.auto.running;
+      saveState();
+      renderAll();
+      toast(state.auto.running ? 'Updates resumed' : 'Updates paused');
+    });
+    document.getElementById('genNow').addEventListener('click', () => {
+      const r = Math.random();
+      r < 0.6 ? addIncome() : addExpense();
+    });
+    document.getElementById('addIncomeBtn').addEventListener('click', () => addIncome());
+    document.getElementById('addExpenseBtn').addEventListener('click', () => addExpense());
+    document.getElementById('runPayrollBtn').addEventListener('click', () => runPayroll(true));
+    document.getElementById('saveBtn').addEventListener('click', () => { saveState(); toast('State saved.'); });
+    document.getElementById('resetDayBtn').addEventListener('click', () => {
+      state.daily.date = '1900-01-01';
+      ensureDay();
+      saveState();
+      renderAll();
+    });
+    document.getElementById('filterType').addEventListener('change', renderTable);
+
+    // -------------- Boot
+    function boot(){
+      const loaded = loadState();
+      if (loaded){
+        state = loaded;
+      } else {
+        state = DEFAULT_STATE();
+        seedStartOfDay();
+        saveState();
+      }
+      renderAll();
+      detectIP();
+      startLoop();
+      if (!state.login?.loggedIn) showLogin(true);
+    }
+
+    boot();
+  </script>
+</body>
+</html>
