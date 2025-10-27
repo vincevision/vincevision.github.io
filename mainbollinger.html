@@ -86,17 +86,34 @@
     <div class="panel-header">
       <div class="controls">
         <select id="symbol"></select>
+
         <select id="htf">
+          <option value="3600">HTF: 1H</option>
+          <option value="7200">HTF: 2H</option>
+          <option value="10800">HTF: 3H</option>
           <option value="14400">HTF: 4H</option>
+          <option value="28800">HTF: 8H</option>
+          <option value="43200">HTF: 12H</option>
           <option value="86400" selected>HTF: 1D</option>
           <option value="W">HTF: 1W</option>
+          <option value="M">HTF: 1M</option>
         </select>
+
         <label class="switch"><input id="useLtf" type="checkbox" checked /> Use LTF confluence</label>
+
         <select id="ltf">
-          <option value="900">LTF: 15m</option>
+          <option value="60">LTF: 1m</option>
+          <option value="120">LTF: 2m</option>
+          <option value="180">LTF: 3m</option>
+          <option value="300">LTF: 5m</option>
+          <option value="600">LTF: 10m</option>
+          <option value="900" selected>LTF: 15m</option>
+          <option value="1200">LTF: 20m</option>
           <option value="1800">LTF: 30m</option>
-          <option value="3600" selected>LTF: 1H</option>
+          <option value="3600">LTF: 1H</option>
+          <option value="7200">LTF: 2H</option>
         </select>
+
         <label class="switch"><input id="autoTrade" type="checkbox" checked /> Auto-trade on signals</label>
         <select id="slType">
           <option value="band" selected>SL: Beyond Band</option>
@@ -157,7 +174,7 @@
           </select>
         </div>
       </div>
-      <div class="small" style="margin-top:6px">Tip: turn off any filter to relax signals. Confidence auto-scales to enabled rules.</div>
+      <div class="small" style="margin-top:6px">Turn off any filter to relax signals. Confidence auto-scales to enabled rules.</div>
     </div>
 
     <div class="section">
@@ -327,7 +344,7 @@
         <li>Optional: LTF mid-break + structure, both toggleable.</li>
       </ul>
       <div class="hr"></div>
-      <div class="note">Weekly candles aggregate Daily. Trades tracked on selected LTF for precise TP/SL hits.</div>
+      <div class="note">Weekly/Monthly candles aggregate Daily. Trades tracked on selected LTF for precise TP/SL hits.</div>
     </div>
   </div>
 </div>
@@ -374,8 +391,9 @@
   let ws=null, isOpen=false;
   let subs = {};   // subId -> {symbol,gran,onInit,onUpdate}
   let pending = {}; // key -> meta
-  let dailyMap = {}; // symbol -> daily candles (for weekly)
+  let dailyMap = {}; // symbol -> daily candles (for weekly/monthly)
   let weeklyStates = {}; // symbol -> {lastEmitted, lastLatestEpoch}
+  let monthlyStates = {}; // symbol -> {lastEmitted, lastLatestEpoch}
   let htfCandles = []; let ltfCandles = [];
   let lastClosedHTFOpenTime = null;
   let recentSignals = [];
@@ -386,6 +404,7 @@
   const fmt = (n,d=5)=> (n==null||!isFinite(n))?'–':Number(n).toFixed(d);
   const niceTime = ts => new Date(ts*1000).toLocaleString();
   const nowTS = ()=> Math.floor(Date.now()/1000);
+  const isClosed = o => (o.is_closed === 1 || o.is_closed === true || o.is_closed === '1');
 
   // WebSocket
   function connect(){
@@ -449,7 +468,6 @@
       opt.textContent = `${s.display_name} — ${s.market_display_name}`;
       selSymbol.appendChild(opt);
     }
-    // preselect common symbols if present
     const defaults = ['frxEURUSD','frxGBPUSD','R_100'];
     for(const d of defaults){
       const o = Array.from(selSymbol.options).find(o=>o.value===d);
@@ -529,6 +547,19 @@
     for(const c of d){
       const key=startOfWeek(c.epoch);
       if(curKey===null || key!==curKey){ if(cur) res.push(cur); curKey=key; cur={epoch:key, open:c.open, high:c.high, low:c.low, close:c.close}; }
+      else { cur.high=Math.max(cur.high,c.high); cur.low=Math.min(cur.low,c.low); cur.close=c.close; }
+    }
+    if(cur) res.push(cur);
+    return res;
+  }
+  function monthlyFromDaily(d){
+    if(!d.length) return [];
+    const res=[]; const monthStart = (ts)=>{ const dt=new Date(ts*1000); dt.setUTCDate(1); dt.setUTCHours(0,0,0,0); return Math.floor(dt.getTime()/1000); };
+    const keyFor = (ts)=>{ const dt=new Date(ts*1000); return dt.getUTCFullYear()+'-'+dt.getUTCMonth(); };
+    let curKey=null, cur=null;
+    for(const c of d){
+      const key=keyFor(c.epoch);
+      if(curKey===null || key!==curKey){ if(cur) res.push(cur); curKey=key; cur={epoch:monthStart(c.epoch), open:c.open, high:c.high, low:c.low, close:c.close}; }
       else { cur.high=Math.max(cur.high,c.high); cur.low=Math.min(cur.low,c.low); cur.close=c.close; }
     }
     if(cur) res.push(cur);
@@ -775,7 +806,6 @@
     const maOK = (plan.bias==='SELL' && (plan.lastClose < plan.ma3[lastIdx])) || (plan.bias==='BUY' && (plan.lastClose > plan.ma3[lastIdx]));
     ma3cEl.innerHTML = plan.rules.useMA3 ? (maOK?'<span class="good">✓ Body rule</span>':'<span class="warn">–</span>') : '<span class="muted">Off</span>';
 
-    const lc = lastCrossEx(plan.stoch.k, plan.stoch.d, plan.rules.stochOB, plan.rules.stochOS);
     const stOK = (plan.bias==='SELL' && plan.comp.stochOKsell) || (plan.bias==='BUY' && plan.comp.stochOKbuy);
     stochcEl.innerHTML = plan.rules.useStoch
       ? (stOK?`<span class="good">✓ Cross${plan.rules.stochZone?' · Zone':''}${plan.rules.stochRange?' · Range':''}${plan.rules.stochWindow?' · Recent':''}</span>`:`<span class="warn">–</span>`)
@@ -984,6 +1014,7 @@
     forgetAll(); htfCandles=[]; ltfCandles=[];
     dailyMap[symbol] = dailyMap[symbol] || [];
     weeklyStates[symbol] = weeklyStates[symbol] || {lastEmitted:null, lastLatestEpoch:null};
+    monthlyStates[symbol] = monthlyStates[symbol] || {lastEmitted:null, lastLatestEpoch:null};
 
     // LTF subscription (always for tracking)
     subscribeCandles(symbol, ltf, (arr)=>{
@@ -1011,7 +1042,7 @@
         const newLatest = weekly[weekly.length-1]?.epoch || null;
         htfCandles = weekly;
         updateUI();
-        if(o.is_closed === 1){
+        if(isClosed(o)){
           if(newLatest !== prevLatest){
             const closedIdx = weekly.length-2;
             if(closedIdx>=0){
@@ -1025,6 +1056,35 @@
           }
         }
       });
+    } else if(htf==='M'){
+      subscribeCandles(symbol, 86400, (arr)=>{
+        dailyMap[symbol] = arr.slice();
+        const monthly = monthlyFromDaily(dailyMap[symbol]);
+        htfCandles = monthly;
+        monthlyStates[symbol].lastLatestEpoch = monthly[monthly.length-1]?.epoch || null;
+        updateUI();
+      }, (o)=>{
+        const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+        mergeCandle(dailyMap[symbol], c);
+        const monthly = monthlyFromDaily(dailyMap[symbol]);
+        const prevLatest = monthlyStates[symbol].lastLatestEpoch;
+        const newLatest = monthly[monthly.length-1]?.epoch || null;
+        htfCandles = monthly;
+        updateUI();
+        if(isClosed(o)){
+          if(newLatest !== prevLatest){
+            const closedIdx = monthly.length-2;
+            if(closedIdx>=0){
+              const closedEpoch = monthly[closedIdx].epoch;
+              if(monthlyStates[symbol].lastEmitted !== closedEpoch){
+                emitSignalAtIndex(closedEpoch, closedIdx);
+                monthlyStates[symbol].lastEmitted = closedEpoch;
+              }
+            }
+            monthlyStates[symbol].lastLatestEpoch = newLatest;
+          }
+        }
+      });
     } else {
       const gran = parseInt(htf,10);
       subscribeCandles(symbol, gran, (arr)=>{
@@ -1033,7 +1093,7 @@
         const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
         mergeCandle(htfCandles, c);
         updateUI();
-        if(o.is_closed === 1){ emitSignalForLastClosed(o.open_time); }
+        if(isClosed(o)){ emitSignalForLastClosed(o.open_time); }
       });
     }
   }
