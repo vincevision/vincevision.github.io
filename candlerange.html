@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Option B — Cross‑TF Mean Reversion (High‑Quality) + Auto‑Scan</title>
+<title>Option B — Cross‑TF Mean Reversion (HQ) + Auto‑Scan + Discord</title>
 <style>
   :root{
     --bg:#0d1117; --bg2:#0f1522; --panel:#111827; --panel2:#0b1020;
@@ -38,7 +38,7 @@
   .legend{display:flex;align-items:center;gap:10px;font-size:12px;color:#93a3b8}
   .lg{display:inline-flex;align-items:center;gap:6px}
   .lg b{width:10px;height:3px;border-radius:2px;display:inline-block}
-  .lg .bb{background:var(--bb)} .lg .mid{background:#94a3b8} .lg .ma3{background:#f97316}
+  .lg .bb{background:#00d4ff} .lg .mid{background:#94a3b8} .lg .ma3{background:#f97316}
   .small{font-size:12px;color:#9aa9bd}
   canvas{display:block;width:100%;height:300px;background:#0b1220}
   .subcanvas{height:120px;border-top:1px solid var(--border)}
@@ -48,7 +48,7 @@
   .pill{display:inline-flex;align-items:center;gap:6px;background:#0b1324;border:1px solid #1f2a44;color:#9fb3c8;padding:6px 10px;border-radius:999px;font-size:12px}
   .flag{padding:2px 8px;border-radius:999px;border:1px solid #1f2a44;font-size:11px}
   .flag.buy{background:rgba(34,197,94,.12);color:#86efac;border-color:rgba(34,197,94,.3)}
-  .flag.sell{background:rgba(239,68,68,.12);color:#fecaca;border-color:rgba(34,197,94,.3)}
+  .flag.sell{background:rgba(239,68,68,.12);color:#fecaca;border-color:rgba(239,68,68,.3)}
   .flag.neutral{background:rgba(148,163,184,.12);color:#cbd5e1;border-color:#334155}
   .score{font-weight:800;font-size:26px}
   .score.good{color:var(--up)} .score.bad{color:var(--down)} .score.mid{color:var(--warn)}
@@ -65,7 +65,7 @@
   <div class="brand">
     <span style="display:inline-flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:linear-gradient(135deg, #7c3aed, #22d3ee);box-shadow:0 6px 20px rgba(124,58,237,.35)">⚡</span>
     <span>Option B — Cross‑TF Mean Reversion</span>
-    <span class="badge">BB(20,2) · 3MA · StochRSI(3,3,14,16) · HQ · Auto‑Scan</span>
+    <span class="badge">BB(20,2) · 3MA · StochRSI(3,3,14,16) · HQ · Auto‑Scan · Discord</span>
   </div>
   <div class="status">
     <span id="ws-dot" class="dot"></span><span id="ws-status">Disconnected</span>
@@ -80,7 +80,7 @@
         <select id="symbol"></select>
 
         <!-- Box TF -->
-        <select id="boxTF" title="Box timeframe: previous candle defines the range">
+        <select id="boxTF" title="Box timeframe: previous candle range">
           <option value="W">Box: 1W</option>
           <option value="86400" selected>Box: 1D</option>
           <option value="14400">Box: 4H</option>
@@ -89,7 +89,7 @@
         </select>
 
         <!-- One-Down TF -->
-        <select id="oneDownTF" title="Fallback TF midline to target (must lie inside the Box range)">
+        <select id="oneDownTF" title="Fallback/Target TF midline (must be inside Box range)">
           <option value="86400">Target: 1D</option>
           <option value="14400" selected>Target: 4H</option>
           <option value="3600">Target: 1H</option>
@@ -113,12 +113,16 @@
         </select>
 
         <!-- Auto-scan -->
-        <label class="switch"><input id="autoScan" type="checkbox" /> Auto‑scan markets</label>
+        <label class="switch"><input id="autoScan" type="checkbox" /> Auto‑scan</label>
         <button id="scanNow" class="btn secondary" title="Scan once">Scan Now</button>
         <div>
           <div class="small">Rescan (sec)</div>
           <input id="scanEvery" type="number" min="10" step="10" value="60" style="width:90px" />
         </div>
+
+        <!-- Discord -->
+        <label class="switch"><input id="notifyDiscord" type="checkbox" checked /> Notify Discord</label>
+        <input id="webhook" type="text" style="min-width:360px" title="Discord webhook URL" />
 
         <button id="start" class="btn">Start</button>
         <button id="stop" class="btn secondary">Stop</button>
@@ -162,7 +166,7 @@
       <div class="metric">
         <h4>Confluence</h4>
         <div id="confluence" class="v">–</div>
-        <div class="note">Entry TF midline + structure + (optional) 3MA + retest</div>
+        <div class="note">Entry TF midline + structure + (opt) 3MA + retest</div>
       </div>
     </div>
 
@@ -244,7 +248,7 @@
       </div>
     </div>
 
-    <div class="section small">Educational use only. Markets carry risk. Targets/SLs are simulated from LTF OHLC.</div>
+    <div class="section small">Note: Browser CORS may affect webhooks. Run from a server (not file://). Educational use only.</div>
   </div>
 
   <!-- RIGHT PANEL -->
@@ -305,6 +309,7 @@
   const boxTF = el('boxTF'), oneDownTF = el('oneDownTF'), ltfTF = el('ltfTF');
   const hqMode = el('hqMode'), autoTrade = el('autoTrade'), slMode = el('slMode');
   const autoScan = el('autoScan'), scanNow = el('scanNow'), scanEvery = el('scanEvery'), scanStatus = el('scanStatus');
+  const notifyDiscord = el('notifyDiscord'), webhookInput = el('webhook');
   const tapLookback = el('tapLookback'), barsSince = el('barsSince'), minConf = el('minConf');
   const sellKMin = el('sellKMin'), buyKMax = el('buyKMax'), obosSel = el('obos');
   const requireRetest = el('requireRetest'), ltfsMid = el('ltfsMid'), ltfsStruct = el('ltfsStruct'), ltfsMA3 = el('ltfsMA3');
@@ -327,11 +332,14 @@
   let boxCandles=[], oneCandles=[], ltfCandles=[];
   let recentSignals=[], trades=[];
   let lastSignalEpoch=0, activeSymbol=null;
-  let activeSymbolsList = []; // list of symbols to scan
+  let activeSymbolsList = [];
   let scanTimer=null, scanInProgress=false;
 
-  // For one-off scan requests
-  const scanWaiters = {}; // key: scan|symbol|gran -> resolver
+  // One-off scan waiters
+  const scanWaiters = {};
+
+  // Defaults
+  webhookInput.value = "https://discord.com/api/webhooks/1431662464080285736/wiqGZaLuY8gFZ88uH77K6Gj9dEYRiKaHe8X0oBTVZZjoWz5nazb7oteUsv62nPiY55At";
 
   // Utils
   const fmt = (n,d=5)=> (n==null||!isFinite(n))?'–':Number(n).toFixed(d);
@@ -339,13 +347,104 @@
   const nowTS = ()=> Math.floor(Date.now()/1000);
   const isClosed = o => (o.is_closed===1||o.is_closed===true||o.is_closed==='1');
 
-  // WebSocket
+  function tfLabel(val){
+    if(val==='W') return '1W';
+    const g=parseInt(val,10);
+    const map={60:'1m',120:'2m',180:'3m',300:'5m',600:'10m',900:'15m',1200:'20m',1800:'30m',3600:'1H',7200:'2H',10800:'3H',14400:'4H',28800:'8H',43200:'12H',86400:'1D'};
+    return map[g] || (g+'s');
+  }
+
+  // Discord
+  function discordPost(payload){
+    try{
+      if(!notifyDiscord.checked) return;
+      const url = (webhookInput.value||'').trim();
+      if(!url) return;
+      fetch(url, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify(payload),
+        mode: 'cors' // if CORS blocks, you may need to run behind a server/proxy
+      }).catch(e=>console.warn('Discord webhook error', e));
+    }catch(e){}
+  }
+  function discordSimple(content){ discordPost({content}); }
+  function discordSignal(symbol, plan){
+    const color = plan.bias==='BUY' ? 0x16a34a : 0xef4444;
+    const embed = {
+      title: `Signal ${plan.bias} — ${symbol}`,
+      color,
+      timestamp: new Date().toISOString(),
+      fields: [
+        {name:'Box TF', value: tfLabel(boxTF.value), inline:true},
+        {name:'Target TF', value: tfLabel(oneDownTF.value), inline:true},
+        {name:'Entry TF', value: tfLabel(ltfTF.value), inline:true},
+        {name:'Confidence', value: String(plan.score), inline:true},
+        {name:'Entry', value: fmt(plan.entry), inline:true},
+        {name:'TP', value: fmt(plan.TP), inline:true},
+        {name:'SL', value: fmt((slMode.value==='band'?plan.SL_band:plan.SL_swing)), inline:true},
+        {name:'Tap/3MA/Stoch', value: `${plan.tapOK?'✅':'❌'} / ${plan.bodyOK?'✅':'❌'} / ${plan.stOK?'✅':'❌'}`, inline:true},
+        {name:'LTF mid/struct/3MA', value: `${plan.lMidOK?'✅':'❌'} / ${plan.structOK?'✅':'❌'} / ${ltfsMA3.checked?(plan.lBodyOK?'✅':'❌'):'OFF'}`, inline:true}
+      ],
+      footer:{text:'Option B — Cross‑TF Mean Reversion'}
+    };
+    discordPost({ username:'Signal Engine', embeds:[embed] });
+  }
+  function discordScanFound(symbol, plan){
+    const embed = {
+      title: `Scan match found — ${symbol}`,
+      color: 0x22d3ee,
+      timestamp: new Date().toISOString(),
+      fields: [
+        {name:'Box TF', value: tfLabel(boxTF.value), inline:true},
+        {name:'Target TF', value: tfLabel(oneDownTF.value), inline:true},
+        {name:'Entry TF', value: tfLabel(ltfTF.value), inline:true},
+        {name:'Bias', value: plan.bias, inline:true},
+        {name:'Confidence', value: String(plan.score), inline:true}
+      ]
+    };
+    discordPost({username:'Signal Engine', embeds:[embed]});
+  }
+  function discordScanNone(){
+    discordSimple(`🔎 Scan complete — no matches. Will rescan in ${Math.max(10, parseInt(scanEvery.value||'60',10))}s.`);
+  }
+  function discordTradeOpen(t){
+    const color = t.side==='BUY' ? 0x16a34a : 0xef4444;
+    const embed = {
+      title:`Trade opened — ${t.side} ${t.symbol}`,
+      color,
+      timestamp:new Date().toISOString(),
+      fields:[
+        {name:'Entry', value: fmt(t.entry), inline:true},
+        {name:'TP', value: fmt(t.tp), inline:true},
+        {name:'SL', value: fmt(t.sl), inline:true},
+        {name:'Init R', value: t.rrInit!=null? t.rrInit.toFixed(2) : '–', inline:true}
+      ]
+    };
+    discordPost({username:'Signal Engine', embeds:[embed]});
+  }
+  function discordTradeClose(t){
+    const color = t.status==='won' ? 0x16a34a : (t.status==='lost'?0xef4444:0xf59e0b);
+    const embed = {
+      title:`Trade ${t.status.toUpperCase()} — ${t.side} ${t.symbol}`,
+      color,
+      timestamp:new Date().toISOString(),
+      fields:[
+        {name:'Entry', value: fmt(t.entry), inline:true},
+        {name:'Exit', value: fmt(t.exitPrice), inline:true},
+        {name:'R', value: t.rr!=null? t.rr.toFixed(2) : '–', inline:true}
+      ]
+    };
+    discordPost({username:'Signal Engine', embeds:[embed]});
+  }
+
+  // WS
   function connect(){
-    ws = new WebSocket(WS_URL);
-    ws.onopen = () => { isOpen=true; wsDot.classList.add('on'); wsStatus.textContent='Connected'; send({active_symbols:'brief', product_type:'basic'}); };
-    ws.onmessage = handleMsg;
-    ws.onclose = ()=>{ isOpen=false; wsDot.classList.remove('on'); wsStatus.textContent='Disconnected — reconnecting...'; setTimeout(connect, 1200); };
-    ws.onerror = ()=>{ wsStatus.textContent='Error'; };
+    const WS = new WebSocket(WS_URL);
+    WS.onopen = () => { ws=WS; isOpen=true; wsDot.classList.add('on'); wsStatus.textContent='Connected'; send({active_symbols:'brief', product_type:'basic'}); };
+    WS.onmessage = handleMsg;
+    WS.onclose = ()=>{ isOpen=false; wsDot.classList.remove('on'); wsStatus.textContent='Disconnected — reconnecting...'; setTimeout(connect, 1200); };
+    WS.onerror = ()=>{ wsStatus.textContent='Error'; };
   }
   function send(obj){ if(isOpen) ws.send(JSON.stringify(obj)); }
   function forget(id){ if(!id) return; send({forget:id}); delete subs[id]; }
@@ -356,7 +455,6 @@
     pending[key] = {symbol, gran, onInit, onUpdate};
     send({ticks_history: symbol, style:'candles', granularity: gran, count: 500, end:'latest', adjust_start_time:1, subscribe:1});
   }
-
   function onceCandles(symbol, gran, count=400){
     return new Promise((resolve)=>{
       const key = `scan|${symbol}|${gran}`;
@@ -376,17 +474,14 @@
       const symbol = msg.echo_req?.ticks_history;
       const gran = Number(msg.echo_req?.granularity || 0);
       const arrRaw = (msg.candles || []);
-      // One-off scan responses (no subscription id)
       if(!subId){
         const key = `scan|${symbol}|${gran}`;
         if(scanWaiters[key]){
           const arr = arrRaw.map(c=>({epoch:c.epoch||c.open_time, open:+c.open, high:+c.high, low:+c.low, close:+c.close}));
-          const resolve = scanWaiters[key]; delete scanWaiters[key];
-          resolve(arr);
+          scanWaiters[key](arr); delete scanWaiters[key];
           return;
         }
       }
-      // Streaming subscriptions
       const key = `${symbol}|${gran}|candles`;
       if(subId && pending[key]){
         subs[subId] = pending[key];
@@ -423,7 +518,6 @@
       selSymbol.appendChild(opt);
       activeSymbolsList.push(s.symbol);
     }
-    // preselect
     const defaults = ['frxEURUSD','frxGBPUSD','R_100'];
     for(const d of defaults){
       const o = Array.from(selSymbol.options).find(o=>o.value===d);
@@ -431,7 +525,7 @@
     }
   }
 
-  // TA helpers
+  // TA
   function SMA(arr, len){
     const out=new Array(arr.length).fill(null);
     let sum=0; for(let i=0;i<arr.length;i++){ sum+=arr[i]; if(i>=len) sum-=arr[i-len]; if(i>=len-1) out[i]=sum/len; }
@@ -541,7 +635,6 @@
     ctx2.strokeStyle='#132136'; ctx2.beginPath(); for(let i=0;i<5;i++){ const yy=Math.round(i*H2/4); ctx2.moveTo(0,yy); ctx2.lineTo(W2,yy);} ctx2.stroke();
     ctx2.strokeStyle='#334155'; ctx2.setLineDash([4,4]); ctx2.beginPath(); ctx2.moveTo(0, y2(80)); ctx2.lineTo(W2, y2(80)); ctx2.stroke();
     ctx2.beginPath(); ctx2.moveTo(0, y2(20)); ctx2.lineTo(W2, y2(20)); ctx2.stroke(); ctx2.setLineDash([]);
-    // K/D
     ctx2.lineWidth=1.5; ctx2.strokeStyle='#22d3ee'; ctx2.beginPath();
     for(let i=offset;i<stoch.k.length;i++){ const j=i-offset; const v=stoch.k[i]; if(v==null) continue; const xi=x(j), yi=y2(v); if(j===0) ctx2.moveTo(xi,yi); else ctx2.lineTo(xi,yi);} ctx2.stroke();
     ctx2.strokeStyle='#7c3aed'; ctx2.beginPath();
@@ -551,7 +644,7 @@
   // Strategy — Option B
   function recentTap(candles, upper, lower, look, side){
     const n=candles.length; const from=Math.max(0,n-look-1);
-    for(let i=from;i<=n-2;i++){ // closed bars
+    for(let i=from;i<=n-2;i++){
       if(side==='SELL' && upper[i]!=null && candles[i].high>=upper[i]) return true;
       if(side==='BUY'  && lower[i]!=null && candles[i].low<=lower[i]) return true;
     } return false;
@@ -575,7 +668,6 @@
     let optionB_ok = (!boxBasisInside && oneBasisInside);
     if(!optionB_ok) return { gate:false, boxHigh, boxLow, boxBasisInside, oneBasisInside };
 
-    // direction by position within box
     const lastClose = oneArr[oneLast].close;
     const rng = (boxHigh - boxLow);
     const rel = rng>0 ? (lastClose - boxLow)/rng : 0.5;
@@ -583,7 +675,6 @@
     if(rel <= 0.35) bias='BUY'; else if(rel >= 0.65) bias='SELL'; else bias='NEUTRAL';
     if(bias==='NEUTRAL') return {gate:false, boxHigh, boxLow, boxBasisInside, oneBasisInside};
 
-    // HQ filters on One‑Down
     const [ob,os] = obosSel.value.split(',').map(Number);
     const bl = parseInt(tapLookback.value||'3',10), bsx = parseInt(barsSince.value||'3',10);
     const KsellMin = parseInt(sellKMin.value||'68',10), KbuyMax = parseInt(buyKMax.value||'45',10);
@@ -599,7 +690,6 @@
       if(bias==='BUY'  && cr.dir==='up'   && recent && (Know!=null && Know<=KbuyMax))  stOK=true;
     }
 
-    // LTF confluence
     const lCloses = ltfArr.map(x=>x.close); const lBB=BollingerBands(lCloses,20,2);
     const lClose = ltfArr[ltfLast].close;
     const lMA3 = SMA(lCloses, 3);
@@ -627,10 +717,8 @@
     const lBodyGate = ltfsMA3.checked ? lBodyOK : true;
     const ltfOk = lMidOK && structOK && retestOK && lBodyGate;
 
-    // Confidence
     let score=0; if(tapOK) score+=30; if(bodyOK) score+=20; if(stOK) score+=30; if(ltfOk) score+=20;
 
-    // Plan
     const upper = oneBB.upper[oneLast], lower = oneBB.lower[oneLast], basis = oneBB.basis[oneLast];
     const width = (upper!=null&&lower!=null)?(upper-lower):null;
     const entry = lastClose; const TP=basis;
@@ -657,7 +745,6 @@
     };
   }
 
-  // UI
   function updateUI(){
     if(!oneCandles.length || !boxCandles.length) return;
     const plan = analyze(boxCandles, oneCandles, ltfCandles);
@@ -723,6 +810,8 @@
     recentSignals.unshift(row); recentSignals = recentSignals.slice(0,50); renderSignals();
 
     if(beepCk.checked) beep(plan.bias==='BUY' ? 900 : 420, 0.12);
+    if(notifyDiscord.checked) discordSignal(activeSymbol, plan);
+
     if(autoTrade.checked && plan.entry!=null && plan.TP!=null && SL!=null){
       openTrade(activeSymbol, plan.bias, plan.entry, plan.TP, SL, nowTS());
     }
@@ -750,8 +839,10 @@
     const risk = side==='BUY' ? (entry - sl) : (sl - entry);
     const tpr = side==='BUY' ? (tp - entry) : (entry - tp);
     const rrInit = (risk>0 && isFinite(risk)) ? (tpr/risk) : null;
-    trades.unshift({id,symbol,side,entry,tp,sl,openTime,closeTime:null,status:'live',exitPrice:null,rrInit,rrLive:0,bestRR:0});
+    const t = {id,symbol,side,entry,tp,sl,openTime,closeTime:null,status:'live',exitPrice:null,rrInit,rrLive:0,bestRR:0};
+    trades.unshift(t);
     renderTrades();
+    if(notifyDiscord.checked) discordTradeOpen(t);
   }
   function closeTrade(id, status, exitPrice, closeTime){
     const t = trades.find(x=>x.id===id); if(!t || t.status!=='live') return;
@@ -761,6 +852,7 @@
     t.rr = (risk>0)?(prof/risk):null;
     renderTrades();
     if(beepCk.checked) beep(status==='won'?1200:300,0.15);
+    if(notifyDiscord.checked) discordTradeClose(t);
   }
   function updateTradesWithLTF(ohlc){
     if(!trades.some(t=>t.status==='live')) return;
@@ -841,10 +933,11 @@
     }catch(e){}
   }
 
-  // Stream symbol (live subscriptions)
+  // Streaming
   function streamSymbol(symbol){
     activeSymbol = symbol;
     forgetAll(); boxCandles=[]; oneCandles=[]; ltfCandles=[];
+
     // Box TF
     const boxVal = boxTF.value;
     if(boxVal==='W'){
@@ -853,24 +946,21 @@
       const g=parseInt(boxVal,10);
       subscribeCandles(symbol, g, (arr)=>{ boxCandles = arr; updateUI(); }, (o)=>{ mergeCandle(boxCandles, o); updateUI(); });
     }
-    // One‑Down TF
+    // One-Down TF
     const oneG = (oneDownTF.value==='W') ? 86400 : parseInt(oneDownTF.value,10);
     if(oneDownTF.value==='W'){
       subscribeCandles(symbol, 86400, (arr)=>{ dailyMap[symbol]=arr.slice(); oneCandles = weeklyFromDaily(dailyMap[symbol]); updateUI(); }, (o)=>{ mergeCandle(dailyMap[symbol], o); oneCandles=weeklyFromDaily(dailyMap[symbol]); updateUI(); });
     } else {
       subscribeCandles(symbol, oneG, (arr)=>{ oneCandles=arr; updateUI(); }, (o)=>{ mergeCandle(oneCandles,o); updateUI(); });
     }
-    // Entry/Tracking TF
+    // Entry TF
     const ltfG = parseInt(ltfTF.value,10);
     subscribeCandles(symbol, ltfG, (arr)=>{ ltfCandles=arr; updateUI(); renderTrades(); }, (o)=>{ mergeCandle(ltfCandles,o); updateUI(); updateTradesWithLTF(o); });
   }
 
   // Start/Stop
   function start(){
-    if(autoScan.checked){
-      scanAndSwitch();
-      return;
-    }
+    if(autoScan.checked){ scanAndSwitch(); return; }
     const symbol = selSymbol.value;
     if(!symbol){ alert('Select a symbol'); return; }
     streamSymbol(symbol);
@@ -882,71 +972,62 @@
     scanStatus.textContent = 'Scan: idle';
   }
 
-  // Merge candle helper
   function mergeCandle(arr, o){
     const c={epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
     const idx=arr.findIndex(x=>x.epoch===c.epoch);
     if(idx>=0) arr[idx]=c; else { arr.push(c); arr.sort((a,b)=>a.epoch-b.epoch); if(arr.length>1500) arr.splice(0, arr.length-1500); }
   }
 
-  // Auto-scan engine
+  // Auto-scan
   async function scanAndSwitch(){
     if(scanInProgress) return;
-    if(activeSymbolsList.length===0){ alert('Symbols not loaded yet. Please wait until Connected.'); return; }
-    scanInProgress = true;
-    scanStatus.textContent = 'Scan: scanning...';
-
-    const symbols = [...activeSymbolsList]; // shallow copy
-    // Simple heuristic: scan FX majors first if present
+    if(activeSymbolsList.length===0){ alert('Symbols not loaded yet. Wait until Connected.'); return; }
+    scanInProgress = true; scanStatus.textContent='Scan: scanning...';
+    const symbols = [...activeSymbolsList];
     const fxMajors = ['frxEURUSD','frxGBPUSD','frxUSDJPY','frxAUDUSD','frxUSDCHF','frxUSDCAD','frxNZDUSD'];
-    symbols.sort((a,b)=> (fxMajors.includes(b)?1:0) - (fxMajors.includes(a)?1:0)); // FX first
+    symbols.sort((a,b)=> (fxMajors.includes(b)?1:0) - (fxMajors.includes(a)?1:0));
 
     try{
       for(const sym of symbols){
-        // Build arrays for Box, One‑Down, Entry TF (snapshot only)
         let boxArr=[], oneArr=[], ltfArr=[];
-        // Box
         if(boxTF.value==='W'){
           const daily = await onceCandles(sym, 86400, 400);
           boxArr = weeklyFromDaily(daily);
         } else {
           boxArr = await onceCandles(sym, parseInt(boxTF.value,10), 400);
         }
-        // One‑Down
         if(oneDownTF.value==='W'){
           const daily2 = await onceCandles(sym, 86400, 400);
           oneArr = weeklyFromDaily(daily2);
         } else {
           oneArr = await onceCandles(sym, parseInt(oneDownTF.value,10), 400);
         }
-        // Entry
         ltfArr = await onceCandles(sym, parseInt(ltfTF.value,10), 400);
 
         const plan = analyze(boxArr, oneArr, ltfArr);
         if(!plan || !plan.gate) continue;
 
-        // HQ enforcement same as live
         const minC = parseInt(minConf.value||'80',10);
         const needHQ = hqMode.checked;
         const passHQ = (!needHQ) || (plan.score>=minC && plan.tapOK && plan.bodyOK && plan.stOK && plan.ltfOk);
         if(passHQ){
-          // Switch
           selSymbol.value = sym;
+          if(notifyDiscord.checked) discordScanFound(sym, plan);
           streamSymbol(sym);
           scanStatus.textContent = `Scan: found ${sym}`;
           scanInProgress=false;
           return;
         }
       }
-      // none found
       scanStatus.textContent = 'Scan: none found — waiting...';
+      if(notifyDiscord.checked) discordScanNone();
       const interval = Math.max(10, parseInt(scanEvery.value||'60',10));
       if(autoScan.checked){
         scanTimer = setTimeout(()=>{ scanInProgress=false; scanAndSwitch(); }, interval*1000);
       } else {
         scanInProgress=false;
       }
-    } catch(e){
+    }catch(e){
       console.warn('Scan error:', e);
       scanStatus.textContent = 'Scan: error — will retry';
       const interval = Math.max(10, parseInt(scanEvery.value||'60',10));
@@ -960,7 +1041,7 @@
   scanNow.addEventListener('click', scanAndSwitch);
   [boxTF, oneDownTF, ltfTF, slMode, hqMode, autoTrade, tapLookback, barsSince, minConf, sellKMin, buyKMax, obosSel, requireRetest, ltfsMid, ltfsStruct, ltfsMA3]
     .forEach(c=> c.addEventListener('change', updateUI));
-  btnCloseAll.addEventListener('click', ()=>{ const p=currentPrice(); const ts=nowTS(); for(const t of trades.filter(x=>x.status==='live')) closeTrade(t.id,'manual',p,ts); });
+  btnCloseAll.addEventListener('click', ()=>{ const p=ltfCandles.length? ltfCandles[ltfCandles.length-1].close : NaN; const ts=nowTS(); for(const t of trades.filter(x=>x.status==='live')) closeTrade(t.id,'manual',p,ts); });
 
   // Boot
   connect();
