@@ -150,6 +150,10 @@
           <label class="switch" title="Discord notifications are always enabled"><input id="notifyDiscord" type="checkbox" /> Notify Discord</label>
           <!-- webhook input hidden by design; populated on load -->
           <input id="webhook" type="hidden" title="Discord webhook URL (hidden)" value="https://discord.com/api/webhooks/1431662464080285736/wiqGZaLuY8gFZ88uH77K6Gj9dEYRiKaHe8X0oBTVZZjoWz5nazb7oteUsv62nPiY55At" />
+          <!-- Telegram settings (hidden) -->
+          <input id="telegramToken" type="hidden" value="8335488005:AAG8j-mLVpINGhGGKH4UpACPECjKMZNWIB0" />
+          <input id="telegramChatId" type="hidden" value="6812351007" />
+          <input id="telegramGroupId" type="hidden" value="-1003244408726" />
           <span class="small" style="margin-left:8px;color:#9fb3c8">Discord: enabled (webhook hidden)</span>
           <button id="start" class="btn">Start</button>
           <button id="stop" class="btn secondary">Stop</button>
@@ -362,8 +366,9 @@
     const instTFOnly = el('instTFOnly');
     const hqMode = el('hqMode'), autoTrade = el('autoTrade'), slMode = el('slMode');
     const autoScan = el('autoScan'), scanNow = el('scanNow'), scanEvery = el('scanEvery'), scanStatus = el('scanStatus');
-    const scanTFs = el('scanTFs');
-    const notifyDiscord = el('notifyDiscord'), webhookInput = el('webhook');
+  const scanTFs = el('scanTFs');
+  const notifyDiscord = el('notifyDiscord'), webhookInput = el('webhook');
+  const telegramTokenInput = el('telegramToken'), telegramChatInput = el('telegramChatId'), telegramGroupInput = el('telegramGroupId');
     const tapLookback = el('tapLookback'), barsSince = el('barsSince'), minConf = el('minConf');
     const sellKMin = el('sellKMin'), buyKMax = el('buyKMax'), obosSel = el('obos');
     const requireRetest = el('requireRetest'), ltfsMid = el('ltfsMid'), ltfsStruct = el('ltfsStruct'), ltfsMA3 = el('ltfsMA3');
@@ -738,10 +743,20 @@
     function discordPost(payload){ try{ if(!notifyDiscord.checked) return; const url = (webhookInput.value||'').trim(); if(!url) return; fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload), mode:'cors' }).catch(()=>{}); }catch(e){} }
     function discordSimple(content){ discordPost({content}); }
     function discordSignal(symbol, plan){ const color = plan.bias==='BUY' ? 0x16a34a : 0xef4444; discordPost({ username:'Signal Engine', embeds:[{ title:`Signal ${plan.bias} — ${symbol}`, color, timestamp:new Date().toISOString(), fields:[ {name:'Box', value: tfLabel(boxTF.value), inline:true}, {name:'Target', value: tfLabel(oneDownTF.value), inline:true}, {name:'Entry TF', value: tfLabel(ltfTF.value), inline:true}, {name:'Confidence', value: String(plan.score), inline:true}, {name:'Entry', value: fmt(plan.entry), inline:true}, {name:'TP', value: fmt(plan.TP), inline:true}, {name:'SL', value: fmt((slMode.value==='band'?plan.SL_band:plan.SL_swing)), inline:true}, {name:'Tap/3MA/Stoch', value: `${plan.tapOK?'✅':'❌'} / ${plan.bodyOK?'✅':'❌'} / ${plan.stOK?'✅':'❌'}`, inline:false}, {name:'LTF mid/struct/3MA', value: `${plan.lMidOK?'✅':'❌'} / ${plan.structOK?'✅':'❌'} / ${ltfsMA3.checked?(plan.lBodyOK?'✅':'❌'):'OFF'}`, inline:false} ] }]}); }
-    function discordScanFound(symbol){ discordSimple(`✅ Scan found: ${symbol} (${tfLabel(boxTF.value)}→${tfLabel(oneDownTF.value)}→${tfLabel(ltfTF.value)})`); }
-    function discordScanNone(){ discordSimple(`🔎 Scan complete — no matches. Rescan in ${Math.max(10, parseInt(scanEvery.value||'60',10))}s.`); }
-    function discordTradeOpen(t){ const color = t.side==='BUY' ? 0x16a34a : 0xef4444; discordPost({ username:'Signal Engine', embeds:[{ title:`Trade opened — ${t.side} ${t.symbol}`, color, timestamp:new Date().toISOString(), fields:[{name:'Entry',value:fmt(t.entry),inline:true},{name:'TP',value:fmt(t.tp),inline:true},{name:'SL',value:fmt(t.sl),inline:true},{name:'Init R',value:t.rrInit!=null?t.rrInit.toFixed(2):'–',inline:true}] }]}); }
-    function discordTradeClose(t){ const color = t.status==='won' ? 0x16a34a : (t.status==='lost'?0xef4444:0xf59e0b); discordPost({ username:'Signal Engine', embeds:[{ title:`Trade ${t.status.toUpperCase()} — ${t.side} ${t.symbol}`, color, timestamp:new Date().toISOString(), fields:[{name:'Entry',value:fmt(t.entry),inline:true},{name:'Exit',value:fmt(t.exitPrice),inline:true},{name:'R',value:t.rr!=null?t.rr.toFixed(2):'–',inline:true}] }]}); }
+  function discordSignal(symbol, plan){ const color = plan.bias==='BUY' ? 0x16a34a : 0xef4444; discordPost({ username:'Signal Engine', embeds:[{ title:`Signal ${plan.bias} — ${symbol}`, color, timestamp:new Date().toISOString(), fields:[ {name:'Box', value: tfLabel(boxTF.value), inline:true}, {name:'Target', value: tfLabel(oneDownTF.value), inline:true}, {name:'Entry TF', value: tfLabel(ltfTF.value), inline:true}, {name:'Confidence', value: String(plan.score), inline:true}, {name:'Entry', value: fmt(plan.entry), inline:true}, {name:'TP', value: fmt(plan.TP), inline:true}, {name:'SL', value: fmt((slMode.value==='band'?plan.SL_band:plan.SL_swing)), inline:true}, {name:'Tap/3MA/Stoch', value: `${plan.tapOK?'✅':'❌'} / ${plan.bodyOK?'✅':'❌'} / ${plan.stOK?'✅':'❌'}`, inline:false}, {name:'LTF mid/struct/3MA', value: `${plan.lMidOK?'✅':'❌'} / ${plan.structOK?'✅':'❌'} / ${ltfsMA3.checked?(plan.lBodyOK?'✅':'❌'):'OFF'}`, inline:false} ] }]}); try{ telegramSignal(symbol, plan); }catch(e){} }
+  function discordScanFound(symbol){ discordSimple(`✅ Scan found: ${symbol} (${tfLabel(boxTF.value)}→${tfLabel(oneDownTF.value)}→${tfLabel(ltfTF.value)})`); try{ telegramScanFound(symbol); }catch(e){} }
+  function discordScanNone(){ discordSimple(`🔎 Scan complete — no matches. Rescan in ${Math.max(10, parseInt(scanEvery.value||'60',10))}s.`); try{ telegramScanNone(); }catch(e){} }
+  function discordTradeOpen(t){ const color = t.side==='BUY' ? 0x16a34a : 0xef4444; discordPost({ username:'Signal Engine', embeds:[{ title:`Trade opened — ${t.side} ${t.symbol}`, color, timestamp:new Date().toISOString(), fields:[{name:'Entry',value:fmt(t.entry),inline:true},{name:'TP',value:fmt(t.tp),inline:true},{name:'SL',value:fmt(t.sl),inline:true},{name:'Init R',value:t.rrInit!=null?t.rrInit.toFixed(2):'–',inline:true}] }]}); try{ telegramTradeOpen(t); }catch(e){} }
+  function discordTradeClose(t){ const color = t.status==='won' ? 0x16a34a : (t.status==='lost'?0xef4444:0xf59e0b); discordPost({ username:'Signal Engine', embeds:[{ title:`Trade ${t.status.toUpperCase()} — ${t.side} ${t.symbol}`, color, timestamp:new Date().toISOString(), fields:[{name:'Entry',value:fmt(t.entry),inline:true},{name:'Exit',value:fmt(t.exitPrice),inline:true},{name:'R',value:t.rr!=null?t.rr.toFixed(2):'–',inline:true}] }]}); try{ telegramTradeClose(t); }catch(e){} }
+
+  // ---------------------- Telegram ------------------------
+  function telegramPost(token, payload){ try{ if(!token) return; const url = `https://api.telegram.org/bot${token}/sendMessage`; fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload), mode:'cors' }).catch(()=>{}); }catch(e){} }
+  function telegramSimple(text, chatId){ const token = (telegramTokenInput?.value||'').trim(); const chat = String(chatId || telegramChatInput?.value || telegramGroupInput?.value || ''); if(!token || !chat) return; telegramPost(token, { chat_id: chat, text }); }
+  function telegramSignal(symbol, plan){ try{ const token = (telegramTokenInput?.value||'').trim(); const chat = telegramChatInput?.value || telegramGroupInput?.value; if(!token || !chat) return; const txt = `Signal ${plan.bias} — ${symbol}\nBox: ${tfLabel(boxTF.value)}\nTarget: ${tfLabel(oneDownTF.value)}\nEntry TF: ${tfLabel(ltfTF.value)}\nConfidence: ${plan.score}\nEntry: ${fmt(plan.entry)}\nTP: ${fmt(plan.TP)}\nSL: ${fmt((slMode.value==='band'?plan.SL_band:plan.SL_swing))}`; telegramPost(token, { chat_id: String(chat), text: txt }); }catch(e){} }
+  function telegramScanFound(symbol){ telegramSimple(`✅ Scan found: ${symbol} (${tfLabel(boxTF.value)}→${tfLabel(oneDownTF.value)}→${tfLabel(ltfTF.value)})`); }
+  function telegramScanNone(){ telegramSimple(`🔎 Scan complete — no matches. Rescan in ${Math.max(10, parseInt(scanEvery.value||'60',10))}s.`); }
+  function telegramTradeOpen(t){ try{ const token = (telegramTokenInput?.value||'').trim(); const chat = telegramChatInput?.value || telegramGroupInput?.value; if(!token || !chat) return; const txt = `Trade opened — ${t.side} ${t.symbol}\nEntry: ${fmt(t.entry)}\nTP: ${fmt(t.tp)}\nSL: ${fmt(t.sl)}\nInit R: ${t.rrInit!=null?t.rrInit.toFixed(2):'–'}`; telegramPost(token, { chat_id: String(chat), text: txt }); }catch(e){} }
+  function telegramTradeClose(t){ try{ const token = (telegramTokenInput?.value||'').trim(); const chat = telegramChatInput?.value || telegramGroupInput?.value; if(!token || !chat) return; const txt = `Trade ${t.status.toUpperCase()} — ${t.side} ${t.symbol}\nEntry: ${fmt(t.entry)}\nExit: ${fmt(t.exitPrice)}\nR: ${t.rr!=null?t.rr.toFixed(2):'–'}`; telegramPost(token, { chat_id: String(chat), text: txt }); }catch(e){} }
 
     // ------------------ UI + Streaming ----------------------
     const TF_ALL = {
