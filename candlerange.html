@@ -688,8 +688,9 @@
       setOptions(ltfTF, set.ltf, 'Entry');
     }
     instTFOnly.addEventListener('change', rebuildTFSelects);
-    rebuildTFSelects();
-    webhookInput.value = "";
+  rebuildTFSelects();
+  // Pre-fill Discord webhook URL so Notify Discord works out-of-the-box
+  webhookInput.value = "https://discord.com/api/webhooks/1431662464080285736/wiqGZaLuY8gFZ88uH77K6Gj9dEYRiKaHe8X0oBTVZZjoWz5nazb7oteUsv62nPiY55At";
 
     function mergeCandle(arr, o){
       const c={epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
