@@ -110,10 +110,10 @@
 <body>
 <header>
   <div class="wrap">
-    <h1>Bollinger Bands & Stochastic Signals (Deriv) — Auto Market Scanner</h1>
+    <h1>Level-to-Level Signals (Deriv) — Auto Market Scanner</h1>
     <div class="sub">
-      Uses HTF Stochastic oversold/overbought near BB outer bands as key levels, refines entries on LTF (institutional TF) with BOS, BB middle break, and 3 EMA alignment.
-      Now with automatic market selection on analysis & scanner across multiple symbols. App ID defaults to 1089.
+      Uses previous HTF candle high/low as key levels, refines entries on LTF with EMA/RSI/BOS, targets opposite key level.
+      Now with automatic market switching & scanner across multiple symbols. App ID defaults to 1089.
     </div>
   </div>
 </header>
@@ -166,7 +166,7 @@
         </select>
       </div>
       <div class="field small">
-        <label>LTF (Institutional)</label>
+        <label>LTF</label>
         <select id="ltfSelect">
           <option value="60" selected>1m</option>
           <option value="180">3m</option>
@@ -232,17 +232,18 @@
       <div class="field">
         <label>&nbsp;</label>
         <div class="inline">
-          <button id="analyzeBtn">Analyze Now (Auto-Select)</button>
+          <button id="analyzeBtn">Analyze Now</button>
           <button id="backtestBtn" class="secondary">Backtest (last 20 HTF)</button>
         </div>
       </div>
     </div>
 
     <div class="chips" style="margin-top:10px">
-      <span class="chip">HTF: Stoch(14,3,3) <16 oversold / >84 overbought near BB outer</span>
-      <span class="chip">LTF: BOS + close >/< BB middle + close above/below 3 EMAs (9/21/50 aligned)</span>
-      <span class="chip">SL: outer BB ± buffer × ATR(HTF)</span>
-      <span class="chip">TP: middle BB ± buffer × ATR(HTF)</span>
+      <span class="chip">HTF key levels = previous candle High / Low</span>
+      <span class="chip">LTF confirmation = EMA(9/21) cross, RSI(14) 50-cross, or BOS break</span>
+      <span class="chip">BOS = Break of most recent LTF swing high/low</span>
+      <span class="chip">SL beyond level by SL buffer × ATR(HTF)</span>
+      <span class="chip">TP = opposite level minus TP buffer × ATR(HTF)</span>
     </div>
   </section>
 
@@ -258,8 +259,8 @@
           <th>Symbol</th>
           <th>HTF/LTF</th>
           <th>Bias</th>
-          <th>HTF BB Upper</th>
-          <th>HTF BB Lower</th>
+          <th>HTF High</th>
+          <th>HTF Low</th>
           <th>Entry</th>
           <th>SL</th>
           <th>TP</th>
@@ -309,7 +310,7 @@
     </div>
   </section>
 
- <section class="panel">
+  <section class="panel">
     <div class="note">
       Educational tool. Markets change — no fixed win rate is guaranteed. Always validate on your own charts and manage risk.
     </div>
@@ -420,48 +421,6 @@ let SCAN_INDEX = 0;
 const SIGNALS_SEEN = new Set();
 
 /** Indicators */
-function sma(values, period) {
-  const out = new Array(values.length).fill(null);
-  for (let i = period - 1; i < values.length; i++) {
-    out[i] = values.slice(i - period + 1, i + 1).reduce((a, b) => a + Number(b), 0) / period;
-  }
-  return out;
-}
-function stddev(values, period) {
-  const out = new Array(values.length).fill(null);
-  for (let i = period - 1; i < values.length; i++) {
-    const slice = values.slice(i - period + 1, i + 1);
-    const mean = slice.reduce((a, b) => a + Number(b), 0) / period;
-    const variance = slice.reduce((a, b) => a + Math.pow(Number(b) - mean, 2), 0) / period;
-    out[i] = Math.sqrt(variance);
-  }
-  return out;
-}
-function bollinger(candles, period = 20, mult = 2) {
-  const closes = candles.map(c => c.close);
-  const middle = sma(closes, period);
-  const stdevs = stddev(closes, period);
-  const upper = middle.map((m, i) => m !== null ? m + mult * (stdevs[i] || 0) : null);
-  const lower = middle.map((m, i) => m !== null ? m - mult * (stdevs[i] || 0) : null);
-  return { middle, upper, lower };
-}
-function stochastic(candles, kPeriod = 14, smoothK = 3, smoothD = 3) {
-  const highs = candles.map(c => c.high);
-  const lows = candles.map(c => c.low);
-  const closes = candles.map(c => c.close);
-  const stochK = new Array(closes.length).fill(null);
-  for (let i = kPeriod - 1; i < closes.length; i++) {
-    const hSlice = highs.slice(i - kPeriod + 1, i + 1);
-    const lSlice = lows.slice(i - kPeriod + 1, i + 1);
-    const h14 = Math.max(...hSlice);
-    const l14 = Math.min(...lSlice);
-    const range = h14 - l14;
-    stochK[i] = range === 0 ? 50 : 100 * (closes[i] - l14) / range;
-  }
-  const slowK = sma(stochK, smoothK);
-  const dLine = sma(slowK, smoothD);
-  return { k: slowK, d: dLine };
-}
 function ema(values, period) {
   const k = 2/(period+1), out = [];
   let prev = null;
@@ -470,6 +429,26 @@ function ema(values, period) {
     if (i < period - 1) out.push(null);
     else if (i === period-1) { prev = values.slice(0,period).reduce((a,b)=>a+Number(b),0)/period; out.push(prev); }
     else { prev = v*k + prev*(1-k); out.push(prev); }
+  }
+  return out;
+}
+function rsi(values, period=14) {
+  const out = Array(values.length).fill(null);
+  let gains=0, losses=0;
+  for (let i=1;i<values.length;i++) {
+    const ch = values[i]-values[i-1];
+    gains += ch>0?ch:0; losses+= ch<0?-ch:0;
+    if (i===period) {
+      let ag=gains/period, al=losses/period;
+      out[i] = 100 - 100/(1+(al===0?100:ag/al));
+      let pg=ag, pl=al;
+      for (let j=i+1;j<values.length;j++){
+        const c=values[j]-values[j-1], g=c>0?c:0, l=c<0?-c:0;
+        pg=(pg*(period-1)+g)/period; pl=(pl*(period-1)+l)/period;
+        const RS = pl===0?100:pg/pl; out[j]=100-100/(1+RS);
+      }
+      break;
+    }
   }
   return out;
 }
@@ -483,6 +462,41 @@ function atr(c, period=14) {
   let a=tr.slice(1,period+1).reduce((x,y)=>x+y,0)/period; out[period]=a;
   for (let i=period+1;i<tr.length;i++){ a=(a*(period-1)+tr[i])/period; out[i]=a; }
   return out;
+}
+function detectBOS(ltf, side, lookback = 15) {
+  if (ltf.length < lookback + 2) return false;
+  const recent = ltf.slice(ltf.length - (lookback + 1), ltf.length - 1);
+  const current = ltf[ltf.length - 1];
+  let recentSwingHigh = -Infinity;
+  let recentSwingLow = Infinity;
+
+  // Find most recent swing high
+  for (let i = recent.length - 2; i >= 1; i--) {
+    const candle = recent[i];
+    const left = recent[i - 1];
+    const right = recent[i + 1];
+    if (candle.high > left.high && candle.high > right.high) {
+      recentSwingHigh = candle.high;
+      break;
+    }
+  }
+
+  // Find most recent swing low
+  for (let i = recent.length - 2; i >= 1; i--) {
+    const candle = recent[i];
+    const left = recent[i - 1];
+    const right = recent[i + 1];
+    if (candle.low < left.low && candle.low < right.low) {
+      recentSwingLow = candle.low;
+      break;
+    }
+  }
+
+  if (side === 'long') {
+    return recentSwingHigh !== -Infinity && current.close > recentSwingHigh;
+  } else {
+    return recentSwingLow !== Infinity && current.close < recentSwingLow;
+  }
 }
 
 /** API wrappers */
@@ -527,234 +541,144 @@ async function getCandles(symbol, granularity, count=500) {
 
 /** Strategy */
 function computeSignal({htf, ltf, params}) {
-  if (!htf || !ltf || htf.length < 50 || ltf.length < 100) return null;
+  if (!htf || !ltf || htf.length < 20 || ltf.length < 50) return null;
 
-  const htfBB = bollinger(htf, 20, 2);
-  const hStoch = stochastic(htf, 14, 3, 3);
-  const lastStochD = hStoch.d[hStoch.d.length - 1];
-  const lastBBLower = htfBB.lower[htfBB.lower.length - 1];
-  const lastBBUpper = htfBB.upper[htfBB.upper.length - 1];
-  const lastBBMiddle = htfBB.middle[htfBB.middle.length - 1];
-  const atrHTF = atr(htf, 14).filter(x => x !== null).pop();
-  if (!atrHTF || !lastStochD || lastBBLower === null || lastBBUpper === null || lastBBMiddle === null) return null;
+  const prevHTF = htf[htf.length-2];
+  const prevHigh = prevHTF.high, prevLow = prevHTF.low;
 
+  const atrHTF = atr(htf, 14).filter(x=>x!==null).pop();
+  if (!atrHTF) return null;
   const zone = atrHTF * params.zoneWidth;
-  const price = ltf[ltf.length - 1].close;
-  const nearLower = Math.abs(price - lastBBLower) <= zone;
-  const nearUpper = Math.abs(price - lastBBUpper) <= zone;
 
-  let side = null, note = [];
-  const OVERSOLD = 16, OVERBOUGHT = 84;
-  if (lastStochD < OVERSOLD && nearLower) {
-    side = 'long';
-    note.push('HTF Stoch oversold', 'Near HTF BB lower');
-  } else if (lastStochD > OVERBOUGHT && nearUpper) {
-    side = 'short';
-    note.push('HTF Stoch overbought', 'Near HTF BB upper');
-  }
+  const closesL = ltf.map(c=>c.close);
+  const ema9 = ema(closesL, 9), ema21 = ema(closesL, 21), rsi14 = rsi(closesL, 14);
+  const last = ltf[ltf.length-1], price = last.close;
+
+  const closesH = htf.map(c=>c.close);
+  const hE50 = ema(closesH, 50).filter(x=>x!==null).pop();
+  const hE200 = ema(closesH, 200).filter(x=>x!==null).pop();
+  const htfTrend = hE50 && hE200 ? (hE50 > hE200 ? 'up' : 'down') : 'neutral';
+
+  const nearHigh = Math.abs(price - prevHigh) <= zone;
+  const nearLow  = Math.abs(price - prevLow)  <= zone;
+
+  const e9 = ema9[ema9.length-1], e21 = ema21[ema21.length-1];
+  const e9p = ema9[ema9.length-2], e21p = ema21[ema21.length-2];
+  const rsiNow = rsi14[rsi14.length-1], rsiPrev = rsi14[rsi14.length-2];
+
+  const crossUp = e9p !== null && e21p !== null && e9p <= e21p && e9 > e21;
+  const crossDn = e9p !== null && e21p !== null && e9p >= e21p && e9 < e21;
+  const rsiBull = rsiPrev !== null && rsiPrev <= 50 && rsiNow > 50;
+  const rsiBear = rsiPrev !== null && rsiPrev >= 50 && rsiNow < 50;
+
+  const bosLong = detectBOS(ltf, 'long');
+  const bosShort = detectBOS(ltf, 'short');
+
+  let side = null, note=[];
+  if (nearLow && (crossUp || rsiBull || bosLong)) { side='long'; note.push('Near HTF Low', crossUp?'EMA9>21':null, rsiBull?'RSI>50':null, bosLong?'LTF BOS':null); }
+  else if (nearHigh && (crossDn || rsiBear || bosShort)) { side='short'; note.push('Near HTF High', crossDn?'EMA9<21':null, rsiBear?'RSI<50':null, bosShort?'LTF BOS':null); }
   if (!side) return null;
 
-  // LTF confirmation
-  const ltfBB = bollinger(ltf, 20, 2);
-  const lCloses = ltf.map(c => c.close);
-  const lEma9 = ema(lCloses, 9);
-  const lEma21 = ema(lCloses, 21);
-  const lEma50 = ema(lCloses, 50);
-  const lastL = ltf[ltf.length - 1];
-  const prevL = ltf[ltf.length - 2];
-  const lastE9 = lEma9[lEma9.length - 1];
-  const lastE21 = lEma21[lEma21.length - 1];
-  const lastE50 = lEma50[lEma50.length - 1];
-  const lastMB = ltfBB.middle[ltfBB.middle.length - 1];
-
-  if (lastE9 === null || lastE21 === null || lastE50 === null || lastMB === null || !prevL) return null;
-
-  const alignedBull = lastE9 > lastE21 && lastE21 > lastE50;
-  const alignedBear = lastE9 < lastE21 && lastE21 < lastE50;
-  let ltfConfirm = false;
-  let ltfNotes = [];
-  if (side === 'long') {
-    const bos = lastL.close > prevL.high;
-    const midBreak = lastL.close > lastMB;
-    const closure = lastL.close > lastE9 && lastL.close > lastE21 && lastL.close > lastE50;
-    ltfConfirm = bos && midBreak && closure && alignedBull;
-    if (bos) ltfNotes.push('LTF BOS up');
-    if (midBreak) ltfNotes.push('LTF BB mid break');
-    if (alignedBull) ltfNotes.push('EMAs bull aligned');
-  } else {
-    const bos = lastL.close < prevL.low;
-    const midBreak = lastL.close < lastMB;
-    const closure = lastL.close < lastE9 && lastL.close < lastE21 && lastL.close < lastE50;
-    ltfConfirm = bos && midBreak && closure && alignedBear;
-    if (bos) ltfNotes.push('LTF BOS down');
-    if (midBreak) ltfNotes.push('LTF BB mid break');
-    if (alignedBear) ltfNotes.push('EMAs bear aligned');
-  }
-  if (!ltfConfirm) return null;
-  note = note.concat(ltfNotes);
-
-  const slBuf = atrHTF * params.slBuffer;
-  const tpBuf = atrHTF * params.tpBuffer;
+  const slBuf = atrHTF * params.slBuffer, tpBuf = atrHTF * params.tpBuffer;
   const entry = price;
   let sl, tp;
-  if (side === 'long') {
-    sl = lastBBLower - slBuf;
-    tp = lastBBMiddle - tpBuf;
-  } else {
-    sl = lastBBUpper + slBuf;
-    tp = lastBBMiddle + tpBuf;
-  }
+  if (side==='long'){ sl=prevLow - slBuf; tp=prevHigh - tpBuf; }
+  else { sl=prevHigh + slBuf; tp=prevLow + tpBuf; }
 
-  const risk = Math.abs(entry - sl);
-  const reward = Math.abs(tp - entry);
-  const rr = reward / risk;
-  if (!isFinite(rr) || rr <= 0.5) { note.push('Unfavorable RR; skipped'); return null; }
+  const rr = Math.abs((tp - entry) / (entry - sl));
+  if (!isFinite(rr) || rr <= 0.3) { note.push('Unfavorable RR; skipped'); return null; }
 
-  let conf = 60;
-  if (alignedBull || alignedBear) conf += 15;
-  const dToLevel = side === 'long' ? Math.abs(entry - lastBBLower) : Math.abs(entry - lastBBUpper);
-  conf += dToLevel <= zone * 0.5 ? 15 : (dToLevel <= zone ? 10 : 0);
-  const depth = Math.abs(lastStochD - (side === 'long' ? OVERSOLD : OVERBOUGHT));
-  if (depth > 5) conf += 10;
-  // HTF trend
-  const hCloses = htf.map(c => c.close);
-  const hE50 = ema(hCloses, 50).filter(x => x !== null).pop();
-  const hE200 = ema(hCloses, 200).filter(x => x !== null).pop();
-  if (hE50 && hE200) {
-    if ((side === 'long' && hE50 > hE200) || (side === 'short' && hE50 < hE200)) conf += 10;
-  }
+  let conf = 50;
+  if (htfTrend==='up' && side==='long') conf+=10;
+  if (htfTrend==='down' && side==='short') conf+=10;
+  if (htfTrend==='up' && side==='short') conf-=8;
+  if (htfTrend==='down' && side==='long') conf-=8;
+  const dToLevel = side==='long' ? Math.abs(entry - prevLow) : Math.abs(entry - prevHigh);
+  conf += dToLevel <= zone*0.5 ? 10 : (dToLevel <= zone ? 6 : 0);
+  conf += ((side==='long' && crossUp) || (side==='short' && crossDn)) ? 10 : 0;
+  conf += ((side==='long' && rsiBull) || (side==='short' && rsiBear)) ? 8 : 0;
+  conf += ((side==='long' && bosLong) || (side==='short' && bosShort)) ? 10 : 0;
+  if (atrHTF / (Math.max(prevHigh - prevLow, 1e-8)) > 0.9) conf -= 8;
   conf = Math.max(0, Math.min(100, conf));
 
-  return {
-    time: lastL.epoch,
-    side,
-    prevHigh: lastBBUpper,
-    prevLow: lastBBLower,
-    entry,
-    sl,
-    tp,
-    rr,
-    confidence: conf,
-    notes: note.filter(Boolean).join(' · ')
-  };
+  return { time: last.epoch, side, prevHigh, prevLow, entry, sl, tp, rr, confidence: conf, notes: note.filter(Boolean).join(' · ') };
 }
 
 /** Backtest simplified */
 function backtest({htf, ltf, params, N=20}) {
-  const results = [];
-  if (htf.length < N + 50) return results;
-  const htfBB = bollinger(htf, 20, 2);
-  const hStoch = stochastic(htf, 14, 3, 3);
+  const results=[]; if (htf.length < N+30) return results;
   const atrHTFAll = atr(htf, 14);
-  const lClose = ltf.map(c => c.close);
-  const lE9 = ema(lClose, 9);
-  const lE21 = ema(lClose, 21);
-  const lE50 = ema(lClose, 50);
-  const ltfBB = bollinger(ltf, 20, 2);
-  const OVERSOLD = 16, OVERBOUGHT = 84;
+  const lClose = ltf.map(c=>c.close), lE9=ema(lClose,9), lE21=ema(lClose,21), lRSI=rsi(lClose,14);
 
   function ltfRangeIndices(startEpoch, endEpoch) {
-    let s = ltf.findIndex(c => c.epoch >= startEpoch);
-    if (s === -1) s = 0;
-    let e = ltf.findIndex(c => c.epoch >= endEpoch);
-    if (e === -1) e = ltf.length;
-    return [s, e];
+    let s = ltf.findIndex(c => c.epoch >= startEpoch); if (s===-1) s=0;
+    let e = ltf.findIndex(c => c.epoch >= endEpoch); if (e===-1) e=ltf.length;
+    return [s,e];
   }
 
   const startIdx = Math.max(2, htf.length - (N + 2));
-  for (let i = startIdx; i < htf.length - 1; i++) {
-    const prevIdx = i - 1;
-    const prevC = htf[prevIdx];
-    const currC = htf[i];
-    if (!prevC || !currC) continue;
-    const stochVal = hStoch.d[prevIdx];
-    if (stochVal === null) continue;
-    const bbLower = htfBB.lower[prevIdx];
-    const bbUpper = htfBB.upper[prevIdx];
-    const bbMiddle = htfBB.middle[prevIdx];
-    const atrVal = atrHTFAll[prevIdx];
-    if (bbLower === null || bbUpper === null || bbMiddle === null || !atrVal) continue;
-    const zone = atrVal * params.zoneWidth;
-    const nearLow = Math.abs(prevC.close - bbLower) <= zone;
-    const nearHigh = Math.abs(prevC.close - bbUpper) <= zone;
-    let side = null;
-    if (stochVal < OVERSOLD && nearLow) side = 'long';
-    else if (stochVal > OVERBOUGHT && nearHigh) side = 'short';
-    if (!side) continue;
-    const slBuf = atrVal * params.slBuffer;
-    const tpBuf = atrVal * params.tpBuffer;
-    let sl, tp;
-    if (side === 'long') {
-      sl = bbLower - slBuf;
-      tp = bbMiddle - tpBuf;
-    } else {
-      sl = bbUpper + slBuf;
-      tp = bbMiddle + tpBuf;
-    }
+  for (let i=startIdx;i<htf.length-1;i++){
+    const prevC=htf[i-1], currC=htf[i]; if (!prevC||!currC) continue;
+    const prevHigh=prevC.high, prevLow=prevC.low;
+    const atrVal = atrHTFAll[i] || atrHTFAll.filter(x=>x!==null).slice(-1)[0]; if (!atrVal) continue;
+    const zone=params.zoneWidth*atrVal, slBuf=params.slBuffer*atrVal, tpBuf=params.tpBuffer*atrVal;
     const [lStart, lEnd] = ltfRangeIndices(prevC.epoch, currC.epoch);
-    let opened = false;
-    let entry = null;
-    for (let j = Math.max(lStart, 1); j < lEnd; j++) {
-      const currL = ltf[j];
-      const prevLC = ltf[j - 1];
-      if (!prevLC) continue;
-      const e9j = lE9[j];
-      const e21j = lE21[j];
-      const e50j = lE50[j];
-      if (e9j === null || e21j === null || e50j === null) continue;
-      const mbj = ltfBB.middle[j];
-      if (mbj === null) continue;
-      let openCond = false;
-      if (!opened) {
-        let bos, midBreak, closure, aligned;
-        if (side === 'long') {
-          bos = currL.close > prevLC.high;
-          midBreak = currL.close > mbj;
-          closure = currL.close > e9j && currL.close > e21j && currL.close > e50j;
-          aligned = e9j > e21j && e21j > e50j;
+    let opened=false, side=null, entry=null, sl=null, tp=null;
+
+    for (let j=Math.max(lStart+2,2); j<lEnd; j++){
+      const price = ltf[j].close;
+      const nearHigh=Math.abs(price-prevHigh)<=zone, nearLow=Math.abs(price-prevLow)<=zone;
+      const crossUp=lE9[j-1]!==null&&lE21[j-1]!==null&&lE9[j-1]<=lE21[j-1]&&lE9[j]>lE21[j];
+      const crossDn=lE9[j-1]!==null&&lE21[j-1]!==null&&lE9[j-1]>=lE21[j-1]&&lE9[j]<lE21[j];
+      const rsiBull=lRSI[j-1]!==null&&lRSI[j-1]<=50&&lRSI[j]>50;
+      const rsiBear=lRSI[j-1]!==null&&lRSI[j-1]>=50&&lRSI[j]<50;
+
+      if (!opened){
+        if (nearLow && (crossUp || rsiBull)){ side='long'; entry=price; sl=prevLow-slBuf; tp=prevHigh-tpBuf; opened=true; }
+        else if (nearHigh && (crossDn || rsiBear)){ side='short'; entry=price; sl=prevHigh+slBuf; tp=prevLow+tpBuf; opened=true; }
+      } else {
+        const hi=ltf[j].high, lo=ltf[j].low;
+        if (side==='long'){
+          if (lo<=sl){ results.push({ idx:i, time:currC.epoch, side, entry, sl, tp, outcome:'SL', R:-1 }); break; }
+          else if (hi>=tp){ const R=(tp-entry)/(entry-sl); results.push({ idx:i, time:currC.epoch, side, entry, sl, tp, outcome:'TP', R }); break; }
         } else {
-          bos = currL.close < prevLC.low;
-          midBreak = currL.close < mbj;
-          closure = currL.close < e9j && currL.close < e21j && currL.close < e50j;
-          aligned = e9j < e21j && e21j < e50j;
+          if (hi>=sl){ results.push({ idx:i, time:currC.epoch, side, entry, sl, tp, outcome:'SL', R:-1 }); break; }
+          else if (lo<=tp){ const R=(entry-tp)/(sl-entry); results.push({ idx:i, time:currC.epoch, side, entry, sl, tp, outcome:'TP', R }); break; }
         }
-        openCond = bos && midBreak && closure && aligned;
-        if (openCond) {
-          entry = currL.close;
-          opened = true;
-        }
-      }
-      if (opened) {
-        const hi = currL.high;
-        const lo = currL.low;
-        let hit = false;
-        if (side === 'long') {
-          if (lo <= sl) {
-            results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'SL', R: -1 });
-            hit = true;
-          } else if (hi >= tp) {
-            const R = (tp - entry) / (entry - sl);
-            results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'TP', R });
-            hit = true;
-          }
-        } else {
-          if (hi >= sl) {
-            results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'SL', R: -1 });
-            hit = true;
-          } else if (lo <= tp) {
-            const R = (entry - tp) / (sl - entry);
-            results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'TP', R });
-            hit = true;
-          }
-        }
-        if (hit) break;
-      }
-      if (j === lEnd - 1 && opened) {
-        results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'NoFill', R: 0 });
+        if (j===lEnd-1){ results.push({ idx:i, time:currC.epoch, side:side||'none', entry, sl, tp, outcome:'NoFill', R:0 }); }
       }
     }
   }
   return results.slice(-N);
+}
+
+/** Discord Webhook */
+async function sendToDiscord(sig, symbol, params) {
+  const webhookUrl = 'https://discord.com/api/webhooks/1431662464080285736/wiqGZaLuY8gFZ88uH77K6Gj9dEYRiKaHe8X0oBTVZZjoWz5nazb7oteUsv62nPiY55At';
+  const embed = {
+    title: `New Signal: ${sig.side.toUpperCase()} ${symbol}`,
+    color: sig.side === 'long' ? 0x10b981 : 0xef4444,
+    fields: [
+      { name: 'HTF/LTF', value: `${secToTfLabel(params.htf)} / ${secToTfLabel(params.ltf)}`, inline: true },
+      { name: 'Entry', value: formatPrice(sig.entry, CURRENT_PIP), inline: true },
+      { name: 'SL', value: formatPrice(sig.sl, CURRENT_PIP), inline: true },
+      { name: 'TP', value: formatPrice(sig.tp, CURRENT_PIP), inline: true },
+      { name: 'R:R', value: sig.rr.toFixed(2), inline: true },
+      { name: 'Conf', value: `${sig.confidence}%`, inline: true },
+      { name: 'Notes', value: sig.notes, inline: false }
+    ],
+    timestamp: new Date(sig.time * 1000).toISOString()
+  };
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ embeds: [embed] })
+    });
+    console.log('Signal sent to Discord');
+  } catch (err) {
+    console.error('Failed to send to Discord:', err);
+  }
 }
 
 /** UI + Scanner */
@@ -789,7 +713,7 @@ async function loadSymbols() {
   updateSymbolMeta();
   buildMarketFilters();
   updateScanList();
-  setStatus(`Loaded ${SYMBOLS.length} symbols`);
+  setStatus(`Loaded ${SYMBOLS.length} signals`);
 }
 
 function buildMarketFilters() {
@@ -881,7 +805,7 @@ function renderSingleSignal(sig, params) {
     const td = document.createElement('td');
     td.colSpan = 12;
     td.className = 'muted';
-    td.textContent = 'No signal right now (conditions not met near BB levels).';
+    td.textContent = 'No signal right now (conditions not met near key levels).';
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
@@ -926,6 +850,11 @@ function addSignalRow(sig, symbol, params, replace=false) {
     const lastRow = tbody.lastElementChild;
     if (lastRow) tbody.removeChild(lastRow);
   }
+
+  // Share to Discord for new scanner signals
+  if (!replace) {
+    sendToDiscord(sig, symbol, params);
+  }
 }
 
 function clearSignals() {
@@ -937,55 +866,14 @@ function clearSignals() {
 /** Event handlers */
 async function onAnalyze() {
   try {
-    updateScanList(); // Ensure list is current
+    if (!CURRENT_SYMBOL) { alert('Select or enter a symbol first.'); return; }
     const params = getParams();
     if (params.ltf >= params.htf) { alert('Lower timeframe must be smaller than HTF.'); return; }
-    let sig = null;
-    let selectedSym = CURRENT_SYMBOL;
-    const minConf = Math.max(0, Math.min(100, Number(document.getElementById('minConf').value) || 0));
-    if (SCAN_LIST.length > 0 && (!CURRENT_SYMBOL || SCAN_LIST.length > 1)) {
-      // Auto-select mode: scan for first valid signal
-      setStatus('Scanning markets for signal...');
-      for (const sym of SCAN_LIST) {
-        try {
-          const tempSig = await analyzeSymbol(sym, params);
-          if (tempSig && tempSig.confidence >= minConf) {
-            sig = tempSig;
-            selectedSym = sym;
-            break;
-          }
-        } catch (e) {
-          console.warn('Skipped', sym, e);
-        }
-      }
-      if (!sig) {
-        setStatus('No qualifying signal found in selected markets.');
-        renderSingleSignal(null, params);
-        return;
-      }
-      // Update UI to selected symbol
-      CURRENT_SYMBOL = selectedSym;
-      const sel = document.getElementById('symbolSelect');
-      if (sel.querySelector(`option[value="${selectedSym}"]`)) sel.value = selectedSym;
-      const sObj = SYMBOLS.find(x => x.symbol === selectedSym);
-      CURRENT_PIP = Number(sObj?.pip) || 0.0001;
-      updateSymbolMeta();
-      setStatus(`Signal found on ${selectedSym}. Analysis complete.`);
-    } else if (CURRENT_SYMBOL) {
-      setStatus('Fetching candles…');
-      sig = await analyzeSymbol(CURRENT_SYMBOL, params);
-      setStatus('Analysis complete');
-    } else {
-      alert('Select markets or enter a manual symbol.');
-      return;
-    }
+    setStatus('Fetching candles…');
+    const sig = await analyzeSymbol(CURRENT_SYMBOL, params);
+    setStatus('Analysis complete');
     renderSingleSignal(sig, params);
-    // Also add to signals table
-    if (sig) addSignalRow(sig, selectedSym, params, false);
-  } catch (err) {
-    console.error(err);
-    setStatus('Error: ' + (err.message || 'analysis failed'));
-  }
+  } catch (err) { console.error(err); setStatus('Error: ' + (err.message || 'analysis failed')); }
 }
 
 async function onBacktest() {
