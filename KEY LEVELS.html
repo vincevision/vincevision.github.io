@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Level-to-Level Signals — Preferred Setup + TF Matrix Scanner (Deriv)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0e1220; --panel: #141a2a; --text: #e7ecf4; --muted: #94a3b8;
+      --accent: #00d1b2; --accent-2: #7c5cff; --danger: #ef4444; --success: #10b981;
+      --warning: #f59e0b; --border: #273046; --chip: #1f2a44;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: linear-gradient(180deg, #0b1020 0%, #0c1324 100%); color: var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header { padding: 20px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px;
+      background: radial-gradient(1200px 400px at 10% -20%, rgba(124,92,255,.15), transparent 60%),
+                  radial-gradient(1200px 400px at 90% -30%, rgba(0,209,178,.15), transparent 60%); }
+    header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: .3px; }
+    header .sub { color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .wrap { max-width: 1250px; margin: 0 auto; padding: 16px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 16px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset, 0 10px 30px rgba(0,0,0,0.2); }
+    .controls { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; align-items: end; }
+    .controls .field { grid-column: span 3; display: flex; flex-direction: column; gap: 6px; }
+    .controls .field.small { grid-column: span 2; }
+    .controls .field.wide { grid-column: span 6; }
+    .controls label { font-size: 12px; color: var(--muted); }
+    select, input[type="number"], input[type="text"] {
+      background: #0f1423; color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; outline: none;
+    }
+    button {
+      background: linear-gradient(135deg, var(--accent), #00b8b2);
+      border: none; color: #051220; font-weight: 700; padding: 12px 14px;
+      border-radius: 10px; cursor: pointer; box-shadow: 0 8px 20px rgba(0,209,178,0.25);
+      transition: transform .08s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button.secondary { background: #1e283d; color: var(--text); box-shadow: none; border: 1px solid var(--border); }
+    .inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .chip { background: var(--chip); color: var(--muted); font-size: 12px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 999px; }
+    .market-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .market-filters label { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid var(--border); background: #0f1423; color: var(--muted); cursor: pointer; user-select: none; }
+    .market-filters input { transform: scale(1.1); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 12px 8px; vertical-align: middle; }
+    th { text-align: left; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+    tr:hover { background: #0f1423; }
+    .badge { padding: 4px 8px; border-radius: 999px; font-weight: 700; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; }
+    .long { background: rgba(16,185,129,.15); color: var(--success); border: 1px solid rgba(16,185,129,.35); }
+    .short { background: rgba(239,68,68,.15); color: var(--danger); border: 1px solid rgba(239,68,68,.35); }
+    .muted { color: var(--muted); }
+    .status-ok { color: var(--success); }
+    .status-warn { color: var(--warning); }
+    .status-bad { color: var(--danger); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .note { color: var(--muted); font-size: 12px; }
+    .progress { width: 100%; height: 8px; background: #0f1423; border-radius: 6px; overflow: hidden; border: 1px solid var(--border); }
+    .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
+    .footnote { color: var(--muted); font-size: 12px; margin-top: 10px; }
+    .pill { font-size: 11px; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); background: #0f1423; color: var(--muted); }
+    @media (max-width: 900px) {
+      .controls .field { grid-column: span 6; }
+      .controls .field.small { grid-column: span 6; }
+      .controls .field.wide { grid-column: span 6; }
+    }
+    @media (max-width: 600px) {
+      .controls { grid-template-columns: repeat(6, 1fr); }
+      .controls .field, .controls .field.small, .controls .field.wide { grid-column: span 6; }
+      header h1 { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Level-to-Level Signals — Preferred Setup + TF Matrix Scanner</h1>
+    <div class="sub">
+      Previous HTF candle High/Low as key levels, LTF confirmations (EMA/RSI, optional wick), SL/TP via HTF ATR buffers.
+      Auto-scans symbols and multiple timeframe pairs to find your preferred setup. App ID defaults to 1089.
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel">
+    <div class="controls">
+      <div class="field small">
+        <label>Endpoint</label>
+        <select id="endpointSelect">
+          <option value="wss://ws.derivws.com/websockets/v3">Deriv (ws.derivws.com)</option>
+          <option value="wss://ws.binaryws.com/websockets/v3">Binary (ws.binaryws.com)</option>
+        </select>
+      </div>
+      <div class="field small">
+        <label>App ID</label>
+        <input id="appId" type="number" value="1089" min="1" />
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div class="inline">
+          <button id="reconnectBtn" class="secondary">Reconnect</button>
+          <span class="note" id="status">Status: initializing…</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Symbol</label>
+        <select id="symbolSelect"></select>
+        <div class="chips" id="symbolMeta"></div>
+      </div>
+      <div class="field small">
+        <label>Manual symbol (override)</label>
+        <div class="inline">
+          <input id="manualSymbol" type="text" placeholder="e.g., frxEURUSD or R_75" />
+          <button id="useManualBtn" class="secondary">Use</button>
+        </div>
+      </div>
+
+      <div class="field small">
+        <label>HTF</label>
+        <select id="htfSelect">
+          <option value="900">15m</option>
+          <option value="1800">30m</option>
+          <option value="3600">1h</option>
+          <option value="7200">2h</option>
+          <option value="14400">4h</option>
+          <option value="43200">12h</option>
+          <option value="86400" selected>1d</option>
+        </select>
+      </div>
+      <div class="field small">
+        <label>LTF</label>
+        <select id="ltfSelect">
+          <option value="60">1m</option>
+          <option value="180">3m</option>
+          <option value="300">5m</option>
+          <option value="900" selected>15m</option>
+          <option value="1800">30m</option>
+        </select>
+      </div>
+
+      <div class="field small">
+        <label>Zone width (× HTF ATR)</label>
+        <input id="zoneWidth" type="number" value="0.3" step="0.05" min="0.05" max="1.5">
+      </div>
+      <div class="field small">
+        <label>SL buffer (× HTF ATR)</label>
+        <input id="slBuffer" type="number" value="0.5" step="0.05" min="0.1" max="2">
+      </div>
+      <div class="field small">
+        <label>TP buffer (× HTF ATR)</label>
+        <input id="tpBuffer" type="number" value="0.2" step="0.05" min="0" max="1">
+      </div>
+
+      <div class="field small">
+        <label>Min confidence</label>
+        <input id="minConf" type="number" value="60" min="0" max="100">
+      </div>
+      <div class="field small">
+        <label>Max rows</label>
+        <input id="maxRows" type="number" value="150" min="10" max="500">
+      </div>
+
+      <div class="field wide">
+        <label>Preferred Setup Mode</label>
+        <div class="inline">
+          <label class="pill"><input type="checkbox" id="prefOn" checked /> Enabled</label>
+          <label class="pill"><input type="checkbox" id="prefTrend" checked /> Require HTF trend alignment</label>
+          <label class="pill"><input type="checkbox" id="prefBothMomentum" checked /> Require EMA & RSI both</label>
+          <label class="pill"><input type="checkbox" id="prefWick" /> Require wick rejection</label>
+          <label class="pill">Max zone frac <input id="prefMaxZoneFrac" type="number" value="0.5" step="0.05" min="0.1" max="1" style="width:72px; margin-left:6px;"> </label>
+          <label class="pill">Min RR <input id="prefMinRR" type="number" value="1.0" step="0.1" min="0.2" max="5" style="width:72px; margin-left:6px;"> </label>
+          <label class="pill"><input type="checkbox" id="prefPauseOnHit" checked /> Pause on hit</label>
+        </div>
+        <div class="note">When enabled, the scanner “hunts” for strict confluence and only surfaces those signals.</div>
+      </div>
+
+      <div class="field wide">
+        <label>TF Matrix (scanner & matrix backtest)</label>
+        <div class="market-filters" id="tfMatrix"></div>
+        <div class="inline" style="margin-top:6px;">
+          <button id="selectAllTF" class="secondary">All TF pairs</button>
+          <button id="selectNoTF" class="secondary">None</button>
+          <span class="note">The scanner cycles symbols × selected TF pairs.</span>
+        </div>
+      </div>
+
+      <div class="field wide">
+        <label>Market filters (scanner)</label>
+        <div class="market-filters" id="marketFilters"></div>
+        <div class="inline" style="margin-top:6px;">
+          <button id="selectAllMarkets" class="secondary">All</button>
+          <button id="selectNoMarkets" class="secondary">None</button>
+          <span class="note" id="scanInfo">Scanner idle.</span>
+        </div>
+      </div>
+
+      <div class="field small">
+        <label>Scan step (sec)</label>
+        <input id="scanSec" type="number" value="10" min="3" max="300">
+      </div>
+      <div class="field small">
+        <label>Auto update (single symbol)</label>
+        <div class="inline">
+          <input id="refreshSec" type="number" value="30" min="5" max="600" style="width:120px;">
+          <button id="toggleAuto" class="secondary">Start Auto</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>Scanner</label>
+        <div class="inline">
+          <button id="toggleScan">Start Auto Scan</button>
+          <button id="clearSignals" class="secondary">Clear Signals</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>&nbsp;</label>
+        <div class="inline">
+          <button id="analyzeBtn">Analyze Now</button>
+          <button id="backtestBtn" class="secondary">Backtest (last 20 HTF)</button>
+          <button id="backtestMatrixBtn" class="secondary">Matrix Backtest (selected markets & TF)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chips" style="margin-top:10px">
+      <span class="chip">HTF levels = previous candle High / Low</span>
+      <span class="chip">LTF confirm = EMA(9/21) + RSI(14) 50-cross (strict mode can require BOTH)</span>
+      <span class="chip">SL beyond level by SL buffer × ATR(HTF)</span>
+      <span class="chip">TP = opposite level − TP buffer × ATR(HTF)</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="inline" style="justify-content: space-between; align-items:center; margin-bottom:6px;">
+      <h3 style="margin:0; font-size:16px;">Live Signals (Multi-market + TF Matrix)</h3>
+      <div class="note" id="connNote"></div>
+    </div>
+    <table id="signalsTable">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Symbol</th>
+          <th>Market</th>
+          <th>HTF/LTF</th>
+          <th>Bias</th>
+          <th>HTF High</th>
+          <th>HTF Low</th>
+          <th>Entry</th>
+          <th>SL</th>
+          <th>TP</th>
+          <th>R:R</th>
+          <th>Conf</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody id="signalsBody">
+        <tr><td colspan="13" class="muted">No signals yet. Click Analyze or Start Auto Scan.</td></tr>
+      </tbody>
+    </table>
+    <div class="footnote">
+      Scanner rotates symbols × TF pairs. Preferred Setup Mode narrows to higher-confluence signals. “Pause on hit” will stop scanning and bring the setup into focus.
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="grid-2">
+      <div>
+        <h3 style="margin:0; font-size:16px;">Backtest Snapshot</h3>
+        <div class="note">Single-symbol backtest or Matrix Backtest (across markets & TF). Assumes fills at LTF close when conditions align.</div>
+      </div>
+      <div>
+        <div class="note" id="btSummary">No backtest yet.</div>
+        <div class="progress" style="margin-top:8px;"><span id="btBar" style="width:0%"></span></div>
+      </div>
+    </div>
+    <div style="margin-top:12px; overflow:auto;">
+      <table id="btTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Time</th>
+            <th>Symbol</th>
+            <th>Market</th>
+            <th>HTF/LTF</th>
+            <th>Bias</th>
+            <th>Entry</th>
+            <th>SL</th>
+            <th>TP</th>
+            <th>Outcome</th>
+            <th>R</th>
+          </tr>
+        </thead>
+        <tbody id="btBody">
+          <tr><td colspan="11" class="muted">Run a backtest to populate.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="note">
+      Educational tool. No fixed win rate is guaranteed. Validate on your charts and manage risk.
+    </div>
+  </section>
+</main>
+
+<script>
+/** Config */
+let APP_ID = 1089;
+let ENDPOINT = 'wss://ws.derivws.com/websockets/v3';
+
+/** Status helpers */
+function setStatus(msg) {
+  document.getElementById('status').textContent = 'Status: ' + msg;
+  document.getElementById('connNote').textContent = msg;
+}
+function fmtTime(epoch) {
+  try { return new Date(epoch*1000).toISOString().replace('T',' ').slice(0,19); }
+  catch(_) { return String(epoch); }
+}
+function pipToDecimals(pip) {
+  if (!pip) return 4;
+  const s = String(pip);
+  if (s.includes('e-')) return Math.abs(Number(s.split('e-')[1] || 0));
+  if (!s.includes('.')) return 0;
+  return s.split('.')[1].length;
+}
+function formatPrice(v, pip) {
+  if (v === null || v === undefined || !isFinite(v)) return '-';
+  const decimals = pipToDecimals(pip || 0.0001);
+  return Number(v).toFixed(decimals);
+}
+function secToTfLabel(s) {
+  const map = {60:'1m',120:'2m',180:'3m',300:'5m',600:'10m',900:'15m',1800:'30m',3600:'1h',7200:'2h',14400:'4h',28800:'8h',43200:'12h',86400:'1d'};
+  return map[s] || (s + 's');
+}
+
+/** Deriv WS helper */
+class DerivWS {
+  constructor(getUrlFn) {
+    this.getUrlFn = getUrlFn;
+    this.ws = null;
+    this.queue = [];
+    this.pending = new Map();
+    this.connected = false;
+    this.manualClose = false;
+    this._connect();
+  }
+  _connect() {
+    try {
+      const url = this.getUrlFn();
+      this.ws = new WebSocket(url);
+      this.ws.onopen = () => { this.connected = true; setStatus('Connected to ' + url); this._flush(); };
+      this.ws.onmessage = (ev) => {
+        const data = JSON.parse(ev.data);
+        if (data.error) {
+          setStatus(`Deriv error: ${data.error.message} [${data.error.code||'ERR'}]`);
+          if (data.req_id && this.pending.has(data.req_id)) {
+            this.pending.get(data.req_id).reject(data.error);
+            this.pending.delete(data.req_id);
+          }
+          return;
+        }
+        if (data.req_id && this.pending.has(data.req_id)) {
+          this.pending.get(data.req_id).resolve(data);
+          this.pending.delete(data.req_id);
+        }
+      };
+      this.ws.onclose = () => {
+        this.connected = false;
+        if (!this.manualClose) { setStatus('Disconnected. Reconnecting…'); setTimeout(() => this._connect(), 1200); }
+        else { setStatus('Disconnected.'); }
+      };
+      this.ws.onerror = (e) => { console.error('WS error:', e); setStatus('WebSocket error. Check network / endpoint / app_id.'); };
+    } catch (e) { console.error('Connect error:', e); setStatus('Failed to open WebSocket: ' + (e.message || e)); }
+  }
+  _flush() {
+    while (this.queue.length && this.connected) {
+      const {payload, resolve, reject, req_id} = this.queue.shift();
+      this.pending.set(req_id, {resolve, reject});
+      this.ws.send(JSON.stringify(payload));
+    }
+  }
+  send(payload) {
+    return new Promise((resolve, reject) => {
+      const req_id = Math.floor(Math.random() * 1e9);
+      payload.req_id = req_id;
+      if (!this.connected) { this.queue.push({payload, resolve, reject, req_id}); }
+      else { this.pending.set(req_id, {resolve, reject}); this.ws.send(JSON.stringify(payload)); }
+    });
+  }
+  close() { this.manualClose = true; try { this.ws && this.ws.close(); } catch(_) {} }
+}
+
+/** Globals */
+let api = null;
+let SYMBOLS = [];           // full symbol objects
+let MARKETS = [];           // unique markets [{code, name}]
+let CURRENT_SYMBOL = null;
+let CURRENT_PIP = 0.0001;
+
+let AUTO_TIMER = null;      // single-symbol auto update
+let SCAN_ACTIVE = false;
+let SCAN_TIMER = null;
+let SCAN_BUSY = false;
+
+let SCAN_LIST = [];         // symbols
+let SCAN_INDEX_SYM = 0;
+let SCAN_TF_COMBOS = [];    // [{htf, ltf, label}]
+let SCAN_INDEX_TF = 0;
+
+const SIGNALS_SEEN = new Set();
+
+/** Indicators */
+function ema(values, period) {
+  const k = 2/(period+1), out = [];
+  let prev = null;
+  for (let i=0;i<values.length;i++) {
+    const v = Number(values[i]);
+    if (i < period - 1) out.push(null);
+    else if (i === period-1) { prev = values.slice(0,period).reduce((a,b)=>a+Number(b),0)/period; out.push(prev); }
+    else { prev = v*k + prev*(1-k); out.push(prev); }
+  }
+  return out;
+}
+function rsi(values, period=14) {
+  const out = Array(values.length).fill(null);
+  let gains=0, losses=0;
+  for (let i=1;i<values.length;i++) {
+    const ch = values[i]-values[i-1];
+    gains += ch>0?ch:0; losses+= ch<0?-ch:0;
+    if (i===period) {
+      let ag=gains/period, al=losses/period;
+      out[i] = 100 - 100/(1+(al===0?100:ag/al));
+      let pg=ag, pl=al;
+      for (let j=i+1;j<values.length;j++){
+        const c=values[j]-values[j-1], g=c>0?c:0, l=c<0?-c:0;
+        pg=(pg*(period-1)+g)/period; pl=(pl*(period-1)+l)/period;
+        const RS = pl===0?100:pg/pl; out[j]=100-100/(1+RS);
+      }
+      break;
+    }
+  }
+  return out;
+}
+function atr(c, period=14) {
+  const tr=[]; for (let i=0;i<c.length;i++){
+    if (i===0) tr.push(c[0].high-c[0].low);
+    else { const h=c[i].high, l=c[i].low, pc=c[i-1].close; tr.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc))); }
+  }
+  const out=Array(c.length).fill(null);
+  if (c.length<=period) return out;
+  let a=tr.slice(1,period+1).reduce((x,y)=>x+y,0)/period; out[period]=a;
+  for (let i=period+1;i<tr.length;i++){ a=(a*(period-1)+tr[i])/period; out[i]=a; }
+  return out;
+}
+function wickInfo(c) {
+  const open = +c.open, close = +c.close, high = +c.high, low = +c.low;
+  const body = Math.max(1e-12, Math.abs(close - open));
+  const upper = Math.max(0, high - Math.max(open, close));
+  const lower = Math.max(0, Math.min(open, close) - low);
+  const bullish = close >= open;
+  return { upper, lower, body, bullish };
+}
+
+/** Deriv API wrappers */
+async function getActiveSymbols() {
+  const attempts = [
+    { active_symbols: 'brief', product_type: 'financial' },
+    { active_symbols: 'brief', product_type: 'derived' },
+    { active_symbols: 'brief', product_type: 'basic' },
+    { active_symbols: 'brief' }
+  ];
+  const combined = [];
+  const seen = new Set();
+  let lastError = null;
+
+  for (const p of attempts) {
+    try {
+      const res = await api.send(p);
+      const list = Array.isArray(res.active_symbols) ? res.active_symbols : [];
+      for (const s of list) {
+        if (!seen.has(s.symbol)) { seen.add(s.symbol); combined.push(s); }
+      }
+    } catch (err) { lastError = err; console.warn('active_symbols attempt failed:', err); }
+  }
+  if (!combined.length && lastError) {
+    setStatus(`active_symbols failed: ${lastError.message} [${lastError.code||'ERR'}]`);
+  }
+  return combined.sort((a,b)=>a.display_name.localeCompare(b.display_name));
+}
+async function getCandles(symbol, granularity, count=500) {
+  if (!symbol) throw new Error('Symbol not selected');
+  const res = await api.send({
+    ticks_history: symbol,
+    adjust_start_time: 1,
+    style: 'candles',
+    end: 'latest',
+    count: Math.min(Math.max(count, 50), 5000),
+    granularity
+  });
+  if (res && res.candles) return res.candles;
+  throw new Error('No candles returned');
+}
+
+/** Strategy */
+function computeSignal({htf, ltf, params}) {
+  if (!htf || !ltf || htf.length < 20 || ltf.length < 50) return null;
+
+  const prevHTF = htf[htf.length-2];
+  const prevHigh = prevHTF.high, prevLow = prevHTF.low;
+
+  const atrHTF = atr(htf, 14).filter(x=>x!==null).pop();
+  if (!atrHTF) return null;
+  const zone = atrHTF * params.zoneWidth;
+
+  const closesL = ltf.map(c=>c.close);
+  const ema9 = ema(closesL, 9), ema21 = ema(closesL, 21), rsi14 = rsi(closesL, 14);
+  const last = ltf[ltf.length-1], prev = ltf[ltf.length-2], price = last.close;
+
+  const closesH = htf.map(c=>c.close);
+  const hE50 = ema(closesH, 50).filter(x=>x!==null).pop();
+  const hE200 = ema(closesH, 200).filter(x=>x!==null).pop();
+  const htfTrend = hE50 && hE200 ? (hE50 > hE200 ? 'up' : 'down') : 'neutral';
+
+  const nearHigh = Math.abs(price - prevHigh) <= zone;
+  const nearLow  = Math.abs(price - prevLow)  <= zone;
+
+  const e9 = ema9[ema9.length-1], e21 = ema21[ema21.length-1];
+  const e9p = ema9[ema9.length-2], e21p = ema21[ema21.length-2];
+  const rsiNow = rsi14[rsi14.length-1], rsiPrev = rsi14[rsi14.length-2];
+
+  const crossUp = e9p !== null && e21p !== null && e9p <= e21p && e9 > e21;
+  const crossDn = e9p !== null && e21p !== null && e9p >= e21p && e9 < e21;
+  const rsiBull = rsiPrev !== null && rsiPrev <= 50 && rsiNow > 50;
+  const rsiBear = rsiPrev !== null && rsiPrev >= 50 && rsiNow < 50;
+
+  // Wick rejection (on last LTF candle)
+  const w = wickInfo(last);
+  const wickLongOk = w.lower >= 1.2 * w.body && w.bullish;
+  const wickShortOk = w.upper >= 1.2 * w.body && !w.bullish;
+
+  let side = null;
+  let note = [];
+  if (nearLow && (crossUp || rsiBull)) {
+    side = 'long';
+    note.push('Near HTF Low', crossUp ? 'EMA9>21' : null, rsiBull ? 'RSI>50' : null);
+  } else if (nearHigh && (crossDn || rsiBear)) {
+    side = 'short';
+    note.push('Near HTF High', crossDn ? 'EMA9<21' : null, rsiBear ? 'RSI<50' : null);
+  }
+  if (!side) return null;
+
+  // SL/TP
+  const slBuf = atrHTF * params.slBuffer, tpBuf = atrHTF * params.tpBuffer;
+  const entry = price;
+  let sl, tp;
+  if (side==='long'){ sl=prevLow - slBuf; tp=prevHigh - tpBuf; }
+  else { sl=prevHigh + slBuf; tp=prevLow + tpBuf; }
+
+  const rr = Math.abs((tp - entry) / (entry - sl));
+  if (!isFinite(rr) || rr <= 0.3) { note.push('Unfavorable RR; skipped'); return null; }
+
+  // Confidence
+  let conf = 50;
+  if (htfTrend==='up' && side==='long') conf+=10;
+  if (htfTrend==='down' && side==='short') conf+=10;
+  if (htfTrend==='up' && side==='short') conf-=8;
+  if (htfTrend==='down' && side==='long') conf-=8;
+  const dToLevel = side==='long' ? Math.abs(entry - prevLow) : Math.abs(entry - prevHigh);
+  if (dToLevel <= zone * 0.5) conf += 10; else if (dToLevel <= zone) conf += 6;
+  if ((side==='long' && crossUp) || (side==='short' && crossDn)) conf += 10;
+  if ((side==='long' && rsiBull) || (side==='short' && rsiBear)) conf += 8;
+  if ((side==='long' && wickLongOk) || (side==='short' && wickShortOk)) conf += 6;
+  if (atrHTF / (Math.max(prevHigh - prevLow, 1e-8)) > 0.9) conf -= 8;
+  conf = Math.max(0, Math.min(100, conf));
+
+  const dTo = dToLevel;
+  const zFrac = zone > 0 ? dToLevel / zone : 1;
+
+  return {
+    time: last.epoch,
+    side, prevHigh, prevLow, entry, sl, tp, rr, confidence: conf,
+    notes: note.filter(Boolean).join(' · '),
+    meta: {
+      htfTrend, crossUp, crossDn, rsiBull, rsiBear,
+      wickLongOk, wickShortOk, dToLevel: dTo, zone, zoneFrac: zFrac
+    }
+  };
+}
+
+function isPreferred(sig, prefer) {
+  if (!prefer?.on) return true; // not strict
+  if (!sig) return false;
+  const m = sig.meta || {};
+  // Trend alignment
+  if (prefer.trend && ((m.htfTrend === 'up' && sig.side !== 'long') || (m.htfTrend === 'down' && sig.side !== 'short'))) return false;
+  // Momentum both
+  if (prefer.bothMomentum) {
+    if (sig.side === 'long' && !(m.crossUp && m.rsiBull)) return false;
+    if (sig.side === 'short' && !(m.crossDn && m.rsiBear)) return false;
+  }
+  // Wick rejection
+  if (prefer.wick) {
+    if (sig.side === 'long' && !m.wickLongOk) return false;
+    if (sig.side === 'short' && !m.wickShortOk) return false;
+  }
+  // Zone tightness
+  if (prefer.maxZoneFrac !== null && prefer.maxZoneFrac !== undefined) {
+    if (!isFinite(m.zoneFrac) || m.zoneFrac > prefer.maxZoneFrac) return false;
+  }
+  // Min RR
+  if (prefer.minRR && sig.rr < prefer.minRR) return false;
+  return true;
+}
+
+/** Backtest simplified */
+function backtest({htf, ltf, params, N=20}) {
+  const results=[]; if (htf.length < N+30) return results;
+  const atrHTFAll = atr(htf, 14);
+  const lClose = ltf.map(c=>c.close), lE9=ema(lClose,9), lE21=ema(lClose,21), lRSI=rsi(lClose,14);
+
+  function ltfRangeIndices(startEpoch, endEpoch) {
+    let s = ltf.findIndex(c => c.epoch >= startEpoch); if (s===-1) s=0;
+    let e = ltf.findIndex(c => c.epoch >= endEpoch); if (e===-1) e=ltf.length;
+    return [s,e];
+  }
+
+  const startIdx = Math.max(2, htf.length - (N + 2));
+  for (let i=startIdx;i<htf.length-1;i++){
+    const prevC=htf[i-1], currC=htf[i]; if (!prevC||!currC) continue;
+    const prevHigh=prevC.high, prevLow=prevC.low;
+    const atrVal = atrHTFAll[i] || atrHTFAll.filter(x=>x!==null).slice(-1)[0]; if (!atrVal) continue;
+    const zone=params.zoneWidth*atrVal, slBuf=params.slBuffer*atrVal, tpBuf=params.tpBuffer*atrVal;
+    const [lStart, lEnd] = ltfRangeIndices(prevC.epoch, currC.epoch);
+    let opened=false, side=null, entry=null, sl=null, tp=null;
+
+    for (let j=Math.max(lStart+2,2); j<lEnd; j++){
+      const price = ltf[j].close;
+      const nearHigh=Math.abs(price-prevHigh)<=zone, nearLow=Math.abs(price-prevLow)<=zone;
+      const crossUp=lE9[j-1]!==null&&lE21[j-1]!==null&&lE9[j-1]<=lE21[j-1]&&lE9[j]>lE21[j];
+      const crossDn=lE9[j-1]!==null&&lE21[j-1]!==null&&lE9[j-1]>=lE21[j-1]&&lE9[j]<lE21[j];
+      const rsiBull=lRSI[j-1]!==null&&lRSI[j-1]<=50&&lRSI[j]>50;
+      const rsiBear=lRSI[j-1]!==null&&lRSI[j-1]>=50&&lRSI[j]<50;
+
+      if (!opened){
+        if (nearLow && (crossUp || rsiBull)){ side='long'; entry=price; sl=prevLow-slBuf; tp=prevHigh-tpBuf; opened=true; }
+        else if (nearHigh && (crossDn || rsiBear)){ side='short'; entry=price; sl=prevHigh+slBuf; tp=prevLow+tpBuf; opened=true; }
+      } else {
+        const hi=ltf[j].high, lo=ltf[j].low;
+        if (side==='long'){
+          if (lo<=sl){ results.push({ idx:i, time:currC.epoch, side, entry, sl, tp, outcome:'SL', R:-1 }); break; }
+          else if (hi>=tp){ const R=(tp-entry)/(entry-sl); results.push({ idx:i, time:currC.epoch, side, entry, sl, tp, outcome:'TP', R }); break; }
+        } else {
+          if (hi>=sl){ results.push({ idx:i, time:currC.epoch, side, entry, sl, tp, outcome:'SL', R:-1 }); break; }
+          else if (lo<=tp){ const R=(entry-tp)/(sl-entry); results.push({ idx:i, time:currC.epoch, side, entry, sl, tp, outcome:'TP', R }); break; }
+        }
+        if (j===lEnd-1){ results.push({ idx:i, time:currC.epoch, side:side||'none', entry, sl, tp, outcome:'NoFill', R:0 }); }
+      }
+    }
+  }
+  return results;
+}
+
+/** UI + Scanner */
+function getPreferredOptions() {
+  return {
+    on: document.getElementById('prefOn').checked,
+    trend: document.getElementById('prefTrend').checked,
+    bothMomentum: document.getElementById('prefBothMomentum').checked,
+    wick: document.getElementById('prefWick').checked,
+    maxZoneFrac: Number(document.getElementById('prefMaxZoneFrac').value),
+    minRR: Number(document.getElementById('prefMinRR').value),
+    pauseOnHit: document.getElementById('prefPauseOnHit').checked
+  };
+}
+function getParams() {
+  return {
+    htf: Number(document.getElementById('htfSelect').value),
+    ltf: Number(document.getElementById('ltfSelect').value),
+    zoneWidth: Number(document.getElementById('zoneWidth').value),
+    slBuffer: Number(document.getElementById('slBuffer').value),
+    tpBuffer: Number(document.getElementById('tpBuffer').value),
+  };
+}
+
+function updateSymbolMeta() {
+  const code = CURRENT_SYMBOL;
+  const s = SYMBOLS.find(x=>x.symbol === code);
+  CURRENT_PIP = Number(s?.pip) || CURRENT_PIP || 0.0001;
+  const decimals = pipToDecimals(CURRENT_PIP);
+  const market = s?.market_display_name || s?.market || '-';
+  const submarket = s?.submarket_display_name || s?.submarket || '-';
+  const meta = document.getElementById('symbolMeta');
+  meta.innerHTML = '';
+  [['Market', market], ['Sub', submarket], ['Pip', String(s?.pip || '-')], ['Digits', String(decimals)]].forEach(([k,v])=>{
+    const sp = document.createElement('span'); sp.className='chip'; sp.textContent = `${k}: ${v}`; meta.appendChild(sp);
+  });
+}
+
+async function analyzeSymbol(symbol, htfSec, ltfSec, baseParams) {
+  const [htf, ltf] = await Promise.all([
+    getCandles(symbol, htfSec, 400),
+    getCandles(symbol, ltfSec, 1500),
+  ]);
+  htf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+  ltf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+  const sig = computeSignal({ htf, ltf, params: baseParams });
+  return sig;
+}
+
+function addSignalRow(sig, symbol, marketName, tfLabel, pip, replace=false) {
+  if (!sig) return;
+  const minConf = Math.max(0, Math.min(100, Number(document.getElementById('minConf').value) || 0));
+  if (sig.confidence < minConf) return;
+
+  const key = `${symbol}|${sig.time}|${sig.side}|${tfLabel}`;
+  if (SIGNALS_SEEN.has(key) && !replace) return;
+  SIGNALS_SEEN.add(key);
+
+  const tbody = document.getElementById('signalsBody');
+  if (replace) tbody.innerHTML = '';
+
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${fmtTime(sig.time)}</td>
+    <td>${symbol}</td>
+    <td>${marketName || '-'}</td>
+    <td>${tfLabel}</td>
+    <td><span class="badge ${sig.side === 'long' ? 'long' : 'short'}">${sig.side.toUpperCase()}</span></td>
+    <td>${formatPrice(sig.prevHigh, pip)}</td>
+    <td>${formatPrice(sig.prevLow, pip)}</td>
+    <td>${formatPrice(sig.entry, pip)}</td>
+    <td>${formatPrice(sig.sl, pip)}</td>
+    <td>${formatPrice(sig.tp, pip)}</td>
+    <td>${sig.rr.toFixed(2)}</td>
+    <td>${sig.confidence}%</td>
+    <td>${sig.notes}</td>
+  `;
+  if (tbody.firstChild && !replace) tbody.insertBefore(tr, tbody.firstChild);
+  else tbody.appendChild(tr);
+
+  const maxRows = Math.max(10, Math.min(500, Number(document.getElementById('maxRows').value) || 150));
+  while (tbody.rows.length > maxRows) {
+    const lastRow = tbody.lastElementChild;
+    if (lastRow) tbody.removeChild(lastRow);
+  }
+}
+
+function clearSignals() {
+  SIGNALS_SEEN.clear();
+  const tbody = document.getElementById('signalsBody');
+  tbody.innerHTML = '<tr><td colspan="13" class="muted">Cleared. Waiting for new signals…</td></tr>';
+}
+
+/** TF Matrix UI */
+const TF_PRESETS = [
+  { htf: 86400, ltf: 1800, label: '1d / 30m' },
+  { htf: 86400, ltf: 900,  label: '1d / 15m' },
+  { htf: 14400, ltf: 900,  label: '4h / 15m' },
+  { htf: 14400, ltf: 300,  label: '4h / 5m' },
+  { htf: 3600,  ltf: 300,  label: '1h / 5m' },
+  { htf: 3600,  ltf: 60,   label: '1h / 1m' },
+];
+function buildTfMatrix() {
+  const container = document.getElementById('tfMatrix');
+  container.innerHTML = '';
+  TF_PRESETS.forEach((p, idx) => {
+    const id = `tfm_${idx}`;
+    const lab = document.createElement('label');
+    lab.setAttribute('for', id);
+    const checked = [0,1,2,3].includes(idx) ? 'checked' : ''; // default select first 4
+    lab.innerHTML = `<input type="checkbox" id="${id}" data-htf="${p.htf}" data-ltf="${p.ltf}" ${checked}/> ${p.label}`;
+    container.appendChild(lab);
+  });
+}
+function selectedTfMatrix() {
+  const inputs = document.querySelectorAll('#tfMatrix input[type="checkbox"]');
+  const list = [];
+  inputs.forEach((cb, idx) => {
+    if (cb.checked) {
+      const htf = Number(cb.getAttribute('data-htf'));
+      const ltf = Number(cb.getAttribute('data-ltf'));
+      list.push({ htf, ltf, label: `${secToTfLabel(htf)} / ${secToTfLabel(ltf)}` });
+    }
+  });
+  return list;
+}
+
+/** Markets filter */
+function buildMarketFilters() {
+  const byCode = new Map();
+  for (const s of SYMBOLS) {
+    const code = s.market || s.market_display_name || 'other';
+    const name = s.market_display_name || s.market || code;
+    if (!byCode.has(code)) byCode.set(code, { code, name, count: 0 });
+    byCode.get(code).count += 1;
+  }
+  MARKETS = Array.from(byCode.values()).sort((a,b)=>a.name.localeCompare(b.name));
+  const container = document.getElementById('marketFilters');
+  container.innerHTML = '';
+  if (!MARKETS.length) {
+    const lbl = document.createElement('span'); lbl.className = 'note'; lbl.textContent = 'No markets available. Use manual symbol.'; container.appendChild(lbl);
+    return;
+  }
+  for (const m of MARKETS) {
+    const id = `mkt_${m.code}`;
+    const lab = document.createElement('label');
+    lab.setAttribute('for', id);
+    lab.innerHTML = `<input type="checkbox" id="${id}" data-market="${m.code}" checked /> ${m.name} (${m.count})`;
+    container.appendChild(lab);
+  }
+}
+function selectedMarkets() {
+  const inputs = document.querySelectorAll('#marketFilters input[type="checkbox"]');
+  const out = [];
+  inputs.forEach(i => { if (i.checked) out.push(i.getAttribute('data-market')); });
+  return out;
+}
+function updateScanList() {
+  const mkts = new Set(selectedMarkets());
+  SCAN_LIST = SYMBOLS.filter(s => mkts.size ? mkts.has(s.market || s.market_display_name) : true).map(s => s.symbol);
+  SCAN_INDEX_SYM = 0;
+  const listTxt = `Scanner list: ${SCAN_LIST.length} symbols, ${SCAN_TF_COMBOS.length} TF pairs selected.`;
+  document.getElementById('scanInfo').textContent = listTxt;
+}
+function updateTfCombos() {
+  SCAN_TF_COMBOS = selectedTfMatrix();
+  SCAN_INDEX_TF = 0;
+  updateScanList();
+}
+
+/** Analyze + Backtests */
+async function onAnalyze() {
+  try {
+    if (!CURRENT_SYMBOL) { alert('Select or enter a symbol first.'); return; }
+    const base = getParams();
+    if (base.ltf >= base.htf) { alert('Lower timeframe must be smaller than HTF.'); return; }
+    setStatus('Fetching candles…');
+    const sig = await analyzeSymbol(CURRENT_SYMBOL, base.htf, base.ltf, base);
+    setStatus('Analysis complete');
+    const sObj = SYMBOLS.find(x=>x.symbol===CURRENT_SYMBOL) || {};
+    const tfLabel = `${secToTfLabel(base.htf)} / ${secToTfLabel(base.ltf)}`;
+    addSignalRow(sig, CURRENT_SYMBOL, sObj.market_display_name || sObj.market || '-', tfLabel, Number(sObj.pip) || CURRENT_PIP, true);
+  } catch (err) { console.error(err); setStatus('Error: ' + (err.message || 'analysis failed')); }
+}
+
+async function onBacktest() {
+  try {
+    if (!CURRENT_SYMBOL) { alert('Select or enter a symbol first.'); return; }
+    const base = getParams();
+    if (base.ltf >= base.htf) { alert('Lower timeframe must be smaller than HTF.'); return; }
+    setStatus('Fetching candles for backtest…');
+    const [htf, ltf] = await Promise.all([
+      getCandles(CURRENT_SYMBOL, base.htf, 600),
+      getCandles(CURRENT_SYMBOL, base.ltf, 5000),
+    ]);
+    htf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+    ltf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+
+    setStatus('Running backtest…');
+    const results = backtest({ htf, ltf, params: base, N: 20 }).slice(-20);
+    const sObj = SYMBOLS.find(x=>x.symbol===CURRENT_SYMBOL) || {};
+    renderBacktest(results.map(r => ({...r, symbol: CURRENT_SYMBOL, market: sObj.market_display_name || sObj.market || '-', tfLabel: `${secToTfLabel(base.htf)} / ${secToTfLabel(base.ltf)}`})));
+    setStatus('Backtest complete');
+  } catch (err) { console.error(err); setStatus('Backtest error: ' + (err.message || 'failed')); }
+}
+
+async function onBacktestMatrix() {
+  try {
+    if (!SCAN_LIST.length || !SCAN_TF_COMBOS.length) { alert('Select markets and TF pairs first.'); return; }
+    const N = 12; // backtest depth per symbol/TF (keep light for browser)
+    const base = getParams(); // use buffers/zone settings
+    const rows = [];
+    let done = 0;
+    const total = SCAN_LIST.length * SCAN_TF_COMBOS.length;
+    setStatus(`Matrix Backtest: 0/${total} …`);
+    for (const sym of SCAN_LIST) {
+      const sObj = SYMBOLS.find(x=>x.symbol===sym) || {};
+      for (const combo of SCAN_TF_COMBOS) {
+        try {
+          const [htf, ltf] = await Promise.all([
+            getCandles(sym, combo.htf, 600),
+            getCandles(sym, combo.ltf, 5000),
+          ]);
+          htf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+          ltf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+          const res = backtest({ htf, ltf, params: base, N }).slice(-N);
+          res.forEach(r => rows.push({
+            ...r,
+            symbol: sym,
+            market: sObj.market_display_name || sObj.market || '-',
+            tfLabel: `${secToTfLabel(combo.htf)} / ${secToTfLabel(combo.ltf)}`
+          }));
+        } catch (e) {
+          console.warn('Matrix backtest error for', sym, combo, e);
+        } finally {
+          done++;
+          if (done % 5 === 0 || done === total) setStatus(`Matrix Backtest: ${done}/${total}`);
+        }
+      }
+    }
+    renderBacktest(rows);
+    setStatus('Matrix Backtest complete');
+  } catch (err) { console.error(err); setStatus('Matrix backtest error: ' + (err.message || 'failed')); }
+}
+
+function renderBacktest(results) {
+  const tbody = document.getElementById('btBody');
+  tbody.innerHTML = '';
+  if (!results.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 11; td.className = 'muted';
+    td.textContent = 'No results. Increase history or adjust timeframes.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    document.getElementById('btSummary').textContent = 'Win rate: —';
+    document.getElementById('btBar').style.width = '0%';
+    return;
+  }
+  let wins=0, losses=0, nofills=0, sumR=0;
+  results.forEach((r, idx)=>{
+    if (r.outcome==='TP') wins++; else if (r.outcome==='SL') losses++; else nofills++;
+    sumR += (r.R||0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${idx+1}</td>
+      <td>${fmtTime(r.time)}</td>
+      <td>${r.symbol || '-'}</td>
+      <td>${r.market || '-'}</td>
+      <td>${r.tfLabel || '-'}</td>
+      <td><span class="badge ${r.side === 'long' ? 'long' : 'short'}">${(r.side||'none').toUpperCase()}</span></td>
+      <td>${isFinite(r.entry)? r.entry.toFixed(5) : '-'}</td>
+      <td>${isFinite(r.sl)? r.sl.toFixed(5) : '-'}</td>
+      <td>${isFinite(r.tp)? r.tp.toFixed(5) : '-'}</td>
+      <td class="${r.outcome==='TP'?'status-ok':(r.outcome==='SL'?'status-bad':'muted')}">${r.outcome}</td>
+      <td>${(r.R!==undefined && isFinite(r.R)) ? r.R.toFixed(2) : '-'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  const totalTrades = wins + losses;
+  const winRate = totalTrades ? (wins / totalTrades * 100) : 0;
+  const avgR = totalTrades ? (sumR / (wins+losses)) : 0;
+  document.getElementById('btSummary').textContent =
+    `Trades: ${wins+losses} (wins: ${wins}, losses: ${losses}, no-fills: ${nofills}) • Win rate: ${winRate.toFixed(1)}% • Avg R: ${avgR.toFixed(2)} • Rows: ${results.length}`;
+  document.getElementById('btBar').style.width = Math.min(100, Math.max(0, winRate)) + '%';
+}
+
+/** Scanner */
+function toggleAutoSingle() {
+  const btn = document.getElementById('toggleAuto');
+  if (AUTO_TIMER) {
+    clearInterval(AUTO_TIMER); AUTO_TIMER=null;
+    btn.textContent = 'Start Auto'; btn.classList.add('secondary');
+    setStatus('Single-symbol auto update stopped.');
+  } else {
+    if (SCAN_ACTIVE) { alert('Stop the scanner first.'); return; }
+    const sec = Math.max(5, Math.min(600, Number(document.getElementById('refreshSec').value) || 30));
+    onAnalyze();
+    AUTO_TIMER = setInterval(onAnalyze, sec * 1000);
+    btn.textContent = 'Stop Auto'; btn.classList.remove('secondary');
+    setStatus('Single-symbol auto update running…');
+  }
+}
+
+async function scanStep() {
+  if (!SCAN_ACTIVE || SCAN_BUSY) return;
+  if (!SCAN_LIST.length || !SCAN_TF_COMBOS.length) { document.getElementById('scanInfo').textContent = 'Select markets & TF pairs.'; return; }
+
+  const 
