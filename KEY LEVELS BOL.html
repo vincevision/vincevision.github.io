@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Vincevision Level-to-Level Signal Site (Deriv) - Auto Market Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0e1220;
+      --panel: #141a2a;
+      --text: #e7ecf4;
+      --muted: #94a3b8;
+      --accent: #00d1b2;
+      --accent-2: #7c5cff;
+      --danger: #ef4444;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --border: #273046;
+      --chip: #1f2a44;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #0b1020 0%, #0c1324 100%);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    header {
+      padding: 20px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 10px;
+      background: radial-gradient(1200px 400px at 10% -20%, rgba(124,92,255,.15), transparent 60%),
+                  radial-gradient(1200px 400px at 90% -30%, rgba(0,209,178,.15), transparent 60%);
+    }
+    header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }
+    header .sub { color: var(--muted); font-size: 13px; line-height: 1.4; }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.02) inset, 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .controls { display: grid; grid-template-columns: repeat(12, 1fr); gap: 10px; align-items: end; }
+    .controls .field { grid-column: span 3; display: flex; flex-direction: column; gap: 6px; }
+    .controls .field.small { grid-column: span 2; }
+    .controls .field.wide { grid-column: span 6; }
+    .controls label { font-size: 12px; color: var(--muted); }
+    select, input[type="number"], input[type="text"] {
+      background: #0f1423; color: var(--text); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px; outline: none;
+    }
+    button {
+      background: linear-gradient(135deg, var(--accent), #00b8b2);
+      border: none; color: #051220; font-weight: 700; padding: 12px 14px;
+      border-radius: 10px; cursor: pointer; box-shadow: 0 8px 20px rgba(0,209,178,0.25);
+      transition: transform .08s ease;
+    }
+    button:hover { transform: translateY(-1px); }
+    button.secondary { background: #1e283d; color: var(--text); box-shadow: none; border: 1px solid var(--border); }
+    .inline { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .chip {
+      background: var(--chip); color: var(--muted); font-size: 12px;
+      padding: 6px 8px; border: 1px solid var(--border); border-radius: 999px;
+    }
+    .market-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+    .market-filters label {
+      display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+      border-radius: 999px; border: 1px solid var(--border); background: #0f1423; color: var(--muted);
+      cursor: pointer; user-select: none;
+    }
+    .market-filters input { transform: scale(1.1); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--border); padding: 12px 8px; vertical-align: middle; }
+    th { text-align: left; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .6px; }
+    tr:hover { background: #0f1423; }
+    .badge {
+      padding: 4px 8px; border-radius: 999px; font-weight: 700; font-size: 11px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .long { background: rgba(16,185,129,.15); color: var(--success); border: 1px solid rgba(16,185,129,.35); }
+    .short { background: rgba(239,68,68,.15); color: var(--danger); border: 1px solid rgba(239,68,68,.35); }
+    .muted { color: var(--muted); }
+    .status-ok { color: var(--success); }
+    .status-warn { color: var(--warning); }
+    .status-bad { color: var(--danger); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .note { color: var(--muted); font-size: 12px; }
+    .progress {
+      width: 100%; height: 8px; background: #0f1423; border-radius: 6px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-2), var(--accent)); }
+    .footnote { color: var(--muted); font-size: 12px; margin-top: 10px; }
+    @media (max-width: 900px) {
+      .controls .field { grid-column: span 6; }
+      .controls .field.small { grid-column: span 6; }
+      .controls .field.wide { grid-column: span 6; }
+    }
+    @media (max-width: 600px) {
+      .controls { grid-template-columns: repeat(6, 1fr); }
+      .controls .field, .controls .field.small, .controls .field.wide { grid-column: span 6; }
+      header h1 { font-size: 18px; }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Bollinger Bands & Stochastic Signals (Deriv) — Auto Market Scanner</h1>
+    <div class="sub">
+      Uses HTF Stochastic oversold/overbought near BB outer bands as key levels, refines entries on LTF (institutional TF) with BOS, BB middle break, and 3 EMA alignment.
+      Now with automatic market selection on analysis & scanner across multiple symbols. App ID defaults to 1089.
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="panel">
+    <div class="controls">
+      <div class="field small">
+        <label>Endpoint</label>
+        <select id="endpointSelect">
+          <option value="wss://ws.derivws.com/websockets/v3">Deriv (ws.derivws.com)</option>
+          <option value="wss://ws.binaryws.com/websockets/v3">Binary (ws.binaryws.com)</option>
+        </select>
+      </div>
+      <div class="field small">
+        <label>App ID</label>
+        <input id="appId" type="number" value="1089" min="1" />
+      </div>
+      <div class="field">
+        <label>&nbsp;</label>
+        <div class="inline">
+          <button id="reconnectBtn" class="secondary">Reconnect</button>
+          <span class="note" id="status">Status: initializing…</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Symbol</label>
+        <select id="symbolSelect"></select>
+        <div class="chips" id="symbolMeta"></div>
+      </div>
+      <div class="field small">
+        <label>Manual symbol (override)</label>
+        <div class="inline">
+          <input id="manualSymbol" type="text" placeholder="e.g., frxEURUSD or R_75" />
+          <button id="useManualBtn" class="secondary">Use</button>
+        </div>
+      </div>
+
+      <div class="field small">
+        <label>HTF</label>
+        <select id="htfSelect">
+          <option value="900">15m</option>
+          <option value="1800">30m</option>
+          <option value="3600" selected>1h</option>
+          <option value="7200">2h</option>
+          <option value="14400">4h</option>
+          <option value="43200">12h</option>
+          <option value="86400">1d</option>
+        </select>
+      </div>
+      <div class="field small">
+        <label>LTF (Institutional)</label>
+        <select id="ltfSelect">
+          <option value="60" selected>1m</option>
+          <option value="180">3m</option>
+          <option value="300">5m</option>
+          <option value="900">15m</option>
+          <option value="1800">30m</option>
+        </select>
+      </div>
+
+      <div class="field small">
+        <label>Zone width (× HTF ATR)</label>
+        <input id="zoneWidth" type="number" value="0.3" step="0.05" min="0.05" max="1.5">
+      </div>
+      <div class="field small">
+        <label>SL buffer (× HTF ATR)</label>
+        <input id="slBuffer" type="number" value="0.5" step="0.05" min="0.1" max="2">
+      </div>
+      <div class="field small">
+        <label>TP buffer (× HTF ATR)</label>
+        <input id="tpBuffer" type="number" value="0.2" step="0.05" min="0" max="1">
+      </div>
+
+      <div class="field small">
+        <label>Auto update (single symbol)</label>
+        <div class="inline">
+          <input id="refreshSec" type="number" value="30" min="5" max="600" style="width:120px;">
+          <button id="toggleAuto" class="secondary">Start Auto</button>
+        </div>
+      </div>
+
+      <div class="field wide">
+        <label>Market filters (scanner)</label>
+        <div class="market-filters" id="marketFilters">
+          <!-- built dynamically -->
+        </div>
+        <div class="inline" style="margin-top:6px;">
+          <button id="selectAllMarkets" class="secondary" title="Select all">All</button>
+          <button id="selectNoMarkets" class="secondary" title="Select none">None</button>
+          <span class="note" id="scanInfo">Scanner idle.</span>
+        </div>
+      </div>
+
+      <div class="field small">
+        <label>Scan step (sec)</label>
+        <input id="scanSec" type="number" value="10" min="3" max="300">
+      </div>
+      <div class="field small">
+        <label>Min confidence</label>
+        <input id="minConf" type="number" value="60" min="0" max="100">
+      </div>
+      <div class="field small">
+        <label>Max rows</label>
+        <input id="maxRows" type="number" value="100" min="10" max="500">
+      </div>
+      <div class="field">
+        <label>Scanner</label>
+        <div class="inline">
+          <button id="toggleScan">Start Auto Scan</button>
+          <button id="clearSignals" class="secondary">Clear Signals</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>&nbsp;</label>
+        <div class="inline">
+          <button id="analyzeBtn">Analyze Now (Auto-Select)</button>
+          <button id="backtestBtn" class="secondary">Backtest (last 20 HTF)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="chips" style="margin-top:10px">
+      <span class="chip">HTF: Stoch(14,3,3) <16 oversold / >84 overbought near BB outer</span>
+      <span class="chip">LTF: BOS + close >/< BB middle + close above/below 3 EMAs (9/21/50 aligned)</span>
+      <span class="chip">SL: outer BB ± buffer × ATR(HTF)</span>
+      <span class="chip">TP: middle BB ± buffer × ATR(HTF)</span>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="inline" style="justify-content: space-between; align-items:center; margin-bottom:6px;">
+      <h3 style="margin:0; font-size:16px;">Live Signals (Multi-market)</h3>
+      <div class="note" id="connNote"></div>
+    </div>
+    <table id="signalsTable">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Symbol</th>
+          <th>HTF/LTF</th>
+          <th>Bias</th>
+          <th>HTF BB Upper</th>
+          <th>HTF BB Lower</th>
+          <th>Entry</th>
+          <th>SL</th>
+          <th>TP</th>
+          <th>R:R</th>
+          <th>Conf</th>
+          <th>Note</th>
+        </tr>
+      </thead>
+      <tbody id="signalsBody">
+        <tr><td colspan="12" class="muted">No signals yet. Click Analyze or Start Auto Scan.</td></tr>
+      </tbody>
+    </table>
+    <div class="footnote">
+      Scanner rotates through selected markets/symbols and adds only signals that meet the min confidence. It also switches the visible symbol automatically as it scans.
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="grid-2">
+      <div>
+        <h3 style="margin:0; font-size:16px;">Backtest Snapshot</h3>
+        <div class="note">Prototype backtest on last 20 HTF periods. Assumes fills at LTF close when conditions align.</div>
+      </div>
+      <div>
+        <div class="note" id="btSummary">No backtest yet.</div>
+        <div class="progress" style="margin-top:8px;"><span id="btBar" style="width:0%"></span></div>
+      </div>
+    </div>
+    <div style="margin-top:12px; overflow:auto;">
+      <table id="btTable">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>HTF Time</th>
+            <th>Bias</th>
+            <th>Entry</th>
+            <th>SL</th>
+            <th>TP</th>
+            <th>Outcome</th>
+            <th>R</th>
+          </tr>
+        </thead>
+        <tbody id="btBody">
+          <tr><td colspan="8" class="muted">Run a backtest to populate.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+ <section class="panel">
+    <div class="note">
+      Educational tool. Markets change — no fixed win rate is guaranteed. Always validate on your own charts and manage risk.
+    </div>
+  </section>
+</main>
+
+<script>
+/** Config */
+let APP_ID = 1089;
+let ENDPOINT = 'wss://ws.derivws.com/websockets/v3';
+
+/** Status helpers */
+function setStatus(msg) {
+  document.getElementById('status').textContent = 'Status: ' + msg;
+  document.getElementById('connNote').textContent = msg;
+}
+function fmtTime(epoch) {
+  try { return new Date(epoch*1000).toISOString().replace('T',' ').slice(0,19); }
+  catch(_) { return String(epoch); }
+}
+function pipToDecimals(pip) {
+  if (!pip) return 4;
+  const s = String(pip);
+  if (s.includes('e-')) return Math.abs(Number(s.split('e-')[1] || 0));
+  if (!s.includes('.')) return 0;
+  return s.split('.')[1].length;
+}
+function formatPrice(v, pip) {
+  if (v === null || v === undefined || !isFinite(v)) return '-';
+  const decimals = pipToDecimals(pip || 0.0001);
+  return Number(v).toFixed(decimals);
+}
+function secToTfLabel(s) {
+  const map = {60:'1m',120:'2m',180:'3m',300:'5m',600:'10m',900:'15m',1800:'30m',3600:'1h',7200:'2h',14400:'4h',28800:'8h',43200:'12h',86400:'1d'};
+  return map[s] || (s + 's');
+}
+
+/** Deriv WS helper */
+class DerivWS {
+  constructor(getUrlFn) {
+    this.getUrlFn = getUrlFn;
+    this.ws = null;
+    this.queue = [];
+    this.pending = new Map();
+    this.connected = false;
+    this.manualClose = false;
+    this._connect();
+  }
+  _connect() {
+    try {
+      const url = this.getUrlFn();
+      this.ws = new WebSocket(url);
+      this.ws.onopen = () => { this.connected = true; setStatus('Connected to ' + url); this._flush(); };
+      this.ws.onmessage = (ev) => {
+        const data = JSON.parse(ev.data);
+        if (data.error) {
+          setStatus(`Deriv error: ${data.error.message} [${data.error.code||'ERR'}]`);
+          if (data.req_id && this.pending.has(data.req_id)) {
+            this.pending.get(data.req_id).reject(data.error);
+            this.pending.delete(data.req_id);
+          }
+          return;
+        }
+        if (data.req_id && this.pending.has(data.req_id)) {
+          this.pending.get(data.req_id).resolve(data);
+          this.pending.delete(data.req_id);
+        }
+      };
+      this.ws.onclose = () => {
+        this.connected = false;
+        if (!this.manualClose) { setStatus('Disconnected. Reconnecting…'); setTimeout(() => this._connect(), 1200); }
+        else { setStatus('Disconnected.'); }
+      };
+      this.ws.onerror = (e) => { console.error('WS error:', e); setStatus('WebSocket error. Check network / endpoint / app_id.'); };
+    } catch (e) { console.error('Connect error:', e); setStatus('Failed to open WebSocket: ' + (e.message || e)); }
+  }
+  _flush() {
+    while (this.queue.length && this.connected) {
+      const {payload, resolve, reject, req_id} = this.queue.shift();
+      this.pending.set(req_id, {resolve, reject});
+      this.ws.send(JSON.stringify(payload));
+    }
+  }
+  send(payload) {
+    return new Promise((resolve, reject) => {
+      const req_id = Math.floor(Math.random() * 1e9);
+      payload.req_id = req_id;
+      if (!this.connected) { this.queue.push({payload, resolve, reject, req_id}); }
+      else { this.pending.set(req_id, {resolve, reject}); this.ws.send(JSON.stringify(payload)); }
+    });
+  }
+  close() { this.manualClose = true; try { this.ws && this.ws.close(); } catch(_) {} }
+}
+
+/** Globals */
+let api = null;
+let SYMBOLS = [];           // full symbol objects
+let MARKETS = [];           // unique markets [{code, name}]
+let CURRENT_SYMBOL = null;
+let CURRENT_PIP = 0.0001;
+
+let AUTO_TIMER = null;      // single-symbol auto update
+let SCAN_ACTIVE = false;
+let SCAN_TIMER = null;
+let SCAN_BUSY = false;
+let SCAN_LIST = [];
+let SCAN_INDEX = 0;
+const SIGNALS_SEEN = new Set();
+
+/** Indicators */
+function sma(values, period) {
+  const out = new Array(values.length).fill(null);
+  for (let i = period - 1; i < values.length; i++) {
+    out[i] = values.slice(i - period + 1, i + 1).reduce((a, b) => a + Number(b), 0) / period;
+  }
+  return out;
+}
+function stddev(values, period) {
+  const out = new Array(values.length).fill(null);
+  for (let i = period - 1; i < values.length; i++) {
+    const slice = values.slice(i - period + 1, i + 1);
+    const mean = slice.reduce((a, b) => a + Number(b), 0) / period;
+    const variance = slice.reduce((a, b) => a + Math.pow(Number(b) - mean, 2), 0) / period;
+    out[i] = Math.sqrt(variance);
+  }
+  return out;
+}
+function bollinger(candles, period = 20, mult = 2) {
+  const closes = candles.map(c => c.close);
+  const middle = sma(closes, period);
+  const stdevs = stddev(closes, period);
+  const upper = middle.map((m, i) => m !== null ? m + mult * (stdevs[i] || 0) : null);
+  const lower = middle.map((m, i) => m !== null ? m - mult * (stdevs[i] || 0) : null);
+  return { middle, upper, lower };
+}
+function stochastic(candles, kPeriod = 14, smoothK = 3, smoothD = 3) {
+  const highs = candles.map(c => c.high);
+  const lows = candles.map(c => c.low);
+  const closes = candles.map(c => c.close);
+  const stochK = new Array(closes.length).fill(null);
+  for (let i = kPeriod - 1; i < closes.length; i++) {
+    const hSlice = highs.slice(i - kPeriod + 1, i + 1);
+    const lSlice = lows.slice(i - kPeriod + 1, i + 1);
+    const h14 = Math.max(...hSlice);
+    const l14 = Math.min(...lSlice);
+    const range = h14 - l14;
+    stochK[i] = range === 0 ? 50 : 100 * (closes[i] - l14) / range;
+  }
+  const slowK = sma(stochK, smoothK);
+  const dLine = sma(slowK, smoothD);
+  return { k: slowK, d: dLine };
+}
+function ema(values, period) {
+  const k = 2/(period+1), out = [];
+  let prev = null;
+  for (let i=0;i<values.length;i++) {
+    const v = Number(values[i]);
+    if (i < period - 1) out.push(null);
+    else if (i === period-1) { prev = values.slice(0,period).reduce((a,b)=>a+Number(b),0)/period; out.push(prev); }
+    else { prev = v*k + prev*(1-k); out.push(prev); }
+  }
+  return out;
+}
+function atr(c, period=14) {
+  const tr=[]; for (let i=0;i<c.length;i++){
+    if (i===0) tr.push(c[0].high-c[0].low);
+    else { const h=c[i].high, l=c[i].low, pc=c[i-1].close; tr.push(Math.max(h-l, Math.abs(h-pc), Math.abs(l-pc))); }
+  }
+  const out=Array(c.length).fill(null);
+  if (c.length<=period) return out;
+  let a=tr.slice(1,period+1).reduce((x,y)=>x+y,0)/period; out[period]=a;
+  for (let i=period+1;i<tr.length;i++){ a=(a*(period-1)+tr[i])/period; out[i]=a; }
+  return out;
+}
+
+/** API wrappers */
+async function getActiveSymbols() {
+  const attempts = [
+    { active_symbols: 'brief', product_type: 'financial' },
+    { active_symbols: 'brief', product_type: 'derived' },
+    { active_symbols: 'brief', product_type: 'basic' },
+    { active_symbols: 'brief' }
+  ];
+  const combined = [];
+  const seen = new Set();
+  let lastError = null;
+
+  for (const p of attempts) {
+    try {
+      const res = await api.send(p);
+      const list = Array.isArray(res.active_symbols) ? res.active_symbols : [];
+      for (const s of list) {
+        if (!seen.has(s.symbol)) { seen.add(s.symbol); combined.push(s); }
+      }
+    } catch (err) { lastError = err; console.warn('active_symbols attempt failed:', err); }
+  }
+  if (!combined.length && lastError) {
+    setStatus(`active_symbols failed: ${lastError.message} [${lastError.code||'ERR'}]`);
+  }
+  return combined.sort((a,b)=>a.display_name.localeCompare(b.display_name));
+}
+async function getCandles(symbol, granularity, count=500) {
+  if (!symbol) throw new Error('Symbol not selected');
+  const res = await api.send({
+    ticks_history: symbol,
+    adjust_start_time: 1,
+    style: 'candles',
+    end: 'latest',
+    count: Math.min(Math.max(count, 50), 5000),
+    granularity
+  });
+  if (res && res.candles) return res.candles;
+  throw new Error('No candles returned');
+}
+
+/** Strategy */
+function computeSignal({htf, ltf, params}) {
+  if (!htf || !ltf || htf.length < 50 || ltf.length < 100) return null;
+
+  const htfBB = bollinger(htf, 20, 2);
+  const hStoch = stochastic(htf, 14, 3, 3);
+  const lastStochD = hStoch.d[hStoch.d.length - 1];
+  const lastBBLower = htfBB.lower[htfBB.lower.length - 1];
+  const lastBBUpper = htfBB.upper[htfBB.upper.length - 1];
+  const lastBBMiddle = htfBB.middle[htfBB.middle.length - 1];
+  const atrHTF = atr(htf, 14).filter(x => x !== null).pop();
+  if (!atrHTF || !lastStochD || lastBBLower === null || lastBBUpper === null || lastBBMiddle === null) return null;
+
+  const zone = atrHTF * params.zoneWidth;
+  const price = ltf[ltf.length - 1].close;
+  const nearLower = Math.abs(price - lastBBLower) <= zone;
+  const nearUpper = Math.abs(price - lastBBUpper) <= zone;
+
+  let side = null, note = [];
+  const OVERSOLD = 16, OVERBOUGHT = 84;
+  if (lastStochD < OVERSOLD && nearLower) {
+    side = 'long';
+    note.push('HTF Stoch oversold', 'Near HTF BB lower');
+  } else if (lastStochD > OVERBOUGHT && nearUpper) {
+    side = 'short';
+    note.push('HTF Stoch overbought', 'Near HTF BB upper');
+  }
+  if (!side) return null;
+
+  // LTF confirmation
+  const ltfBB = bollinger(ltf, 20, 2);
+  const lCloses = ltf.map(c => c.close);
+  const lEma9 = ema(lCloses, 9);
+  const lEma21 = ema(lCloses, 21);
+  const lEma50 = ema(lCloses, 50);
+  const lastL = ltf[ltf.length - 1];
+  const prevL = ltf[ltf.length - 2];
+  const lastE9 = lEma9[lEma9.length - 1];
+  const lastE21 = lEma21[lEma21.length - 1];
+  const lastE50 = lEma50[lEma50.length - 1];
+  const lastMB = ltfBB.middle[ltfBB.middle.length - 1];
+
+  if (lastE9 === null || lastE21 === null || lastE50 === null || lastMB === null || !prevL) return null;
+
+  const alignedBull = lastE9 > lastE21 && lastE21 > lastE50;
+  const alignedBear = lastE9 < lastE21 && lastE21 < lastE50;
+  let ltfConfirm = false;
+  let ltfNotes = [];
+  if (side === 'long') {
+    const bos = lastL.close > prevL.high;
+    const midBreak = lastL.close > lastMB;
+    const closure = lastL.close > lastE9 && lastL.close > lastE21 && lastL.close > lastE50;
+    ltfConfirm = bos && midBreak && closure && alignedBull;
+    if (bos) ltfNotes.push('LTF BOS up');
+    if (midBreak) ltfNotes.push('LTF BB mid break');
+    if (alignedBull) ltfNotes.push('EMAs bull aligned');
+  } else {
+    const bos = lastL.close < prevL.low;
+    const midBreak = lastL.close < lastMB;
+    const closure = lastL.close < lastE9 && lastL.close < lastE21 && lastL.close < lastE50;
+    ltfConfirm = bos && midBreak && closure && alignedBear;
+    if (bos) ltfNotes.push('LTF BOS down');
+    if (midBreak) ltfNotes.push('LTF BB mid break');
+    if (alignedBear) ltfNotes.push('EMAs bear aligned');
+  }
+  if (!ltfConfirm) return null;
+  note = note.concat(ltfNotes);
+
+  const slBuf = atrHTF * params.slBuffer;
+  const tpBuf = atrHTF * params.tpBuffer;
+  const entry = price;
+  let sl, tp;
+  if (side === 'long') {
+    sl = lastBBLower - slBuf;
+    tp = lastBBMiddle - tpBuf;
+  } else {
+    sl = lastBBUpper + slBuf;
+    tp = lastBBMiddle + tpBuf;
+  }
+
+  const risk = Math.abs(entry - sl);
+  const reward = Math.abs(tp - entry);
+  const rr = reward / risk;
+  if (!isFinite(rr) || rr <= 0.5) { note.push('Unfavorable RR; skipped'); return null; }
+
+  let conf = 60;
+  if (alignedBull || alignedBear) conf += 15;
+  const dToLevel = side === 'long' ? Math.abs(entry - lastBBLower) : Math.abs(entry - lastBBUpper);
+  conf += dToLevel <= zone * 0.5 ? 15 : (dToLevel <= zone ? 10 : 0);
+  const depth = Math.abs(lastStochD - (side === 'long' ? OVERSOLD : OVERBOUGHT));
+  if (depth > 5) conf += 10;
+  // HTF trend
+  const hCloses = htf.map(c => c.close);
+  const hE50 = ema(hCloses, 50).filter(x => x !== null).pop();
+  const hE200 = ema(hCloses, 200).filter(x => x !== null).pop();
+  if (hE50 && hE200) {
+    if ((side === 'long' && hE50 > hE200) || (side === 'short' && hE50 < hE200)) conf += 10;
+  }
+  conf = Math.max(0, Math.min(100, conf));
+
+  return {
+    time: lastL.epoch,
+    side,
+    prevHigh: lastBBUpper,
+    prevLow: lastBBLower,
+    entry,
+    sl,
+    tp,
+    rr,
+    confidence: conf,
+    notes: note.filter(Boolean).join(' · ')
+  };
+}
+
+/** Backtest simplified */
+function backtest({htf, ltf, params, N=20}) {
+  const results = [];
+  if (htf.length < N + 50) return results;
+  const htfBB = bollinger(htf, 20, 2);
+  const hStoch = stochastic(htf, 14, 3, 3);
+  const atrHTFAll = atr(htf, 14);
+  const lClose = ltf.map(c => c.close);
+  const lE9 = ema(lClose, 9);
+  const lE21 = ema(lClose, 21);
+  const lE50 = ema(lClose, 50);
+  const ltfBB = bollinger(ltf, 20, 2);
+  const OVERSOLD = 16, OVERBOUGHT = 84;
+
+  function ltfRangeIndices(startEpoch, endEpoch) {
+    let s = ltf.findIndex(c => c.epoch >= startEpoch);
+    if (s === -1) s = 0;
+    let e = ltf.findIndex(c => c.epoch >= endEpoch);
+    if (e === -1) e = ltf.length;
+    return [s, e];
+  }
+
+  const startIdx = Math.max(2, htf.length - (N + 2));
+  for (let i = startIdx; i < htf.length - 1; i++) {
+    const prevIdx = i - 1;
+    const prevC = htf[prevIdx];
+    const currC = htf[i];
+    if (!prevC || !currC) continue;
+    const stochVal = hStoch.d[prevIdx];
+    if (stochVal === null) continue;
+    const bbLower = htfBB.lower[prevIdx];
+    const bbUpper = htfBB.upper[prevIdx];
+    const bbMiddle = htfBB.middle[prevIdx];
+    const atrVal = atrHTFAll[prevIdx];
+    if (bbLower === null || bbUpper === null || bbMiddle === null || !atrVal) continue;
+    const zone = atrVal * params.zoneWidth;
+    const nearLow = Math.abs(prevC.close - bbLower) <= zone;
+    const nearHigh = Math.abs(prevC.close - bbUpper) <= zone;
+    let side = null;
+    if (stochVal < OVERSOLD && nearLow) side = 'long';
+    else if (stochVal > OVERBOUGHT && nearHigh) side = 'short';
+    if (!side) continue;
+    const slBuf = atrVal * params.slBuffer;
+    const tpBuf = atrVal * params.tpBuffer;
+    let sl, tp;
+    if (side === 'long') {
+      sl = bbLower - slBuf;
+      tp = bbMiddle - tpBuf;
+    } else {
+      sl = bbUpper + slBuf;
+      tp = bbMiddle + tpBuf;
+    }
+    const [lStart, lEnd] = ltfRangeIndices(prevC.epoch, currC.epoch);
+    let opened = false;
+    let entry = null;
+    for (let j = Math.max(lStart, 1); j < lEnd; j++) {
+      const currL = ltf[j];
+      const prevLC = ltf[j - 1];
+      if (!prevLC) continue;
+      const e9j = lE9[j];
+      const e21j = lE21[j];
+      const e50j = lE50[j];
+      if (e9j === null || e21j === null || e50j === null) continue;
+      const mbj = ltfBB.middle[j];
+      if (mbj === null) continue;
+      let openCond = false;
+      if (!opened) {
+        let bos, midBreak, closure, aligned;
+        if (side === 'long') {
+          bos = currL.close > prevLC.high;
+          midBreak = currL.close > mbj;
+          closure = currL.close > e9j && currL.close > e21j && currL.close > e50j;
+          aligned = e9j > e21j && e21j > e50j;
+        } else {
+          bos = currL.close < prevLC.low;
+          midBreak = currL.close < mbj;
+          closure = currL.close < e9j && currL.close < e21j && currL.close < e50j;
+          aligned = e9j < e21j && e21j < e50j;
+        }
+        openCond = bos && midBreak && closure && aligned;
+        if (openCond) {
+          entry = currL.close;
+          opened = true;
+        }
+      }
+      if (opened) {
+        const hi = currL.high;
+        const lo = currL.low;
+        let hit = false;
+        if (side === 'long') {
+          if (lo <= sl) {
+            results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'SL', R: -1 });
+            hit = true;
+          } else if (hi >= tp) {
+            const R = (tp - entry) / (entry - sl);
+            results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'TP', R });
+            hit = true;
+          }
+        } else {
+          if (hi >= sl) {
+            results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'SL', R: -1 });
+            hit = true;
+          } else if (lo <= tp) {
+            const R = (entry - tp) / (sl - entry);
+            results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'TP', R });
+            hit = true;
+          }
+        }
+        if (hit) break;
+      }
+      if (j === lEnd - 1 && opened) {
+        results.push({ idx: prevIdx, time: currC.epoch, side, entry, sl, tp, outcome: 'NoFill', R: 0 });
+      }
+    }
+  }
+  return results.slice(-N);
+}
+
+/** UI + Scanner */
+function createAPI() {
+  if (api) { try { api.close(); } catch(_) {} }
+  APP_ID = parseInt(document.getElementById('appId').value) || 1089;
+  ENDPOINT = document.getElementById('endpointSelect').value;
+  api = new DerivWS(() => `${ENDPOINT}?app_id=${APP_ID}`);
+}
+
+async function loadSymbols() {
+  setStatus('Loading symbols…');
+  SYMBOLS = await getActiveSymbols();
+  const sel = document.getElementById('symbolSelect');
+  sel.innerHTML = '';
+  if (!SYMBOLS.length) {
+    setStatus('Could not load symbols. Check endpoint/app_id or use manual symbol.');
+    buildMarketFilters(); // empty state
+    return;
+  }
+  for (const s of SYMBOLS) {
+    const opt = document.createElement('option');
+    opt.value = s.symbol;
+    opt.textContent = `${s.display_name} (${s.symbol})`;
+    sel.appendChild(opt);
+  }
+  sel.value = SYMBOLS.find(s => /EURUSD/i.test(s.display_name))?.symbol
+           || SYMBOLS.find(s => /Volatility 75/i.test(s.display_name))?.symbol
+           || SYMBOLS[0].symbol;
+  CURRENT_SYMBOL = sel.value;
+  CURRENT_PIP = Number(SYMBOLS.find(x=>x.symbol===CURRENT_SYMBOL)?.pip) || 0.0001;
+  updateSymbolMeta();
+  buildMarketFilters();
+  updateScanList();
+  setStatus(`Loaded ${SYMBOLS.length} symbols`);
+}
+
+function buildMarketFilters() {
+  // Collect unique markets
+  const byCode = new Map();
+  for (const s of SYMBOLS) {
+    const code = s.market || s.market_display_name || 'other';
+    const name = s.market_display_name || s.market || code;
+    if (!byCode.has(code)) byCode.set(code, { code, name, count: 0 });
+    byCode.get(code).count += 1;
+  }
+  MARKETS = Array.from(byCode.values()).sort((a,b)=>a.name.localeCompare(b.name));
+  const container = document.getElementById('marketFilters');
+  container.innerHTML = '';
+  if (!MARKETS.length) {
+    const lbl = document.createElement('span');
+    lbl.className = 'note';
+    lbl.textContent = 'No markets available. Use manual symbol.';
+    container.appendChild(lbl);
+    return;
+  }
+  for (const m of MARKETS) {
+    const id = `mkt_${m.code}`;
+    const lab = document.createElement('label');
+    lab.setAttribute('for', id);
+    lab.innerHTML = `<input type="checkbox" id="${id}" data-market="${m.code}" checked /> ${m.name} (${m.count})`;
+    container.appendChild(lab);
+  }
+  container.addEventListener('change', () => {
+    updateScanList();
+  }, { once: true });
+}
+
+function selectedMarkets() {
+  const container = document.getElementById('marketFilters');
+  const inputs = container.querySelectorAll('input[type="checkbox"]');
+  const out = [];
+  inputs.forEach(i => { if (i.checked) out.push(i.getAttribute('data-market')); });
+  return out;
+}
+
+function updateScanList() {
+  const mkts = new Set(selectedMarkets());
+  SCAN_LIST = SYMBOLS.filter(s => mkts.size ? mkts.has(s.market || s.market_display_name) : true).map(s => s.symbol);
+  SCAN_INDEX = 0;
+  document.getElementById('scanInfo').textContent = `Scanner list: ${SCAN_LIST.length} symbols selected.`;
+}
+
+function updateSymbolMeta() {
+  const code = CURRENT_SYMBOL;
+  const s = SYMBOLS.find(x=>x.symbol === code);
+  CURRENT_PIP = Number(s?.pip) || CURRENT_PIP || 0.0001;
+  const decimals = pipToDecimals(CURRENT_PIP);
+  const market = s?.market_display_name || s?.market || '-';
+  const submarket = s?.submarket_display_name || s?.submarket || '-';
+  const meta = document.getElementById('symbolMeta');
+  meta.innerHTML = '';
+  [['Market', market], ['Sub', submarket], ['Pip', String(s?.pip || '-')], ['Digits', String(decimals)]].forEach(([k,v])=>{
+    const sp = document.createElement('span'); sp.className='chip'; sp.textContent = `${k}: ${v}`; meta.appendChild(sp);
+  });
+}
+
+function getParams() {
+  return {
+    htf: Number(document.getElementById('htfSelect').value),
+    ltf: Number(document.getElementById('ltfSelect').value),
+    zoneWidth: Number(document.getElementById('zoneWidth').value),
+    slBuffer: Number(document.getElementById('slBuffer').value),
+    tpBuffer: Number(document.getElementById('tpBuffer').value),
+  };
+}
+
+async function analyzeSymbol(symbol, params) {
+  const [htf, ltf] = await Promise.all([
+    getCandles(symbol, params.htf, 400),
+    getCandles(symbol, params.ltf, 1500),
+  ]);
+  htf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+  ltf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+  const sig = computeSignal({ htf, ltf, params });
+  return sig;
+}
+
+function renderSingleSignal(sig, params) {
+  const tbody = document.getElementById('signalsBody');
+  tbody.innerHTML = '';
+  if (!sig) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 12;
+    td.className = 'muted';
+    td.textContent = 'No signal right now (conditions not met near BB levels).';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+  addSignalRow(sig, CURRENT_SYMBOL, params, true);
+}
+
+function addSignalRow(sig, symbol, params, replace=false) {
+  if (!sig) return;
+  const minConf = Math.max(0, Math.min(100, Number(document.getElementById('minConf').value) || 0));
+  if (sig.confidence < minConf) return;
+
+  const key = `${symbol}|${sig.time}|${sig.side}|${params.htf}|${params.ltf}`;
+  if (SIGNALS_SEEN.has(key) && !replace) return;
+  SIGNALS_SEEN.add(key);
+
+  const tbody = document.getElementById('signalsBody');
+  if (replace) tbody.innerHTML = '';
+
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>${fmtTime(sig.time)}</td>
+    <td>${symbol}</td>
+    <td>${secToTfLabel(params.htf)} / ${secToTfLabel(params.ltf)}</td>
+    <td><span class="badge ${sig.side === 'long' ? 'long' : 'short'}">${sig.side.toUpperCase()}</span></td>
+    <td>${formatPrice(sig.prevHigh, CURRENT_PIP)}</td>
+    <td>${formatPrice(sig.prevLow, CURRENT_PIP)}</td>
+    <td>${formatPrice(sig.entry, CURRENT_PIP)}</td>
+    <td>${formatPrice(sig.sl, CURRENT_PIP)}</td>
+    <td>${formatPrice(sig.tp, CURRENT_PIP)}</td>
+    <td>${sig.rr.toFixed(2)}</td>
+    <td>${sig.confidence}%</td>
+    <td>${sig.notes}</td>
+  `;
+  // Insert at top
+  if (tbody.firstChild && !replace) tbody.insertBefore(tr, tbody.firstChild);
+  else tbody.appendChild(tr);
+
+  // Trim rows
+  const maxRows = Math.max(10, Math.min(500, Number(document.getElementById('maxRows').value) || 100));
+  while (tbody.rows.length > maxRows) {
+    const lastRow = tbody.lastElementChild;
+    if (lastRow) tbody.removeChild(lastRow);
+  }
+}
+
+function clearSignals() {
+  SIGNALS_SEEN.clear();
+  const tbody = document.getElementById('signalsBody');
+  tbody.innerHTML = '<tr><td colspan="12" class="muted">Cleared. Waiting for new signals…</td></tr>';
+}
+
+/** Event handlers */
+async function onAnalyze() {
+  try {
+    updateScanList(); // Ensure list is current
+    const params = getParams();
+    if (params.ltf >= params.htf) { alert('Lower timeframe must be smaller than HTF.'); return; }
+    let sig = null;
+    let selectedSym = CURRENT_SYMBOL;
+    const minConf = Math.max(0, Math.min(100, Number(document.getElementById('minConf').value) || 0));
+    if (SCAN_LIST.length > 0 && (!CURRENT_SYMBOL || SCAN_LIST.length > 1)) {
+      // Auto-select mode: scan for first valid signal
+      setStatus('Scanning markets for signal...');
+      for (const sym of SCAN_LIST) {
+        try {
+          const tempSig = await analyzeSymbol(sym, params);
+          if (tempSig && tempSig.confidence >= minConf) {
+            sig = tempSig;
+            selectedSym = sym;
+            break;
+          }
+        } catch (e) {
+          console.warn('Skipped', sym, e);
+        }
+      }
+      if (!sig) {
+        setStatus('No qualifying signal found in selected markets.');
+        renderSingleSignal(null, params);
+        return;
+      }
+      // Update UI to selected symbol
+      CURRENT_SYMBOL = selectedSym;
+      const sel = document.getElementById('symbolSelect');
+      if (sel.querySelector(`option[value="${selectedSym}"]`)) sel.value = selectedSym;
+      const sObj = SYMBOLS.find(x => x.symbol === selectedSym);
+      CURRENT_PIP = Number(sObj?.pip) || 0.0001;
+      updateSymbolMeta();
+      setStatus(`Signal found on ${selectedSym}. Analysis complete.`);
+    } else if (CURRENT_SYMBOL) {
+      setStatus('Fetching candles…');
+      sig = await analyzeSymbol(CURRENT_SYMBOL, params);
+      setStatus('Analysis complete');
+    } else {
+      alert('Select markets or enter a manual symbol.');
+      return;
+    }
+    renderSingleSignal(sig, params);
+    // Also add to signals table
+    if (sig) addSignalRow(sig, selectedSym, params, false);
+  } catch (err) {
+    console.error(err);
+    setStatus('Error: ' + (err.message || 'analysis failed'));
+  }
+}
+
+async function onBacktest() {
+  try {
+    if (!CURRENT_SYMBOL) { alert('Select or enter a symbol first.'); return; }
+    const params = getParams();
+    if (params.ltf >= params.htf) { alert('Lower timeframe must be smaller than HTF.'); return; }
+    setStatus('Fetching candles for backtest…');
+    const [htf, ltf] = await Promise.all([
+      getCandles(CURRENT_SYMBOL, params.htf, 600),
+      getCandles(CURRENT_SYMBOL, params.ltf, 5000),
+    ]);
+    htf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+    ltf.forEach(c => { c.open=+c.open; c.high=+c.high; c.low=+c.low; c.close=+c.close; c.epoch=+c.epoch; });
+
+    setStatus('Running backtest…');
+    const results = backtest({ htf, ltf, params, N: 20 });
+    renderBacktest(results);
+    setStatus('Backtest complete');
+  } catch (err) { console.error(err); setStatus('Backtest error: ' + (err.message || 'failed')); }
+}
+
+function renderBacktest(results) {
+  const tbody = document.getElementById('btBody');
+  tbody.innerHTML = '';
+  if (!results.length) {
+    const tr = document.createElement('tr');
+    const td = document.createElement('td');
+    td.colSpan = 8; td.className = 'muted';
+    td.textContent = 'No results. Increase history or adjust timeframes.';
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    document.getElementById('btSummary').textContent = 'Win rate: —';
+    document.getElementById('btBar').style.width = '0%';
+    return;
+  }
+  let wins=0, losses=0, nofills=0, sumR=0;
+  results.forEach((r, idx)=>{
+    if (r.outcome==='TP') wins++; else if (r.outcome==='SL') losses++; else nofills++;
+    sumR += (r.R || 0);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${idx+1}</td>
+      <td>${fmtTime(r.time)}</td>
+      <td><span class="badge ${r.side === 'long' ? 'long' : 'short'}">${(r.side||'none').toUpperCase()}</span></td>
+      <td>${formatPrice(r.entry||0, CURRENT_PIP)}</td>
+      <td>${formatPrice(r.sl||0, CURRENT_PIP)}</td>
+      <td>${formatPrice(r.tp||0, CURRENT_PIP)}</td>
+      <td class="${r.outcome==='TP'?'status-ok':(r.outcome==='SL'?'status-bad':'muted')}">${r.outcome}</td>
+      <td>${(r.R!==undefined && isFinite(r.R)) ? r.R.toFixed(2) : '-'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  const totalTrades = wins + losses;
+  const winRate = totalTrades ? (wins / totalTrades * 100) : 0;
+  const avgR = totalTrades ? (sumR / totalTrades) : 0;
+  document.getElementById('btSummary').textContent =
+    `Trades: ${wins+losses} (wins: ${wins}, losses: ${losses}, no-fills: ${nofills}) • Win rate: ${winRate.toFixed(1)}% • Avg R: ${avgR.toFixed(2)}`;
+  document.getElementById('btBar').style.width = Math.min(100, Math.max(0, winRate)) + '%';
+}
+
+function toggleAutoSingle() {
+  const btn = document.getElementById('toggleAuto');
+  if (AUTO_TIMER) {
+    clearInterval(AUTO_TIMER); AUTO_TIMER=null;
+    btn.textContent = 'Start Auto'; btn.classList.add('secondary');
+    setStatus('Single-symbol auto update stopped.');
+  } else {
+    if (SCAN_ACTIVE) { alert('Stop the scanner first.'); return; }
+    const sec = Math.max(5, Math.min(600, Number(document.getElementById('refreshSec').value) || 30));
+    onAnalyze();
+    AUTO_TIMER = setInterval(onAnalyze, sec * 1000);
+    btn.textContent = 'Stop Auto'; btn.classList.remove('secondary');
+    setStatus('Single-symbol auto update running…');
+  }
+}
+
+async function scanStep() {
+  if (!SCAN_ACTIVE || SCAN_BUSY) return;
+  if (!SCAN_LIST.length) { document.getElementById('scanInfo').textContent = 'No symbols to scan. Select markets.'; return; }
+
+  const params = getParams();
+  if (params.ltf >= params.htf) { document.getElementById('scanInfo').textContent = 'Fix TFs: LTF must be < HTF.'; return; }
+
+  const sym = SCAN_LIST[SCAN_INDEX % SCAN_LIST.length]; SCAN_INDEX++;
+  SCAN_BUSY = true;
+  try {
+    // Reflect switching in UI
+    const sel = document.getElementById('symbolSelect');
+    if (sel.querySelector(`option[value="${sym}"]`)) { sel.value = sym; }
+    CURRENT_SYMBOL = sym;
+    const sObj = SYMBOLS.find(x=>x.symbol===sym);
+    CURRENT_PIP = Number(sObj?.pip) || 0.0001;
+    updateSymbolMeta();
+
+    document.getElementById('scanInfo').textContent = `Scanning ${sym} (${SCAN_INDEX}/${SCAN_LIST.length}, loops continue)…`;
+    const sig = await analyzeSymbol(sym, params);
+    if (sig) addSignalRow(sig, sym, params, false);
+  } catch (err) {
+    // Skip symbol on error
+    console.warn('Scan error for', sym, err);
+  } finally {
+    SCAN_BUSY = false;
+  }
+}
+
+function toggleScan() {
+  const btn = document.getElementById('toggleScan');
+  if (SCAN_ACTIVE) {
+    SCAN_ACTIVE = false;
+    if (SCAN_TIMER) clearInterval(SCAN_TIMER);
+    SCAN_TIMER = null;
+    btn.textContent = 'Start Auto Scan';
+    btn.classList.add('secondary');
+    document.getElementById('scanInfo').textContent = 'Scanner stopped.';
+    setStatus('Scanner stopped.');
+    return;
+  }
+  if (AUTO_TIMER) { clearInterval(AUTO_TIMER); AUTO_TIMER=null; document.getElementById('toggleAuto').textContent='Start Auto'; document.getElementById('toggleAuto').classList.add('secondary'); }
+  updateScanList();
+  if (!SCAN_LIST.length) { alert('No symbols in scan list. Select markets.'); return; }
+  const stepSec = Math.max(3, Math.min(300, Number(document.getElementById('scanSec').value) || 10));
+  SCAN_ACTIVE = true;
+  btn.textContent = 'Stop Auto Scan';
+  btn.classList.remove('secondary');
+  setStatus('Scanner running…');
+  scanStep(); // immediate
+  SCAN_TIMER = setInterval(scanStep, stepSec * 1000);
+}
+
+/** Wiring + boot */
+function createHandlers() {
+  document.getElementById('reconnectBtn').addEventListener('click', boot);
+  document.getElementById('analyzeBtn').addEventListener('click', onAnalyze);
+  document.getElementById('backtestBtn').addEventListener('click', onBacktest);
+  document.getElementById('toggleAuto').addEventListener('click', toggleAutoSingle);
+  document.getElementById('toggleScan').addEventListener('click', toggleScan);
+  document.getElementById('clearSignals').addEventListener('click', clearSignals);
+
+  document.getElementById('symbolSelect').addEventListener('change', function(){
+    CURRENT_SYMBOL = this.value;
+    const sObj = SYMBOLS.find(x=>x.symbol===CURRENT_SYMBOL);
+    CURRENT_PIP = Number(sObj?.pip) || 0.0001;
+    updateSymbolMeta();
+  });
+  document.getElementById('useManualBtn').addEventListener('click', function(){
+    const val = (document.getElementById('manualSymbol').value || '').trim();
+    if (!val) { alert('Enter a symbol code, e.g., frxEURUSD or R_75'); return; }
+    CURRENT_SYMBOL = val;
+    setStatus('Using manual symbol: ' + val);
+    updateSymbolMeta();
+  });
+
+  document.getElementById('selectAllMarkets').addEventListener('click', function(){
+    document.querySelectorAll('#marketFilters input[type="checkbox"]').forEach(cb => cb.checked = true);
+    updateScanList();
+  });
+  document.getElementById('selectNoMarkets').addEventListener('click', function(){
+    document.querySelectorAll('#marketFilters input[type="checkbox"]').forEach(cb => cb.checked = false);
+    updateScanList();
+  });
+}
+
+function createAPIAndLoad() { createAPI(); return loadSymbols(); }
+
+async function boot() {
+  try {
+    setStatus('Connecting…');
+    await createAPIAndLoad();
+  } catch (e) {
+    console.error(e); setStatus('Boot error: ' + (e.message || e));
+  }
+}
+
+createHandlers();
+boot();
+</script>
+</body>
+</html>
