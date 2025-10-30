@@ -121,6 +121,8 @@
           <option value="band" selected>SL: Beyond Band</option>
           <option value="swing">SL: Swing High/Low</option>
         </select>
+        <label class="switch"><input id="autoScan" type="checkbox" /> Auto Scan</label>
+        <label class="switch"><input id="autoShow" type="checkbox" /> Auto Show Valid</label>
         <button id="start" class="btn">Start</button>
         <button id="stop" class="btn secondary">Stop</button>
       </div>
@@ -336,6 +338,24 @@
       </table>
     </div>
 
+    <div class="panel-header">
+      <div class="hstack" style="display:flex;align-items:center;gap:10px">
+        <span style="font-weight:700">Valid Markets</span>
+        <span id="valid-count" class="pill">0</span>
+      </div>
+      <div class="small"></div>
+    </div>
+    <div class="section">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Symbol</th><th>Bias</th><th>Conf</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="validbody"></tbody>
+      </table>
+    </div>
+
     <div class="section">
       <h3 style="margin:0 0 10px 0">Strategy Checklist</h3>
       <ul class="small">
@@ -354,13 +374,14 @@
 <script>
 (() => {
   const APP_ID = 1089;
-  const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
+  const WS_URL = wss://ws.derivws.com/websockets/v3?app_id=${APP_ID};
 
   // DOM
   const el = id => document.getElementById(id);
   const wsDot = el('ws-dot'), wsStatus = el('ws-status');
   const selSymbol = el('symbol'), selHTF = el('htf'), selLTF = el('ltf');
   const chkLTF = el('useLtf'), chkAuto = el('autoTrade'), selSLType = el('slType');
+  const chkAutoScan = el('autoScan'), chkAutoShow = el('autoShow');
   const btnStart = el('start'), btnStop = el('stop'), btnCloseAll = el('closeAll'), btnOpen = el('open');
   const canvas = el('chart'), osc = el('osc');
   const kdEl = el('kd'), bbwidthEl = el('bbwidth'), ma3El = el('ma3v'), lastCloseEl = el('lastclose'), updatedEl = el('updated');
@@ -369,6 +390,7 @@
   const tapcEl = el('tapc'), ma3cEl = el('ma3c'), stochcEl = el('stochc'), ltfmidEl = el('ltfmid'), ltfstrEl = el('ltfstr');
   const sigbody = el('sigbody'), sigCount = el('signal-count');
   const livebody = el('livebody'), liveCount = el('live-count'), closedbody = el('closedbody'), closedCount = el('closed-count'), statsEl = el('stats');
+  const validbody = el('validbody'), validCount = el('valid-count');
   const rAcct = el('acct'), rPct = el('riskpct'), rEntry = el('rEntry'), rStop = el('rStop'), rTP = el('rTP'), rRisk = el('rRisk'), rDist = el('rDist'), rR = el('rR'), rSize = el('rSize'), rCalc = el('calc');
   const beepCk = el('beep');
 
@@ -396,11 +418,13 @@
   let dailyMap = {}; // symbol -> daily candles (for weekly/monthly)
   let weeklyStates = {}; // symbol -> {lastEmitted, lastLatestEpoch}
   let monthlyStates = {}; // symbol -> {lastEmitted, lastLatestEpoch}
-  let htfCandles = []; let ltfCandles = [];
-  let lastClosedHTFOpenTime = null;
+  let htfCandlesMap = {}; let ltfCandlesMap = {};
+  let lastClosedHTFOpenTimeMap = {};
   let recentSignals = [];
   let trades = []; // {id,symbol,side,entry,tp,sl,openTime,closeTime,status,exitPrice, rrInit, rrLive, bestRR}
   let activeSymbol = null;
+  let validMarkets = [];
+  let symbolNames = {};
 
   // Utils
   const fmt = (n,d=5)=> (n==null||!isFinite(n))?'–':Number(n).toFixed(d);
@@ -421,7 +445,7 @@
   function forgetAll(){ Object.keys(subs).forEach(forget); subs={}; pending={}; }
 
   function subscribeCandles(symbol, gran, onInit, onUpdate){
-    const key = `${symbol}|${gran}|candles`;
+    const key = ${symbol}|${gran}|candles;
     pending[key] = {symbol, gran, onInit, onUpdate};
     send({ticks_history: symbol, style:'candles', granularity: gran, count: 500, end:'latest', adjust_start_time:1, subscribe:1});
   }
@@ -436,7 +460,7 @@
       const subId = msg.subscription?.id;
       const symbol = msg.echo_req?.ticks_history;
       const gran = Number(msg.echo_req?.granularity || 0);
-      const key = `${symbol}|${gran}|candles`;
+      const key = ${symbol}|${gran}|candles;
       const arr = (msg.candles || []).map(c=>({epoch:c.epoch||c.open_time, open:+c.open, high:+c.high, low:+c.low, close:+c.close}));
       if(subId && pending[key]){
         subs[subId] = pending[key];
@@ -450,8 +474,9 @@
     if(msg.msg_type === 'ohlc'){
       const subId = msg.subscription?.id;
       const o = msg.ohlc;
+      const symbol = subs[subId]?.symbol;
       if(subId && subs[subId]){
-        subs[subId].onUpdate && subs[subId].onUpdate(o, {subId});
+        subs[subId].onUpdate && subs[subId].onUpdate(o, {subId,symbol});
       }
       return;
     }
@@ -467,7 +492,8 @@
     for(const s of sorted){
       const opt = document.createElement('option');
       opt.value = s.symbol;
-      opt.textContent = `${s.display_name} — ${s.market_display_name}`;
+      opt.textContent = ${s.display_name} — ${s.market_display_name};
+      symbolNames[s.symbol] = s.display_name;
       selSymbol.appendChild(opt);
     }
     const defaults = ['frxEURUSD','frxGBPUSD','R_100'];
@@ -582,7 +608,7 @@
     const highs=slice.map(c=>c.high), lows=slice.map(c=>c.low), closes=slice.map(c=>c.close);
     const maxP=Math.max(...highs), minP=Math.min(...lows); const pad=(maxP-minP)*0.1 || 1e-9;
     const top=maxP+pad, bot=minP-pad;
-    const y=v=> Math.round((1-(v-bot)/(top-bot))*H), x=i=> Math.round(i*(W/(N-1)));
+    const y=v=> Math.round((1-(v-bot)/(top-bot))H), x=i=> Math.round(i(W/(N-1)));
 
     // BG grid
     ctx.fillStyle='#0b1220'; ctx.fillRect(0,0,W,H);
@@ -721,15 +747,19 @@
   }
 
   // Plan at specific HTF index (closed-candle logic)
-  function planTradeAtIndex(idx){
-    if(!htfCandles.length || idx==null || idx<0 || idx>=htfCandles.length) return null;
+  function planTradeForSym(sym, idx=null){
+    const htfC = htfCandlesMap[sym] || [];
+    if(!htfC.length) return null;
+    if(idx==null) idx = htfC.length-1;
+    if(idx<0 || idx>=htfC.length) return null;
     const rules = getRules();
-    const used = htfCandles.slice(0, idx+1);
+    const used = htfC.slice(0, idx+1);
     const a=analyzeHTF(used, rules); if(!a.bb) return null;
 
     let ltfC={midUp:false,midDown:false,structUp:false,structDown:false}, ltfOk=true;
-    if(ltfCandles.length){
-      ltfC=analyzeLTF(ltfCandles);
+    const ltf = ltfCandlesMap[sym] || [];
+    if(ltf.length){
+      ltfC=analyzeLTF(ltf);
       if(rules.useLTF){
         const wantDown = (a.bias==='SELL');
         const wantUp = (a.bias==='BUY');
@@ -779,16 +809,18 @@
 
   // Plan for UI (latest bar)
   function planTrade(){
-    return planTradeAtIndex(htfCandles.length-1);
+    return planTradeForSym(activeSymbol);
   }
 
   // UI update
   function updateUI(){
+    const htfCandles = htfCandlesMap[activeSymbol] || [];
+    const ltfCandles = ltfCandlesMap[activeSymbol] || [];
     const plan=planTrade(); if(!plan) return;
     drawCharts(htfCandles, plan.bb, plan.ma3, plan.stoch);
 
     const lastIdx=htfCandles.length-1;
-    kdEl.textContent = plan.stoch.k[lastIdx]!=null ? `${fmt(plan.stoch.k[lastIdx],1)} / ${fmt(plan.stoch.d[lastIdx],1)}` : '–';
+    kdEl.textContent = plan.stoch.k[lastIdx]!=null ? ${fmt(plan.stoch.k[lastIdx],1)} / ${fmt(plan.stoch.d[lastIdx],1)} : '–';
     bbwidthEl.textContent = plan.bandWidth ? fmt(plan.bandWidth,5) : '–';
     ma3El.textContent = plan.ma3[lastIdx]!=null ? fmt(plan.ma3[lastIdx],5) : '–';
     lastCloseEl.textContent = fmt(plan.lastClose,5);
@@ -810,7 +842,7 @@
 
     const stOK = (plan.bias==='SELL' && plan.comp.stochOKsell) || (plan.bias==='BUY' && plan.comp.stochOKbuy);
     stochcEl.innerHTML = plan.rules.useStoch
-      ? (stOK?`<span class="good">✓ Cross${plan.rules.stochZone?' · Zone':''}${plan.rules.stochRange?' · Range':''}${plan.rules.stochWindow?' · Recent':''}</span>`:`<span class="warn">–</span>`)
+      ? (stOK?<span class="good">✓ Cross${plan.rules.stochZone?' · Zone':''}${plan.rules.stochRange?' · Range':''}${plan.rules.stochWindow?' · Recent':''}</span>:<span class="warn">–</span>)
       : '<span class="muted">Off</span>';
 
     ltfmidEl.innerHTML = plan.rules.useLTF
@@ -834,17 +866,18 @@
   }
 
   // Signals
-  function emitSignalAtIndex(onHTFCloseEpoch, idx){
-    if(lastClosedHTFOpenTime === onHTFCloseEpoch) return; // throttle
-    const plan = planTradeAtIndex(idx);
+  function emitSignalForSym(sym, onHTFCloseEpoch, idx){
+    lastClosedHTFOpenTimeMap[sym] = lastClosedHTFOpenTimeMap[sym] || null;
+    if(lastClosedHTFOpenTimeMap[sym] === onHTFCloseEpoch) return; // throttle
+    const plan = planTradeForSym(sym, idx);
     if(!plan) return;
     if(!(plan.bias==='BUY'||plan.bias==='SELL')) return;
     if(plan.rules.useLTF && !plan.ltfOk) return;
 
-    lastClosedHTFOpenTime = onHTFCloseEpoch;
+    lastClosedHTFOpenTimeMap[sym] = onHTFCloseEpoch;
 
     const row = {
-      time: onHTFCloseEpoch, symbol: activeSymbol, side: plan.bias, entry: plan.entry, tp: plan.TP, slBand: plan.SL_band, slSwing: plan.SL_swing, conf: plan.score
+      time: onHTFCloseEpoch, symbol: sym, side: plan.bias, entry: plan.entry, tp: plan.TP, slBand: plan.SL_band, slSwing: plan.SL_swing, conf: plan.score
     };
     recentSignals.unshift(row); recentSignals = recentSignals.slice(0,50); renderSignals();
 
@@ -853,12 +886,9 @@
     if(chkAuto.checked){
       const sl = selSLType.value==='band' ? plan.SL_band : plan.SL_swing;
       if(plan.entry!=null && plan.TP!=null && sl!=null){
-        openTrade(activeSymbol, plan.bias, plan.entry, plan.TP, sl, onHTFCloseEpoch);
+        openTrade(sym, plan.bias, plan.entry, plan.TP, sl, onHTFCloseEpoch);
       }
     }
-  }
-  function emitSignalForLastClosed(epoch){
-    const idx = htfCandles.length-1; emitSignalAtIndex(epoch, idx);
   }
 
   function renderSignals(){
@@ -867,7 +897,7 @@
       const tr=document.createElement('tr');
       tr.innerHTML = `
         <td class="muted">${niceTime(s.time)}</td>
-        <td>${selSymbol.selectedOptions[0]?.textContent?.split('—')[0]?.trim() || s.symbol}</td>
+        <td>${symbolNames[s.symbol] || s.symbol}</td>
         <td>${s.side==='BUY'?'<span class="good">BUY</span>':'<span class="bad">SELL</span>'}</td>
         <td>${fmt(s.entry,5)}</td>
         <td>${fmt(s.tp,5)}</td>
@@ -880,7 +910,7 @@
 
   // Trades
   function openTrade(symbol, side, entry, tp, sl, openTime){
-    const id = `${symbol}_${openTime}_${Math.random().toString(36).slice(2,7)}`;
+    const id = ${symbol}_${openTime}_${Math.random().toString(36).slice(2,7)};
     const risk = side==='BUY' ? (entry - sl) : (sl - entry);
     const tpr = side==='BUY' ? (tp - entry) : (entry - tp);
     const rr = (risk>0 && isFinite(risk)) ? (tpr/risk) : null;
@@ -899,13 +929,13 @@
     if(beepCk.checked) beep(status==='won'?1200:300, 0.15);
   }
 
-  function updateTradesWithLTF(ohlc){
-    if(!trades.some(t=>t.status==='live')) return;
+  function updateTradesWithLTF(ohlc, symbol){
+    if(!trades.some(t=>t.status==='live' && t.symbol===symbol)) return;
     const rules = getRules();
     const cur = {high:+ohlc.high, low:+ohlc.low, close:+ohlc.close, epoch: ohlc.open_time};
     const curPrice = +ohlc.close;
     for(const t of trades){
-      if(t.status!=='live' || t.symbol!==activeSymbol) continue;
+      if(t.status!=='live' || t.symbol!==symbol) continue;
       const risk = t.side==='BUY' ? (t.entry - t.sl) : (t.sl - t.entry);
       if(risk>0){
         const rrLive = t.side==='BUY' ? ((curPrice - t.entry)/risk) : ((t.entry - curPrice)/risk);
@@ -941,14 +971,14 @@
         <td>${fmt(t.entry,5)}</td>
         <td>${fmt(t.tp,5)}</td>
         <td>${fmt(t.sl,5)}</td>
-        <td>${fmt(currentPrice(),5)}</td>
+        <td>${fmt(currentPrice(t.symbol),5)}</td>
         <td>${t.rrLive!=null && isFinite(t.rrLive)? t.rrLive.toFixed(2) : '–'}</td>
         <td><button class="btn secondary" data-close="${t.id}" style="padding:4px 8px">Close</button></td>`;
       livebody.appendChild(tr);
     }
     liveCount.textContent = live.length;
     Array.from(livebody.querySelectorAll('[data-close]')).forEach(btn=>{
-      btn.onclick=()=> closeTrade(btn.getAttribute('data-close'), 'manual', currentPrice(), nowTS());
+      btn.onclick=()=> closeTrade(btn.getAttribute('data-close'), 'manual', currentPrice(btn.closest('tr').querySelector('td:nth-child(2)').textContent), nowTS());
     });
 
     // Closed
@@ -975,12 +1005,13 @@
     const wr = (wins+losses)>0 ? ((wins/(wins+losses))*100).toFixed(1)+'%' : '–';
     const rList = basic.map(t=>t.rr).filter(x=>isFinite(x));
     const avgR = rList.length>0 ? (rList.reduce((a,b)=>a+b,0)/rList.length).toFixed(2) : '–';
-    statsEl.textContent = `Win rate: ${wr} · Avg R: ${avgR}`;
+    statsEl.textContent = Win rate: ${wr} · Avg R: ${avgR};
   }
 
-  function currentPrice(){
-    if(!ltfCandles.length) return NaN;
-    return ltfCandles[ltfCandles.length-1].close;
+  function currentPrice(sym){
+    const ltf = ltfCandlesMap[sym] || [];
+    if(!ltf.length) return NaN;
+    return ltf[ltf.length-1].close;
   }
 
   // Risk calc
@@ -1010,93 +1041,142 @@
 
   // App flow
   function start(){
-    const symbol = selSymbol.value; if(!symbol){ alert('Select a symbol'); return; }
+    const symbol = selSymbol.value; if(!symbol && !chkAutoScan.checked){ alert('Select a symbol'); return; }
     activeSymbol = symbol;
     const htf = selHTF.value, ltf = parseInt(selLTF.value,10);
-    forgetAll(); htfCandles=[]; ltfCandles=[];
-    dailyMap[symbol] = dailyMap[symbol] || [];
-    weeklyStates[symbol] = weeklyStates[symbol] || {lastEmitted:null, lastLatestEpoch:null};
-    monthlyStates[symbol] = monthlyStates[symbol] || {lastEmitted:null, lastLatestEpoch:null};
+    forgetAll(); htfCandlesMap={}; ltfCandlesMap={}; validMarkets = [];
+    const isScan = chkAutoScan.checked;
 
-    // LTF subscription (always for tracking)
-    subscribeCandles(symbol, ltf, (arr)=>{
-      ltfCandles = arr; updateUI(); renderTrades();
-    }, (o)=>{
-      const candle = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
-      mergeCandle(ltfCandles, candle);
-      updateUI();
-      updateTradesWithLTF(o);
-    });
+    if(!isScan){
+      dailyMap[activeSymbol] = dailyMap[activeSymbol] || [];
+      weeklyStates[activeSymbol] = weeklyStates[activeSymbol] || {lastEmitted:null, lastLatestEpoch:null};
+      monthlyStates[activeSymbol] = monthlyStates[activeSymbol] || {lastEmitted:null, lastLatestEpoch:null};
 
-    // HTF subscription
-    if(htf==='W'){
-      subscribeCandles(symbol, 86400, (arr)=>{
-        dailyMap[symbol] = arr.slice();
-        const weekly = weeklyFromDaily(dailyMap[symbol]);
-        htfCandles = weekly;
-        weeklyStates[symbol].lastLatestEpoch = weekly[weekly.length-1]?.epoch || null;
-        updateUI();
-      }, (o)=>{
-        const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
-        mergeCandle(dailyMap[symbol], c);
-        const weekly = weeklyFromDaily(dailyMap[symbol]);
-        const prevLatest = weeklyStates[symbol].lastLatestEpoch;
-        const newLatest = weekly[weekly.length-1]?.epoch || null;
-        htfCandles = weekly;
-        updateUI();
-        if(isClosed(o)){
-          if(newLatest !== prevLatest){
-            const closedIdx = weekly.length-2;
-            if(closedIdx>=0){
-              const closedEpoch = weekly[closedIdx].epoch;
-              if(weeklyStates[symbol].lastEmitted !== closedEpoch){
-                emitSignalAtIndex(closedEpoch, closedIdx);
-                weeklyStates[symbol].lastEmitted = closedEpoch;
+      // HTF sub
+      if(htf==='W' || htf==='M'){
+        subscribeCandles(activeSymbol, 86400, (arr)=>{
+          dailyMap[activeSymbol] = arr.slice();
+          htfCandlesMap[activeSymbol] = htf==='W' ? weeklyFromDaily(arr) : monthlyFromDaily(arr);
+          if(htf==='W') weeklyStates[activeSymbol].lastLatestEpoch = htfCandlesMap[activeSymbol][htfCandlesMap[activeSymbol].length-1]?.epoch || null;
+          if(htf==='M') monthlyStates[activeSymbol].lastLatestEpoch = htfCandlesMap[activeSymbol][htfCandlesMap[activeSymbol].length-1]?.epoch || null;
+          updateUI();
+        }, (o, {symbol})=>{
+          const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+          mergeCandle(dailyMap[activeSymbol], c);
+          const weekly = weeklyFromDaily(dailyMap[activeSymbol]);
+          const monthly = monthlyFromDaily(dailyMap[activeSymbol]);
+          htfCandlesMap[activeSymbol] = htf==='W' ? weekly : monthly;
+          updateUI();
+          if(isClosed(o)){
+            const state = htf==='W' ? weeklyStates[activeSymbol] : monthlyStates[activeSymbol];
+            const newCandles = htfCandlesMap[activeSymbol];
+            const prevLatest = state.lastLatestEpoch;
+            const newLatest = newCandles[newCandles.length-1]?.epoch || null;
+            if(newLatest !== prevLatest){
+              const closedIdx = newCandles.length-2;
+              if(closedIdx>=0){
+                const closedEpoch = newCandles[closedIdx].epoch;
+                if(state.lastEmitted !== closedEpoch){
+                  emitSignalForSym(activeSymbol, closedEpoch, closedIdx);
+                  state.lastEmitted = closedEpoch;
+                }
               }
+              state.lastLatestEpoch = newLatest;
             }
-            weeklyStates[symbol].lastLatestEpoch = newLatest;
           }
-        }
-      });
-    } else if(htf==='M'){
-      subscribeCandles(symbol, 86400, (arr)=>{
-        dailyMap[symbol] = arr.slice();
-        const monthly = monthlyFromDaily(dailyMap[symbol]);
-        htfCandles = monthly;
-        monthlyStates[symbol].lastLatestEpoch = monthly[monthly.length-1]?.epoch || null;
-        updateUI();
-      }, (o)=>{
+        });
+      } else {
+        const gran = parseInt(htf,10);
+        subscribeCandles(activeSymbol, gran, (arr)=>{
+          htfCandlesMap[activeSymbol] = arr; updateUI();
+        }, (o, {symbol})=>{
+          const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+          mergeCandle(htfCandlesMap[activeSymbol], c);
+          updateUI();
+          if(isClosed(o)){ emitSignalForSym(activeSymbol, o.open_time, htfCandlesMap[activeSymbol].length-1); }
+        });
+      }
+
+      // LTF sub
+      subscribeCandles(activeSymbol, ltf, (arr)=>{
+        ltfCandlesMap[activeSymbol] = arr; updateUI(); renderTrades();
+      }, (o, {symbol})=>{
         const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
-        mergeCandle(dailyMap[symbol], c);
-        const monthly = monthlyFromDaily(dailyMap[symbol]);
-        const prevLatest = monthlyStates[symbol].lastLatestEpoch;
-        const newLatest = monthly[monthly.length-1]?.epoch || null;
-        htfCandles = monthly;
+        mergeCandle(ltfCandlesMap[activeSymbol], c);
         updateUI();
-        if(isClosed(o)){
-          if(newLatest !== prevLatest){
-            const closedIdx = monthly.length-2;
-            if(closedIdx>=0){
-              const closedEpoch = monthly[closedIdx].epoch;
-              if(monthlyStates[symbol].lastEmitted !== closedEpoch){
-                emitSignalAtIndex(closedEpoch, closedIdx);
-                monthlyStates[symbol].lastEmitted = closedEpoch;
-              }
-            }
-            monthlyStates[symbol].lastLatestEpoch = newLatest;
-          }
-        }
+        updateTradesWithLTF(o, symbol);
       });
     } else {
-      const gran = parseInt(htf,10);
-      subscribeCandles(symbol, gran, (arr)=>{
-        htfCandles = arr; updateUI();
-      }, (o)=>{
-        const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
-        mergeCandle(htfCandles, c);
-        updateUI();
-        if(isClosed(o)){ emitSignalForLastClosed(o.open_time); }
-      });
+      const symbols = Array.from(selSymbol.options).map(o=>o.value);
+      for(const sym of symbols){
+        dailyMap[sym] = dailyMap[sym] || [];
+        weeklyStates[sym] = weeklyStates[sym] || {lastEmitted:null, lastLatestEpoch:null};
+        monthlyStates[sym] = monthlyStates[sym] || {lastEmitted:null, lastLatestEpoch:null};
+
+        // HTF sub
+        if(htf==='W' || htf==='M'){
+          subscribeCandles(sym, 86400, (arr)=>{
+            dailyMap[sym] = arr.slice();
+            htfCandlesMap[sym] = htf==='W' ? weeklyFromDaily(arr) : monthlyFromDaily(arr);
+            if(htf==='W') weeklyStates[sym].lastLatestEpoch = htfCandlesMap[sym][htfCandlesMap[sym].length-1]?.epoch || null;
+            if(htf==='M') monthlyStates[sym].lastLatestEpoch = htfCandlesMap[sym][htfCandlesMap[sym].length-1]?.epoch || null;
+            analyzeSym(sym);
+          }, (o, {symbol:sym})=>{
+            const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+            mergeCandle(dailyMap[sym], c);
+            const weekly = weeklyFromDaily(dailyMap[sym]);
+            const monthly = monthlyFromDaily(dailyMap[sym]);
+            htfCandlesMap[sym] = htf==='W' ? weekly : monthly;
+            analyzeSym(sym);
+            if(isClosed(o)){
+              const state = htf==='W' ? weeklyStates[sym] : monthlyStates[sym];
+              const newCandles = htfCandlesMap[sym];
+              const prevLatest = state.lastLatestEpoch;
+              const newLatest = newCandles[newCandles.length-1]?.epoch || null;
+              if(newLatest !== prevLatest){
+                const closedIdx = newCandles.length-2;
+                if(closedIdx>=0){
+                  const closedEpoch = newCandles[closedIdx].epoch;
+                  if(state.lastEmitted !== closedEpoch){
+                    const plan = planTradeForSym(sym, closedIdx);
+                    if(plan && (plan.bias==='BUY' || plan.bias==='SELL') && plan.ltfOk){
+                      emitSignalForSym(sym, closedEpoch, closedIdx);
+                    }
+                    state.lastEmitted = closedEpoch;
+                  }
+                }
+                state.lastLatestEpoch = newLatest;
+              }
+            }
+          });
+        } else {
+          const gran = parseInt(htf,10);
+          subscribeCandles(sym, gran, (arr)=>{
+            htfCandlesMap[sym] = arr; analyzeSym(sym);
+          }, (o, {symbol:sym})=>{
+            const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+            mergeCandle(htfCandlesMap[sym], c);
+            analyzeSym(sym);
+            if(isClosed(o)){ 
+              const idx = htfCandlesMap[sym].length-1;
+              const plan = planTradeForSym(sym, idx);
+              if(plan && (plan.bias==='BUY' || plan.bias==='SELL') && plan.ltfOk){
+                emitSignalForSym(sym, o.open_time, idx);
+              }
+            }
+          });
+        }
+
+        // LTF sub
+        subscribeCandles(sym, ltf, (arr)=>{
+          ltfCandlesMap[sym] = arr; analyzeSym(sym);
+        }, (o, {symbol:sym})=>{
+          const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
+          mergeCandle(ltfCandlesMap[sym], c);
+          analyzeSym(sym);
+          updateTradesWithLTF(o, sym);
+        });
+      }
     }
   }
 
@@ -1105,6 +1185,53 @@
   function mergeCandle(arr, c){
     const idx = arr.findIndex(x=>x.epoch===c.epoch);
     if(idx>=0) arr[idx]=c; else { arr.push(c); arr.sort((a,b)=>a.epoch-b.epoch); if(arr.length>1500) arr.splice(0, arr.length-1500); }
+  }
+
+  function analyzeSym(sym){
+    const plan = planTradeForSym(sym);
+    if(!plan) return;
+    const isValid = (plan.bias==='BUY' || plan.bias==='SELL') && plan.ltfOk;
+    const existingIdx = validMarkets.findIndex(v=>v.sym===sym);
+    if(isValid){
+      if(existingIdx===-1){
+        validMarkets.push({sym, plan});
+      } else {
+        validMarkets[existingIdx].plan = plan;
+      }
+    } else if(existingIdx!==-1){
+      validMarkets.splice(existingIdx, 1);
+    }
+    renderScanned();
+    if(chkAutoShow.checked && isValid && activeSymbol!==sym){
+      const currentPlan = planTrade();
+      if(!currentPlan || !currentPlan.ltfOk || currentPlan.bias==='NEUTRAL' || plan.score > currentPlan.score){
+        selSymbol.value = sym;
+        activeSymbol = sym;
+        updateUI();
+      }
+    }
+  }
+
+  function renderScanned(){
+    validbody.innerHTML='';
+    for(const v of validMarkets){
+      const tr=document.createElement('tr');
+      const name = symbolNames[v.sym] || v.sym;
+      tr.innerHTML = `
+        <td>${name}</td>
+        <td>${v.plan.bias==='BUY'?'<span class="good">BUY</span>':'<span class="bad">SELL</span>'}</td>
+        <td>${v.plan.score}</td>
+        <td><button class="btn secondary" data-switch="${v.sym}" style="padding:4px 8px">Show</button></td>`;
+      validbody.appendChild(tr);
+    }
+    validCount.textContent = validMarkets.length;
+    Array.from(validbody.querySelectorAll('[data-switch]')).forEach(btn=>{
+      btn.onclick=()=>{
+        selSymbol.value = btn.getAttribute('data-switch');
+        activeSymbol = selSymbol.value;
+        updateUI();
+      };
+    });
   }
 
   // Events
@@ -1116,9 +1243,11 @@
   ].forEach(ctrl => ctrl.addEventListener('change', updateUI));
   selHTF.addEventListener('change', ()=>{ stop(); start(); });
   selLTF.addEventListener('change', ()=>{ stop(); start(); });
+  chkAutoScan.addEventListener('change', ()=>{ stop(); start(); });
+  chkAutoShow.addEventListener('change', updateUI);
   btnCloseAll.addEventListener('click', ()=>{
-    const live = trades.filter(t=>t.status==='live'); const p=currentPrice(); const ts=nowTS();
-    for(const t of live){ closeTrade(t.id,'manual',p,ts); }
+    const live = trades.filter(t=>t.status==='live'); const ts=nowTS();
+    for(const t of live){ closeTrade(t.id,'manual',currentPrice(t.symbol),ts); }
   });
   btnOpen.addEventListener('click', ()=>{
     const plan = planTrade();
