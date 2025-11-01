@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>BOS Signals — Deriv API</title>
+  <style>
+    :root {
+      --bg: #0b0e11; --panel: #12161c; --panel-2: #171b22; --text: #e6e8ea; --muted: #9aa4af;
+      --green: #22c55e; --red: #ef4444; --yellow: #f59e0b; --blue: #3b82f6; --accent: #8b5cf6;
+      --card: #0f1318; --border: #232a34;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; }
+    a { color: var(--blue); text-decoration: none; }
+    .app { max-width: 1280px; margin: 0 auto; padding: 24px; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+    .title { font-weight: 700; font-size: 22px; display: flex; align-items: center; gap: 8px; }
+    .subtitle { color: var(--muted); font-size: 13px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .col { flex: 1 1 280px; min-width: 280px; }
+    .panel { background: linear-gradient(180deg, var(--panel), var(--panel-2)); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .panel h3 { margin: 0 0 8px 0; font-size: 16px; }
+    .panel h4 { margin: 12px 0 6px; font-size: 14px; color: var(--muted); }
+    .controls { display: grid; grid-template-columns: repeat(3,minmax(160px,1fr)); gap: 12px; }
+    .controls .field { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 12px; color: var(--muted); }
+    input, select, button { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; font-size: 14px; outline: none; }
+    button { cursor: pointer; transition: .15s ease; }
+    button.primary { background: linear-gradient(180deg, #1e293b, #0f172a); border-color: #334155; }
+    button.primary:hover { filter: brightness(1.1); }
+    button.danger { background: linear-gradient(180deg, #3f1d20, #2a0f11); border-color: #5b2429; }
+    .status-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; margin-right: 8px; }
+    .ok { background: var(--green); } .warn { background: var(--yellow); } .err { background: var(--red); }
+    .muted { color: var(--muted); }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.04); }
+    .badge.green { border-color: #1f4d33; background: rgba(34,197,94,0.08); color: #98f7bf; }
+    .badge.red { border-color: #4d1f1f; background: rgba(239,68,68,0.08); color: #ffb3b3; }
+    .badge.blue { border-color: #1f2c4d; background: rgba(59,130,246,0.08); color: #aac7ff; }
+    .badge.yellow { border-color: #4d421f; background: rgba(245,158,11,0.1); color: #f8e1a1; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(240px,1fr)); gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(220px,1fr)); gap: 12px; }
+    .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: grid; gap: 6px; }
+    .kpi .label { font-size: 12px; color: var(--muted); } .kpi .value { font-size: 15px; font-weight: 600; }
+    .divider { height: 1px; background: var(--border); margin: 10px 0; }
+    .log { height: 160px; overflow: auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; background: #0a0d11; border-radius: 8px; border: 1px solid var(--border); padding: 10px; font-size: 12px; color: #c9d1d9; }
+    .footer { margin-top: 18px; color: var(--muted); font-size: 12px; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 8px; }    .flex { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .right { margin-left: auto; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+    .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead { background: #0f141a; } th, td { padding: 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    .link { color: #8ab4ff; cursor: pointer; }
+    .pill { padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); background: rgba(255,255,255,0.04); font-size: 12px; }
+    .pill.green { border-color: #1f4d33; background: rgba(34,197,94,0.08); color: #98f7bf; }
+    .pill.red { border-color: #4d1f1f; background: rgba(239,68,68,0.08); color: #ffb3b3; }
+    .pill.yellow { border-color: #4d421f; background: rgba(245,158,11,0.1); color: #f8e1a1; }
+    .nowrap { white-space: nowrap; }
+    .btn-sm { padding: 6px 8px; font-size: 12px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title">🔔 BOS Signals <span class="subtitle">Bollinger + StochRSI confluence with LTF BoS (Deriv API)</span></div>
+    <div>
+      <span class="badge blue">App ID: <span id="appIdBadge">—</span></span>
+      <span id="conn-badge" class="badge yellow"><span class="status-dot warn"></span>Connecting...</span>
+    </div>
+  </header>
+
+  <div class="panel">
+    <h3>Signal Settings</h3>
+    <div class="controls" style="margin-top: 10px;">
+      <div class="field">
+        <label>Market</label>
+        <select id="marketFilter"></select>
+      </div>
+      <div class="field">
+        <label>Symbol</label>
+        <select id="symbol"></select>
+        <div class="hint" id="openClosedHint">—</div>
+      </div>
+      <div class="field">
+        <label>Higher Timeframe</label>
+        <select id="htf">
+          <option value="900">15m</option>
+          <option value="1800">30m</option>
+          <option value="3600" selected>1h</option>
+          <option value="14400">4h</option>
+          <option value="86400">1d</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Lower Timeframe</label>
+        <select id="ltf">
+          <option value="60" selected>1m</option>
+          <option value="120">2m</option>
+          <option value="180">3m</option>
+          <option value="300">5m</option>
+          <option value="600">10m</option>
+          <option value="900">15m</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Bollinger Period</label>
+        <input id="bbPeriod" type="number" min="5" max="200" value="20"/>
+      </div>
+      <div class="field">
+        <label>Bollinger StdDev</label>
+        <input id="bbMult" type="number" step="0.1" min="0.1" max="6" value="2"/>
+      </div>
+      <div class="field">
+        <label>RSI Length</label>
+        <input id="rsiLen" type="number" min="2" max="100" value="14"/>
+      </div>
+      <div class="field">
+        <label>StochRSI Length</label>
+        <input id="stochLen" type="number" min="2" max="100" value="14"/>
+      </div>
+      <div class="field">
+        <label>Smooth K</label>
+        <input id="kLen" type="number" min="1" max="20" value="3"/>
+      </div>
+      <div class="field">
+        <label>Smooth D</label>
+        <input id="dLen" type="number" min="1" max="20" value="3"/>
+      </div>
+      <div class="field">
+        <label>Overbought / Oversold</label>
+        <div class="row">
+          <input id="obLevel" type="number" min="50" max="100" value="80" style="width: 48%;"/>
+          <input id="osLevel" type="number" min="0" max="50" value="20" style="width: 48%;"/>
+        </div>
+      </div>
+      <div class="field">
+        <label>Fractal Left/Right (LTF)</label>
+        <div class="row">
+          <input id="fractL" type="number" min="1" max="5" value="2" style="width: 48%;"/>          <input id="fractR" type="number" min="1" max="5" value="2" style="width: 48%;"/>
+        </div>
+      </div>
+      <div class="field">
+        <label>History Size (candles)</label>
+        <input id="histCount" type="number" min="200" max="1500" value="500"/>
+      </div>
+    </div>
+    <div class="row" style="margin-top: 12px;">
+      <div class="flex">
+        <button id="startBtn" class="primary">Start / Update</button>
+        <button id="stopBtn" class="danger">Stop</button>
+        <span class="hint">Serve over http(s) and pass ?app_id=YOUR_APP_ID in the URL if needed.</span>
+      </div>
+      <div class="right flex">
+        <span class="badge">HTF Confluence: <strong id="confluence-badge">Pending</strong></span>
+        <span class="badge">LTF BoS: <strong id="bos-badge">Waiting</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Autoscan</h3>
+    <div class="controls">
+      <div class="field">
+        <label>Universe</label>
+        <div class="flex" style="gap:8px;">
+          <label><input type="checkbox" id="incOpen" checked /> Include Open</label>
+          <label><input type="checkbox" id="incClosed" /> Include Closed</label>
+        </div>
+        <div class="hint" id="universeSummary">Open: 0 | Closed: 0</div>
+      </div>
+      <div class="field">
+        <label>Scan Interval (seconds)</label>
+        <input id="scanInterval" type="number" min="10" value="60"/>
+      </div>
+      <div class="field">
+        <label>Max Symbols per Run</label>
+        <input id="scanMax" type="number" min="5" max="200" value="40"/>
+      </div>
+      <div class="field">
+        <label>Micro-LTF Fallback</label>
+        <div class="flex" style="gap:8px;">
+          <label><input type="checkbox" id="microLtfToggle" checked /> Scan smaller LTFs if no BoS</label>
+        </div>
+        <div class="hint">e.g., 5m → 3m → 2m → 1m</div>
+      </div>
+    </div>
+    <div class="row" style="margin-top: 12px;">
+      <div class="flex">
+        <button id="scanStartBtn" class="primary">Start Autoscan</button>
+        <button id="scanStopBtn" class="danger">Stop Autoscan</button>
+        <span id="scanStatus" class="badge yellow"><span class="status-dot warn"></span>Idle</span>
+      </div>
+      <div class="right grid-3" style="min-width: 420px;">
+        <div class="kpi"><div class="label">Last Scan</div><div class="value" id="scanLast">—</div></div>
+        <div class="kpi"><div class="label">Symbols Scanned</div><div class="value" id="scanCount">0</div></div>
+        <div class="kpi"><div class="label">Signals Found</div><div class="value" id="scanFound">0</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Scan Results</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Symbol</th>
+            <th>Status</th>
+            <th>Bias</th>
+            <th>HTF Time</th>
+            <th>Safety TP</th>
+            <th>BoS</th>
+            <th>BoS TF</th>
+            <th>Break Level</th>
+            <th>Updated</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="scanTableBody"></tbody>
+      </table>
+    </div>
+    <div class="hint">Click Go Live to stream that symbol on the panels, or enable AutoTrade for paper trades.</div>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <div class="col">
+      <div class="panel">
+        <h3>Higher Timeframe Signal</h3>
+        <div class="grid-3">
+          <div class="kpi"><div class="label">Bias</div><div class="value" id="bias">Neutral</div><div class="hint">Long if oversold + K cross↑D; Short if overbought + K cross↓D</div></div>
+          <div class="kpi"><div class="label">Bollinger Bands (last)</div><div class="value" id="bbVals">—</div><div class="hint">Lower / Mid / Upper</div></div>
+          <div class="kpi"><div class="label">Stoch RSI (last)</div><div class="value" id="stochVals">—</div><div class="hint">%K / %D</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="grid-2">          <div class="kpi"><div class="label">Confluence Status</div><div class="value" id="confluenceStatus"><span class="badge yellow">Waiting for confluence</span></div></div>
+          <div class="kpi"><div class="label">Safety TP (BB mid)</div><div class="value" id="tpMid">—</div><div class="hint">Midline from HTF at time of confluence</div></div>
+        </div>
+        <div id="htfNote" class="hint" style="margin-top:8px;">—</div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="panel">
+        <h3>Lower Timeframe Structure</h3>
+        <div class="grid-2">
+          <div class="kpi"><div class="label">Reference Swing Level</div><div class="value" id="swingRef">—</div><div class="hint">Last confirmed fractal on LTF after HTF confluence</div></div>
+          <div class="kpi"><div class="label">BoS Status</div><div class="value" id="bosStatus"><span class="badge">Waiting for HTF confluence</span></div><div class="hint">We wait for close beyond that swing level</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="grid-3">
+          <div class="kpi"><div class="label">Break Level</div><div class="value" id="breakLevel">—</div></div>
+          <div class="kpi"><div class="label">Break Time</div><div class="value" id="breakTime">—</div></div>
+          <div class="kpi"><div class="label">Current Price (LTF)</div><div class="value" id="currPrice">—</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="grid-3">
+          <div class="kpi"><div class="label">Suggested SL</div><div class="value" id="sugSL">—</div><div class="hint">Structure ± ATR buffer</div></div>
+          <div class="kpi"><div class="label">Entry (Break Close)</div><div class="value" id="entryPrice">—</div></div>
+          <div class="kpi"><div class="label">R:R to Mid TP</div><div class="value" id="rrVal">—</div></div>
+        </div>
+        <div id="slNote" class="hint" style="margin-top:8px;">—</div>
+        <div id="ltfNote" class="hint" style="margin-top:8px;">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Paper Trading</h3>
+    <div class="controls">
+      <div class="field">
+        <label>AutoTrade</label>
+        <div class="flex"><label><input type="checkbox" id="autoTradeToggle"/> Open trades for confirmed signals</label></div>
+        <div class="hint">Paper only. Opens trades up to Max Trades when BoS is confirmed and market is open.</div>
+      </div>
+      <div class="field">
+        <label>Risk per Trade (%)</label>
+        <input id="riskPct" type="number" min="0.1" step="0.1" value="1.0"/>
+      </div>
+      <div class="field">
+        <label>Max Concurrent Trades</label>
+        <input id="maxTrades" type="number" min="1" max="20" value="5"/>
+      </div>
+    </div>
+    <div class="row" style="margin-top:10px;">
+      <div class="grid-3" style="flex:1;">
+        <div class="kpi"><div class="label">Balance</div><div class="value" id="acctBalance">$10,000.00</div></div>
+        <div class="kpi"><div class="label">Equity</div><div class="value" id="acctEquity">$10,000.00</div></div>
+        <div class="kpi"><div class="label">Open PnL</div><div class="value" id="acctOpenPnl">$0.00</div></div>
+      </div>
+      <div class="grid-3" style="flex:1;">
+        <div class="kpi"><div class="label">Realized PnL</div><div class="value" id="acctRealized">$0.00</div></div>
+        <div class="kpi"><div class="label">Open Trades</div><div class="value" id="acctOpenCount">0</div></div>
+        <div class="kpi"><div class="label">Win Rate</div><div class="value" id="acctWinrate">—</div></div>
+      </div>
+      <div class="flex" style="align-items:center;">
+        <button id="closeAllBtn" class="btn-sm danger">Close All</button>
+        <button id="resetAcctBtn" class="btn-sm">Reset Account</button>
+        <span class="hint">PnL uses risk-based sizing. Educational only.</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <h4>Open Trades</h4>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>            <th>ID</th><th>Symbol</th><th>Dir</th><th>BoS TF</th><th>Entry</th><th>SL</th><th>TP</th><th>SL Method</th><th>Size</th><th>PnL</th><th>R</th><th>Since</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="openTradesBody"></tbody>
+      </table>
+    </div>
+
+    <h4 style="margin-top:12px;">Trade History</h4>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th><th>Symbol</th><th>Dir</th><th>Entry</th><th>Exit</th><th>SL</th><th>TP</th><th>Outcome</th><th>PnL</th><th>R</th><th>Hold</th>
+          </tr>
+        </thead>
+        <tbody id="tradeHistoryBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Live Log</h3>
+    <div id="log" class="log"></div>
+    <div class="footer">For education only. Trading involves risk. This is not financial advice.</div>
+  </div>
+</div>
+
+<script>
+/*
+Quick start:
+- Serve this file over http(s) (not file://).
+- Use your Deriv app_id and whitelist http://localhost in Deriv app settings.
+- Open with: http://localhost:5500/bos_signals.html?app_id=YOUR_APP_ID
+*/
+
+const URL_APP_ID = Number(new URLSearchParams(location.search).get('app_id'));
+const DEFAULT_APP_ID = 1089; // replace with your app ID if you prefer
+const APP_ID = (URL_APP_ID && !isNaN(URL_APP_ID)) ? URL_APP_ID : DEFAULT_APP_ID;
+
+const WS_HOSTS = [
+  'wss://ws.derivws.com/websockets/v3',
+  'wss://ws.binaryws.com/websockets/v3',
+];
+let WS_HOST_INDEX = 0;
+function currentWsUrl() {
+  return `${WS_HOSTS[WS_HOST_INDEX]}?app_id=${APP_ID}`;
+}
+
+// WebSocket + request/response
+let ws = null, isOpen = false;
+let REQUEST_ID = 1;
+const pending = {}; // req_id -> {res, rej}
+let openWaiters = [];
+
+// Subscriptions
+let subs = {}; // sub_id -> {role, symbol, granularity, tradeId?}
+
+// Data/state
+let symbolsAll = []; // {symbol, display_name, market, submarket, is_open}
+let filteredSymbols = [], filteredOpen = [], filteredClosed = [];
+
+let htfCandles = [], ltfCandles = [];
+let htfParams = null, ltfParams = null;
+
+let confluence = null; // {type, time, bbMid, bbLower, bbUpper}
+let bosState = null;
+
+// Autoscan
+let scanTimer = null, scanRunning = false;
+let scanStats = { last: null, count: 0, found: 0 };
+let scanResults = {}; // symbol -> row
+
+// Paper trading
+let tradeSeq = 1;
+let account = { balance: 10000, equity: 10000, openPnl: 0, realizedPnl: 0, wins: 0, losses: 0, riskPct: 1.0, maxTrades: 5, autoTrade: false };
+let openTrades = {}; // id -> position
+let tradeHistory = []; // closed trades
+
+// UI helpers
+const el = id => document.getElementById(id);
+const logEl = el('log');
+function setAppIdBadge(){ const b = el('appIdBadge'); if(b) b.textContent = String(APP_ID); }
+
+function log(...args) {
+  const s = args.map(x => typeof x === 'object' ? JSON.stringify(x) : String(x)).join(' ');
+  const time = new Date().toLocaleTimeString();
+  logEl.textContent += `[${time}] ${s}\n`;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function setConn(status) {
+  const badge = el('conn-badge');
+  if (status === 'open') { badge.innerHTML = '<span class="status-dot ok"></span>Connected'; badge.className = 'badge'; }
+  else if (status === 'connecting') { badge.innerHTML = '<span class="status-dot warn"></span>Connecting...'; badge.className = 'badge yellow'; }
+  else { badge.innerHTML = '<span class="status-dot err"></span>Disconnected'; badge.className = 'badge red'; }
+}
+function toNum(x){ return typeof x === 'string' ? parseFloat(x) : x; }
+function fmt(n) {
+  if (n == null || !isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  const fixed = abs >= 100 ? 2 : abs >= 10 ? 3 : 5;
+  let s = Number(n).toFixed(fixed);
+  s = s.replace(/(\.\d*?[1-9])0+$/,'$1').replace(/\.0+$/,'');
+  return s;
+}
+function fmtMoney(v){ if (v==null || !isFinite(v)) return '$0.00'; const s=v>=0?1:-1; v=Math.abs(v); return (s<0?'-':'')+'$'+v.toFixed(2); }
+function epochToStr(e){ try{return new Date(e*1000).toLocaleString();}catch{return '—';} }
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }function tfToLabel(s){ const v=Number(s); if(v%86400===0)return `${v/86400}d`; if(v%3600===0)return `${v/3600}h`; if(v%60===0)return `${v/60}m`; return `${v}s`; }
+
+// Markets
+const MARKET_NAMES = {
+  forex: 'Forex',
+  cryptocurrencies: 'Cryptocurrencies',
+  synthetic_index: 'Synthetic Index',
+  random_index: 'Random Index',
+  stock_indices: 'Stock Indices',
+  commodities: 'Commodities',
+  indices: 'Indices',
+};
+
+// Math/Indicators
+function SMA(values, period){
+  const out=Array(values.length).fill(null); let sum=0;
+  for(let i=0;i<values.length;i++){
+    const v=values[i]; if(v==null){out[i]=null; continue;}
+    sum+=v; if(i>=period) sum-=values[i-period];
+    if(i>=period-1) out[i]=sum/period;
+  }
+  return out;
+}
+function rollingStd(values, period){
+  const out=Array(values.length).fill(null);
+  for(let i=0;i<values.length;i++){
+    if(i>=period-1){
+      const start=i-period+1, slice=values.slice(start,i+1);
+      let sum=0,n=0; for(const v of slice){ if(v!=null){sum+=v;n++;} }
+      if(n===period){
+        const mean=sum/period; let variance=0;
+        for(const v of slice) variance += Math.pow(v-mean,2);
+        out[i]=Math.sqrt(variance/period);
+      }
+    }
+  }
+  return out;
+}
+function bollinger(closes, period, mult){
+  const ma=SMA(closes,period), sd=rollingStd(closes,period);
+  const upper=ma.map((m,i)=>m!=null&&sd[i]!=null?m+mult*sd[i]:null);
+  const lower=ma.map((m,i)=>m!=null&&sd[i]!=null?m-mult*sd[i]:null);
+  return {ma,upper,lower};
+}
+function RSI(closes, period){
+  const out=Array(closes.length).fill(null);
+  if(closes.length<period+1) return out;
+  let gains=0,losses=0;
+  for(let i=1;i<=period;i++){
+    const d=closes[i]-closes[i-1];
+    if(d>=0) gains+=d; else losses+=-d;
+  }
+  let avgGain=gains/period, avgLoss=losses/period;
+  out[period]=avgLoss===0?100:100-(100/(1+(avgGain/avgLoss)));
+  for(let i=period+1;i<closes.length;i++){
+    const d=closes[i]-closes[i-1];
+    const gain=Math.max(d,0), loss=Math.max(-d,0);
+    avgGain=(avgGain*(period-1)+gain)/period;
+    avgLoss=(avgLoss*(period-1)+loss)/period;
+    const rs=avgLoss===0?Infinity:avgGain/avgLoss;
+    out[i]=100-100/(1+rs);
+  }
+  return out;
+}
+function SMA_smooth(arr, period){
+  const out=Array(arr.length).fill(null);
+  for(let i=0;i<arr.length;i++){
+    let count=0,sum=0,j=i;
+    while(j>=0&&count<period){
+      const v=arr[j];
+      if(v!=null&&isFinite(v)){sum+=v;count++;}
+      j--;
+    }
+    if(count===period) out[i]=sum/period;
+  }
+  return out;
+}
+function stochRSI(closes, rsiLen=14, stochLen=14, kLen=3, dLen=3){
+  const rsi=RSI(closes,rsiLen);
+  const stoch=Array(closes.length).fill(null);
+  for(let i=0;i<closes.length;i++){
+    if(i>=rsiLen+stochLen-1){
+      const start=i-stochLen+1;
+      const slice=rsi.slice(start,i+1).filter(x=>x!=null);
+      if(slice.length===stochLen){
+        const min=Math.min(...slice), max=Math.max(...slice);
+        stoch[i]=(max-min)===0?0:((rsi[i]-min)/(max-min))*100;
+      }
+    }
+  }
+  const k=SMA_smooth(stoch,kLen), d=SMA_smooth(k,dLen);
+  return {rsi,stoch,k,d};
+}
+function crossedAbove(a,b,i){ return i>0 && a[i-1]!=null && b[i-1]!=null && a[i]!=null && b[i]!=null && a[i-1]<b[i-1] && a[i]>=b[i]; }
+function crossedBelow(a,b,i){ return i>0 && a[i-1]!=null && b[i-1]!=null && a[i]!=null && b[i]!=null && a[i-1]>b[i-1] && a[i]<=b[i]; }
+function ATR(candles, period=14){
+  const n=candles.length; if(n<period) return new Array(n).fill(null);
+  const tr=new Array(n).fill(null);
+  for(let i=0;i<n;i++){
+    const h=toNum(candles[i].high), l=toNum(candles[i].low), pc=i>0?toNum(candles[i-1].close):null;
+    const r1=h-l, r2=pc!=null?Math.abs(h-pc):r1, r3=pc!=null?Math.abs(l-pc):r1;
+    tr[i]=Math.max(r1,r2,r3);
+  }
+  const atr=new Array(n).fill(null);
+  let sum=0; for(let i=0;i<period;i++) sum+=tr[i];
+  atr[period-1]=sum/period;
+  for(let i=period;i<n;i++) atr[i]=(atr[i-1]*(period-1)+tr[i])/period;
+  return atr;
+}
+
+// Fractals
+function findFractals(candles, left=2, right=2){
+  const highs=[], lows=[];
+  for(let i=left;i<candles.length-right;i++){
+    let isHigh=true, isLow=true;    const h=toNum(candles[i].high), l=toNum(candles[i].low);
+    for(let j=1;j<=left;j++){
+      if(toNum(candles[i-j].high)>=h) isHigh=false;
+      if(toNum(candles[i-j].low)<=l) isLow=false;
+    }
+    for(let j=1;j<=right;j++){
+      if(toNum(candles[i+j].high)>=h) isHigh=false;
+      if(toNum(candles[i+j].low)<=l) isLow=false;
+    }
+    if(isHigh) highs.push({ index:i, time:candles[i].open_time, price:h });
+    if(isLow) lows.push({ index:i, time:candles[i].open_time, price:l });
+  }
+  return {highs, lows};
+}
+
+// Confluence detection (HTF)
+function detectHTFConfluence(candles, params){
+  const closes = candles.map(c=>toNum(c.close));
+  const bb = bollinger(closes, params.bbPeriod, params.bbMult);
+  const st = stochRSI(closes, params.rsiLen, params.stochLen, params.kLen, params.dLen);
+  const ob = params.obLevel, os = params.osLevel;
+
+  let found = null;
+  for(let i=closes.length-1;i>=0;i--){
+    if(st.k[i]!=null && st.d[i]!=null && crossedAbove(st.k, st.d, i)){
+      const minKD = Math.min(st.k[i], st.d[i]);
+      if(minKD <= os){
+        found = { type:'long', time:candles[i].open_time, bbMid:bb.ma[i], bbLower:bb.lower[i], bbUpper:bb.upper[i], index:i };
+        break;
+      }
+    }
+    if(st.k[i]!=null && st.d[i]!=null && crossedBelow(st.k, st.d, i)){
+      const maxKD = Math.max(st.k[i], st.d[i]);
+      if(maxKD >= ob){
+        found = { type:'short', time:candles[i].open_time, bbMid:bb.ma[i], bbLower:bb.lower[i], bbUpper:bb.upper[i], index:i };
+        break;
+      }
+    }
+  }
+  return { bb, st, found };
+}
+
+// LTF Break of Structure detection
+function detectLTFBoS(candles, lParams, conf){
+  if(!candles.length || !conf) return {state: {exists:false, note:'No data or confluence'}};
+  const startT = conf.time;
+  const left = Number(lParams.fractL||2), right = Number(lParams.fractR||2);
+  const {highs, lows} = findFractals(candles, left, right);
+  const dir = conf.type;
+
+  const windowEnd = candles[candles.length-1].open_time;
+  const inWinHighs = highs.filter(h => h.time >= startT && h.time <= windowEnd);
+  const inWinLows  = lows.filter(l => l.time >= startT && l.time <= windowEnd);
+
+  let ref = null;
+  if(dir==='long'){
+    ref = inWinHighs.length ? inWinHighs[inWinHighs.length-1] : null;
+  }else{
+    ref = inWinLows.length ? inWinLows[inWinLows.length-1] : null;
+  }
+
+  let level = null, refInfo = null;
+  if(ref){
+    level = ref.price;
+    refInfo = {time: ref.time, index: ref.index, price: ref.price};
+  }else{
+    const win = candles.filter(c=>c.open_time >= startT && c.open_time <= windowEnd);
+    if(!win.length) return {state:{exists:false, note:'No LTF window yet'}};
+    if(dir==='long'){
+      level = Math.max(...win.map(c=>toNum(c.high)));
+      refInfo = {time: windowEnd, index: candles.length-1, price: level};
+    }else{
+      level = Math.min(...win.map(c=>toNum(c.low)));
+      refInfo = {time: windowEnd, index: candles.length-1, price: level};
+    }
+  }
+
+  let broken = false, breakCandle = null;
+  const startIdx = refInfo.index+1;
+  for(let i=Math.max(startIdx,0); i<candles.length; i++){
+    const c = candles[i];
+    const close = toNum(c.close);
+    if(dir==='long' && close > level){ broken = true; breakCandle = c; break; }
+    if(dir==='short' && close < level){ broken = true; breakCandle = c; break; }
+  }
+
+  return {
+    state: {
+      exists: true,
+      type: dir,
+      level,
+      ref: refInfo,
+      broken,
+      breakCandle,
+      note: broken ? `Broke ${dir==='long'?'above':'below'} ${fmt(level)}` : `Waiting for close ${dir==='long'?'above':'below'} ${fmt(level)}`
+    }
+  };
+}
+
+// Risk buffer by market
+function bufferMultForMarket(mkt){
+  switch(mkt){
+    case 'forex': return 0.8;
+    case 'cryptocurrencies': return 1.2;
+    case 'synthetic_index':
+    case 'random_index': return 1.7;
+    case 'stock_indices': return 1.2;
+    case 'commodities': return 1.0;
+    default: return 1.0;
+  }
+}
+
+// Suggested SL for panel
+function computeSuggestedSL(){
+  if(!confluence || !ltfCandles.length) return null;
+  const type = confluence.type;
+  const startT = confluence.time;  const endT = bosState?.breakCandle?.open_time || ltfCandles[ltfCandles.length-1].open_time;
+
+  const left = Number(el('fractL').value), right = Number(el('fractR').value);
+  const {highs,lows} = findFractals(ltfCandles, left, right);
+  let swing = null;
+  if(type==='long'){
+    const c = lows.filter(x=>x.time>=startT && x.time<=endT);
+    swing = c.length ? c[c.length-1] : null;
+  }else{
+    const c = highs.filter(x=>x.time>=startT && x.time<=endT);
+    swing = c.length ? c[c.length-1] : null;
+  }
+  const win = ltfCandles.filter(c=>c.open_time>=startT && c.open_time<=endT);
+  if(!swing && win.length){
+    swing = type==='long'
+      ? {price: Math.min(...win.map(c=>toNum(c.low))), time:endT}
+      : {price: Math.max(...win.map(c=>toNum(c.high))), time:endT};
+  }
+
+  const atrArr = ATR(ltfCandles, 14), atr = atrArr[atrArr.length-1];
+  if(!swing || atr==null || !isFinite(atr)) return null;
+
+  const mkt = getSymbolMeta(htfParams?.symbol||ltfParams?.symbol)?.market;
+  const mult = bufferMultForMarket(mkt), buffer = mult*atr;
+  const sl = type==='long' ? (swing.price - buffer) : (swing.price + buffer);
+  const entry = bosState?.broken ? toNum(bosState.breakCandle.close) : null;
+  const tp = confluence.bbMid;
+  let rr = null;
+  if(entry!=null && tp!=null){
+    const reward = Math.abs(tp - entry);
+    const risk = type==='long' ? Math.max(entry - sl, 0) : Math.max(sl - entry, 0);
+    rr = risk>0 ? (reward/risk) : null;
+  }
+  return { sl, entry, rr, atr, buffer, mult, market:mkt, swingPrice:swing.price };
+}
+
+// Optimal SL advisor for trades
+function computeOptimalSL(conf, ltfArr, bos, mkt){
+  const type=conf.type;
+  const entry = toNum(bos.breakCandle?.close ?? bos.level);
+
+  const breakIdx = ltfArr.findIndex(c => c.open_time === bos.breakCandle?.open_time);
+  const atrArr = ATR(ltfArr, 14);
+  const atr = breakIdx>=0 ? atrArr[breakIdx] : atrArr[atrArr.length-1];
+  const mult = bufferMultForMarket(mkt);
+
+  const win=ltfArr.filter(c=>c.open_time>=conf.time && c.open_time<=bos.breakCandle.open_time);
+  const swingPrice = type==='long' ? Math.min(...win.map(c=>toNum(c.low))) : Math.max(...win.map(c=>toNum(c.high)));
+  const bbExtreme = type==='long' ? conf.bbLower : conf.bbUpper;
+  const breakCandle = bos.breakCandle;
+  const wick = type==='long' ? toNum(breakCandle.low) : toNum(breakCandle.high);
+
+  const candidates = [];
+  const sl1 = type==='long' ? (swingPrice - mult*atr) : (swingPrice + mult*atr);
+  candidates.push({ key:'StructureATR', sl: sl1 });
+  const sl2 = type==='long' ? (Math.min(wick, swingPrice) - 0.5*atr) : (Math.max(wick, swingPrice) + 0.5*atr);
+  candidates.push({ key:'BoSCandle', sl: sl2 });
+  const sl3 = type==='long' ? (Math.min(bbExtreme, swingPrice) - 0.5*atr) : (Math.max(bbExtreme, swingPrice) + 0.5*atr);
+  candidates.push({ key:'HTFBand', sl: sl3 });
+
+  const tp = conf.bbMid;
+  let best = null;
+  for(const c of candidates){
+    const risk = type==='long' ? (entry - c.sl) : (c.sl - entry);
+    const reward = Math.abs(tp - entry);
+    const rr = (risk>0) ? (reward / risk) : -Infinity;
+    const okRisk = atr && risk>=(0.25*atr) && risk<=(6*atr);
+    const score = (okRisk ? rr : rr - 2);
+    c.rr=rr; c.risk=risk; c.score=score;
+    if(!best || c.score > best.score) best=c;
+  }
+  if(!best) best = candidates[0];
+  return { sl: best.sl, method: best.key, rr: best.rr, atr, mult, entry, tp, swingPrice };
+}
+
+// Evaluate UI
+function evaluate(){
+  const params = {
+    bbPeriod:Number(el('bbPeriod').value), bbMult:Number(el('bbMult').value),
+    rsiLen:Number(el('rsiLen').value), stochLen:Number(el('stochLen').value),
+    kLen:Number(el('kLen').value), dLen:Number(el('dLen').value),
+    obLevel:Number(el('obLevel').value), osLevel:Number(el('osLevel').value),
+  };
+  if(htfCandles.length>0){
+    const res=detectHTFConfluence(htfCandles, params);
+    const last=htfCandles[htfCandles.length-1], li=htfCandles.length-1, bb=res.bb, st=res.st;
+    el('bbVals').textContent = `${fmt(bb.lower[li])} / ${fmt(bb.ma[li])} / ${fmt(bb.upper[li])}`;
+    el('stochVals').textContent = `${fmt(st.k[li])} / ${fmt(st.d[li])}`;    const sym=el('symbol').value, htfG=Number(el('htf').value);
+    el('htfNote').textContent = `Symbol: ${sym} @ HTF ${tfToLabel(htfG)} | Latest close: ${fmt(last.close)} @ ${epochToStr(last.open_time)}`;
+    if(res.found){
+      confluence={...res.found, tpMid: res.found.bbMid};
+      el('confluenceStatus').innerHTML=`<span class="badge green">Confluence: ${confluence.type.toUpperCase()} @ ${epochToStr(confluence.time)}</span>`;
+      el('bias').textContent= confluence.type==='long'?'Long bias ✅':'Short bias ✅';
+      el('tpMid').textContent=fmt(confluence.tpMid);
+      el('confluence-badge').textContent=confluence.type.toUpperCase();
+    } else {
+      el('confluenceStatus').innerHTML=`<span class="badge yellow">Waiting for confluence</span>`;
+      el('bias').textContent='Neutral';
+      el('tpMid').textContent='—';
+      el('confluence-badge').textContent='Pending';
+      confluence=null;
+    }
+  }
+  const lParams={ fractL:Number(el('fractL').value), fractR:Number(el('fractR').value) };
+  if(confluence && ltfCandles.length>0){
+    const bos=detectLTFBoS(ltfCandles, lParams, confluence); bosState=bos.state;
+    if(!bosState || !bosState.exists){
+      el('swingRef').textContent='—';
+      el('bosStatus').innerHTML=`<span class="badge yellow">Waiting for HTF confluence or swing ref</span>`;
+      el('breakLevel').textContent='—';
+      el('breakTime').textContent='—';
+      el('bos-badge').textContent='Waiting';
+      el('ltfNote').textContent= bosState?.note || '—';
+      const sug=computeSuggestedSL();
+      if(sug){
+        el('sugSL').textContent=fmt(sug.sl);
+        el('entryPrice').textContent='—';
+        el('rrVal').textContent='—';
+        el('slNote').textContent=`Buffer: ${sug.mult} × ATR(14)=${fmt(sug.atr)} | Swing: ${fmt(sug.swingPrice)} | Market: ${sug.market||'n/a'}`;
+      } else {
+        el('sugSL').textContent='—'; el('entryPrice').textContent='—'; el('rrVal').textContent='—'; el('slNote').textContent='—';
+      }
+    } else {
+      const currLTF=ltfCandles[ltfCandles.length-1];
+      const dir= bosState.type==='long'?'↑ Above':'↓ Below';
+      el('swingRef').textContent = `${dir.includes('Above')?'Swing High':'Swing Low'}: ${fmt(bosState.level)} @ ${epochToStr(bosState.ref.time)}`;
+      if(bosState.broken){
+        el('bosStatus').innerHTML=`<span class="badge green">BoS Confirmed (${bosState.type.toUpperCase()})</span>`;
+        el('breakLevel').textContent=fmt(bosState.level);
+        el('breakTime').textContent=epochToStr(bosState.breakCandle.open_time);
+        el('bos-badge').textContent='Confirmed';
+        el('ltfNote').textContent= bosState.type==='long'
+          ? `Broke above ${fmt(bosState.level)}.`
+          : `Broke below ${fmt(bosState.level)}.`;
+      } else {
+        el('bosStatus').innerHTML=`<span class="badge">Waiting for close ${dir} ${fmt(bosState.level)}</span>`;
+        el('breakLevel').textContent=fmt(bosState.level);
+        el('breakTime').textContent='—';
+        el('bos-badge').textContent='Waiting';
+        el('ltfNote').textContent=`Monitor price for a ${dir} ${fmt(bosState.level)} close.`;
+      }
+      el('currPrice').textContent=fmt(currLTF.close);
+      const sug=computeSuggestedSL();
+      if(sug){
+        el('sugSL').textContent=fmt(sug.sl);
+        el('entryPrice').textContent=sug.entry!=null?fmt(sug.entry):'—';
+        el('rrVal').textContent=sug.rr!=null?`${sug.rr.toFixed(2)}R`:'—';
+        el('slNote').textContent=`Buffer: ${sug.mult} × ATR(14)=${fmt(sug.atr)} | Swing: ${fmt(sug.swingPrice)} | Market: ${sug.market||'n/a'}`;
+      } else {
+        el('sugSL').textContent='—'; el('entryPrice').textContent='—'; el('rrVal').textContent='—'; el('slNote').textContent='—';
+      }
+    }
+  } else {
+    if(!confluence){
+      el('bosStatus').innerHTML=`<span class="badge">Waiting for HTF confluence</span>`;
+      el('swingRef').textContent='—'; el('breakLevel').textContent='—'; el('breakTime').textContent='—';
+      el('bos-badge').textContent='Waiting'; el('ltfNote').textContent='—'; el('sugSL').textContent='—';      el('entryPrice').textContent='—'; el('rrVal').textContent='—'; el('slNote').textContent='—';
+    }
+    if(ltfCandles.length>0){
+      const currLTF=ltfCandles[ltfCandles.length-1];
+      el('currPrice').textContent=fmt(currLTF.close);
+    }
+  }
+}
+
+// WS core
+function ensureWS(){
+  if(ws && (ws.readyState===0 || ws.readyState===1)) return; // already connecting/open
+  setConn('connecting');
+  const url = currentWsUrl();
+  ws = new WebSocket(url);
+  ws.onopen = () => {
+    isOpen = true; setConn('open');
+    openWaiters.splice(0).forEach(fn => { try{ fn(); }catch{} });
+    log('WS connected', url);
+    fetchActiveSymbols().catch(e=>log('Active symbols error', e?.message||e));
+  };
+  ws.onclose = (evt) => {
+    isOpen = false; setConn('disconnected');
+    log('WS disconnected', `code=${evt.code}`, `reason=${evt.reason||''}`, `url=${url}`);
+    WS_HOST_INDEX = (WS_HOST_INDEX + 1) % WS_HOSTS.length;
+    setTimeout(ensureWS, 1500);
+  };
+  ws.onerror = (e) => { log('WS error', e?.message||''); };
+  ws.onmessage = (evt) => {
+    let msg;
+    try { msg = JSON.parse(evt.data); } catch(e) { return; }
+
+    if(msg.error){ log('API error', msg.error.message || JSON.stringify(msg.error)); }
+
+    if(msg.req_id && pending[msg.req_id]){
+      pending[msg.req_id].res(msg);
+      delete pending[msg.req_id];
+      return;
+    }
+
+    const type = msg.msg_type;
+    if(type === 'ohlc' && msg.ohlc){
+      const subId = msg.subscription?.id;
+      const sRec = subs[subId];
+      if(!sRec) return;
+      const o = normalizeOhlc(msg.ohlc);
+      if(sRec.role === 'HTF'){
+        updateSeries(htfCandles, o); evaluate();
+      } else if(sRec.role === 'LTF'){
+        updateSeries(ltfCandles, o); evaluate();
+      } else if(sRec.role === 'TRADE' && sRec.tradeId){
+        const t = openTrades[sRec.tradeId];
+        if(t){
+          t.lastOhlc = o;
+          updateTradePnL(t);
+          checkTradeExits(t);
+        }
+      }
+    }
+  };
+}
+
+function waitUntilOpen() {
+  return new Promise((resolve) => {
+    if (isOpen) return resolve();
+    openWaiters.push(resolve);
+  });
+}
+
+async function sendRequest(payload){
+  if(!ws || ws.readyState !== 1) ensureWS();
+  if(!isOpen) await waitUntilOpen();
+  return new Promise((res, rej) => {
+    const req_id = REQUEST_ID++;
+    pending[req_id] = {res, rej};
+    const msg = { ...payload, req_id };
+    try { ws.send(JSON.stringify(msg)); }
+    catch(e){ delete pending[req_id]; rej(e); }
+  });
+}
+
+function forget(subId){
+  if(!subId) return Promise.resolve();
+  return sendRequest({ forget: subId }).catch(()=>{});
+}
+async function clearSubs(){
+  const ids = Object.keys(subs);
+  for(const id of ids){ try{ await forget(id); }catch{} }
+  subs = {};
+}
+
+// Helpers for OHLC arrays
+function normalizeCandles(arr){
+  return (arr||[]).map(c => ({
+    open_time: Number(c.epoch ?? c.open_time),
+    open: toNum(c.open),
+    high: toNum(c.high),
+    low: toNum(c.low),
+    close: toNum(c.close),
+  })).sort((a,b)=>a.open_time-b.open_time);
+}
+function normalizeOhlc(o){
+  return {
+    open_time: Number(o.epoch ?? o.open_time),
+    open: toNum(o.open),
+    high: toNum(o.high),
+    low: toNum(o.low),
+    close: toNum(o.close),
+  };
+}
+function updateSeries(series, o){
+  if(!series.length){ series.push(o); return; }
+  const last = series[series.length-1];
+  if(o.open_time === last.open_time) series[series.length-1] = o;
+  else if(o.open_time > last.open_time) series.push(o);
+}
+
+// Symbol universe
+async function fetchActiveSymbols(){
+  const resp = await sendRequest({ active_symbols:'full' });
+  const list = resp.active_symbols || [];
+  symbolsAll = list.map(s=>({
+    symbol:s.symbol, display_name:s.display_name, market:s.market, submarket:s.submarket, is_open: s.exchange_is_open !== false
+  }));
+  populateMarkets(); applyMarketFilter();
+}
+function populateMarkets(){
+  const sel=el('marketFilter');
+  const markets=Array.from(new Set(symbolsAll.map(s=>s.market))).sort();
+  sel.innerHTML='';
+  const optAll=document.createElement('option'); optAll.value=''; optAll.textContent='All Markets';
+  sel.appendChild(optAll);
+  for(const m of markets){    const opt=document.createElement('option');
+    opt.value=m; opt.textContent=MARKET_NAMES[m] || (m? m.replace('_',' ').replace(/\b\w/g,c=>c.toUpperCase()):'Unknown');
+    sel.appendChild(opt);
+  }
+  sel.addEventListener('change', applyMarketFilter);
+  sel.value = markets.includes('forex') ? 'forex' : '';
+}
+function applyMarketFilter(){
+  const market = el('marketFilter').value;
+  filteredSymbols = symbolsAll.filter(s=>!market || s.market===market);
+  filteredOpen = filteredSymbols.filter(s=>s.is_open);
+  filteredClosed = filteredSymbols.filter(s=>!s.is_open);
+  populateSymbolSelect(); updateUniverseSummary();
+}
+function populateSymbolSelect(){
+  const sel=el('symbol'); sel.innerHTML='';
+  const ogOpen=document.createElement('optgroup'); ogOpen.label=`Open (${filteredOpen.length})`;
+  filteredOpen.forEach(s=>{
+    const opt=document.createElement('option'); opt.value=s.symbol; opt.textContent=`${s.display_name} (${s.symbol})`;
+    ogOpen.appendChild(opt);
+  });
+  sel.appendChild(ogOpen);
+  const ogClosed=document.createElement('optgroup'); ogClosed.label=`Closed (${filteredClosed.length})`;
+  filteredClosed.forEach(s=>{
+    const opt=document.createElement('option'); opt.value=s.symbol; opt.textContent=`${s.display_name} (${s.symbol})`;
+    ogClosed.appendChild(opt);
+  });
+  sel.appendChild(ogClosed);
+  const def=filteredOpen[0] || filteredClosed[0]; if(def) sel.value=def.symbol;
+  const meta=getSymbolMeta(sel.value); el('openClosedHint').textContent = meta?.is_open ? 'Market Status: OPEN' : 'Market Status: CLOSED';
+}
+function updateUniverseSummary(){ el('universeSummary').textContent=`Open: ${filteredOpen.length} | Closed: ${filteredClosed.length}`; }
+function getSymbolMeta(sym){ return symbolsAll.find(s=>s.symbol===sym); }
+
+// One-shot candles
+async function fetchCandlesOnce(symbol, granularity, count){
+  const req={ ticks_history:symbol, end:'latest', count, granularity, style:'candles' };
+  const resp=await sendRequest(req);
+  return normalizeCandles(resp.candles||[]);
+}
+
+// Subscriptions
+async function subscribeCandles(symbol, granularity, count, role){
+  const resp = await sendRequest({
+    ticks_history: symbol,
+    end: 'latest',
+    count,
+    granularity,
+    style: 'candles',
+    subscribe: 1
+  });
+  const subId = resp.subscription?.id;
+  if(!subId){ log('Subscribe failed (no sub id)', role, symbol, granularity); return; }
+  subs[subId] = { role, symbol, granularity };
+
+  const arr = normalizeCandles(resp.candles||[]);
+  if(role==='HTF'){
+    htfCandles = arr;
+  } else if(role==='LTF'){
+    ltfCandles = arr;
+  }
+  evaluate();
+  log('Subscribed', role, symbol, tfToLabel(granularity), 'sub_id=', subId);
+}
+
+async function subscribeTrade(symbol, granularity, count, tradeId){
+  const resp = await sendRequest({
+    ticks_history: symbol,
+    end: 'latest',
+    count,
+    granularity,
+    style: 'candles',
+    subscribe: 1
+  });
+  const subId = resp.subscription?.id;
+  if(!subId) return;
+  subs[subId] = { role:'TRADE', symbol, granularity, tradeId };
+  const arr = normalizeCandles(resp.candles||[]);
+  const t = openTrades[tradeId];
+  if(t && arr.length){
+    t.lastOhlc = arr[arr.length-1];
+    updateTradePnL(t);
+  }
+  log('Subscribed TRADE', symbol, tfToLabel(granularity), 'sub_id=', subId, 'trade=', tradeId);
+}
+
+// Live controls
+async function start(){
+  const symbol = el('symbol').value.trim();
+  const htf = Number(el('htf').value), ltf = Number(el('ltf').value), histCount = Number(el('histCount').value);
+  if(!symbol){ alert('Please select a symbol'); return; }
+  const meta=getSymbolMeta(symbol); el('openClosedHint').textContent = meta?.is_open ? 'Market Status: OPEN' : 'Market Status: CLOSED';
+
+  confluence=null; bosState=null; htfCandles=[]; ltfCandles=[];
+  el('bbVals').textContent='—'; el('stochVals').textContent='—';
+  el('confluenceStatus').innerHTML=`<span class="badge yellow">Waiting for confluence</span>`;
+  el('bias').textContent='Neutral'; el('tpMid').textContent='—'; el('confluence-badge').textContent='Pending';  el('swingRef').textContent='—'; el('bosStatus').innerHTML=`<span class="badge">Waiting for HTF confluence</span>`;
+  el('breakLevel').textContent='—'; el('breakTime').textContent='—'; el('bos-badge').textContent='Waiting';
+  el('currPrice').textContent='—'; el('htfNote').textContent='—'; el('ltfNote').textContent='—';
+  el('sugSL').textContent='—'; el('entryPrice').textContent='—'; el('rrVal').textContent='—'; el('slNote').textContent='—';
+
+  htfParams={symbol, granularity:htf, histCount}; ltfParams={symbol, granularity:ltf, histCount};
+
+  await clearSubs();
+  await subscribeCandles(symbol, htf, histCount, 'HTF');
+  await subscribeCandles(symbol, ltf, histCount, 'LTF');
+}
+function stop(){ clearSubs().then(()=>log('Stopped all subscriptions.')); }
+
+// Autoscan helpers
+function updateScanKPIs(){
+  el('scanLast').textContent = scanStats.last ? new Date(scanStats.last).toLocaleTimeString() : '—';
+  el('scanCount').textContent=String(scanStats.count);
+  el('scanFound').textContent=String(scanStats.found);
+}
+function setScanStatus(state){
+  const b=el('scanStatus');
+  if(state==='running'){ b.innerHTML='<span class="status-dot ok"></span>Running'; b.className='badge'; }
+  else if(state==='idle'){ b.innerHTML='<span class="status-dot warn"></span>Idle'; b.className='badge yellow'; }
+  else { b.innerHTML='<span class="status-dot err"></span>Stopped'; b.className='badge red'; }
+}
+function renderScanTable(){
+  const tbody=el('scanTableBody');
+  const rows = Object.values(scanResults).sort((a,b)=>{
+    const sa=(a.bos?2:1)+(a.is_open?0.1:0), sb=(b.bos?2:1)+(b.is_open?0.1:0);
+    if(sa!==sb) return sb-sa;
+    return (b.updated||0)-(a.updated||0);
+  }).map(r=>{
+    const bosPill = r.bos?'<span class="pill green">Confirmed</span>':'<span class="pill yellow">Waiting</span>';
+    const biasPill = r.bias?`<span class="pill ${r.bias==='long'?'green':'red'}">${r.bias==='long'?'LONG':'SHORT'}</span>`:'—';
+    const statusPill = r.is_open?'<span class="pill green">OPEN</span>':'<span class="pill red">CLOSED</span>';
+    const bosTfLabel = r.bos_tf? tfToLabel(r.bos_tf) : '—';
+    return `<tr>
+      <td class="nowrap">${r.display||r.symbol}</td>
+      <td>${statusPill}</td>
+      <td>${biasPill}</td>
+      <td class="nowrap">${epochToStr(r.time) || '—'}</td>
+      <td>${fmt(r.tpMid)}</td>
+      <td>${bosPill}</td>
+      <td>${bosTfLabel}</td>
+      <td>${r.breakLevel?fmt(r.breakLevel):'—'}</td>
+      <td class="nowrap">${r.updated? new Date(r.updated).toLocaleTimeString():'—'}</td>
+      <td><span class="link" data-golive="${r.symbol}">Go Live</span></td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows || `<tr><td colspan="10" class="muted">No signals yet.</td></tr>`;
+}
+function lowerTfChain(selected){
+  const allowed=[900,600,300,180,120,60]; // 15m,10m,5m,3m,2m,1m
+  const sel=Number(selected);
+  const chain=allowed.filter(v=>v<=sel);
+  return chain.sort((a,b)=>b-a);
+}
+
+async function scanBoSWithFallback(symbol, conf, selectedLtf, lParams, histCount, enableMicro){
+  const ltfs = enableMicro ? lowerTfChain(selectedLtf) : [Number(selectedLtf)];
+  let result={ bos:false, bos_tf:null, st:null, ltfArr:null };
+  for(const tf of ltfs){
+    try{
+      const l = await fetchCandlesOnce(symbol, tf, histCount);
+      const bos=detectLTFBoS(l, lParams, conf); const st=bos?.state;
+      if(st?.exists && st.broken){ result={ bos:true, bos_tf:tf, st, ltfArr:l }; break; }
+      else if(st?.exists && !result.st){ result={ bos:false, bos_tf:null, st, ltfArr:l }; }
+      await sleep(60);
+    }catch(e){ log('Micro-LTF scan error', symbol, tfToLabel(tf), e?.message||e); }
+  }
+  return result;
+}
+
+async function scanOnce(){
+  const htf=Number(el('htf').value), ltf=Number(el('ltf').value), histCount=Number(el('histCount').value);
+  const max=Number(el('scanMax').value), microToggle=el('microLtfToggle').checked;  const params={ bbPeriod:Number(el('bbPeriod').value), bbMult:Number(el('bbMult').value), rsiLen:Number(el('rsiLen').value), stochLen:Number(el('stochLen').value), kLen:Number(el('kLen').value), dLen:Number(el('dLen').value), obLevel:Number(el('obLevel').value), osLevel:Number(el('osLevel').value) };
+  const lParams={ fractL:Number(el('fractL').value), fractR:Number(el('fractR').value) };
+  const incOpen=el('incOpen').checked, incClosed=el('incClosed').checked;
+  let universe=[]; if(incOpen) universe=universe.concat(filteredOpen); if(incClosed) universe=universe.concat(filteredClosed); if(!incOpen && !incClosed) universe=filteredOpen.slice();
+  universe=universe.slice(0,max);
+  scanStats.count=0; let found=0;
+  for(const s of universe){
+    if(!scanRunning) break;
+    try{
+      const h = await fetchCandlesOnce(s.symbol, htf, histCount);
+      if(!h.length) continue;
+      const hRes = detectHTFConfluence(h, params);
+      if(hRes.found){
+        const fb = await scanBoSWithFallback(s.symbol, {...hRes.found}, ltf, lParams, histCount, microToggle);
+        scanResults[s.symbol] = {
+          symbol:s.symbol, display:s.display_name, is_open:s.is_open, bias:hRes.found.type, time:hRes.found.time, tpMid:hRes.found.bbMid,
+          bos: fb.bos, bos_tf: fb.bos_tf, breakLevel: fb.st?.level, breakTime: fb.st?.breakCandle?.open_time, updated:Date.now(),
+          _conf: hRes.found, _st: fb.st, _ltfArr: fb.ltfArr
+        };
+        found++; renderScanTable();
+
+        if(account.autoTrade && s.is_open && fb.bos && countOpenTrades() < account.maxTrades && !hasOpenTradeOnSymbol(s.symbol)){
+          try{ openPaperTradeFromScan(scanResults[s.symbol]); } catch(e){ log('Open trade error', e?.message||e); }
+        }
+      }
+    }catch(e){ log('Scan error', s.symbol, e?.message||e); }
+    scanStats.count++; await sleep(200);
+  }
+  scanStats.found=found; scanStats.last=Date.now(); updateScanKPIs(); renderScanTable();
+}
+function startAutoscan(){ if(scanRunning) return; scanRunning=true; setScanStatus('running'); (async function loop(){ if(!scanRunning) return; await scanOnce(); const interval=Math.max(10, Number(el('scanInterval').value))*1000; if(!scanRunning) return; scanTimer=setTimeout(loop, interval); })(); }
+function stopAutoscan(){ scanRunning=false; if(scanTimer) clearTimeout(scanTimer); scanTimer=null; setScanStatus('idle'); }
+
+// Paper trading core
+function countOpenTrades(){ return Object.keys(openTrades).length; }
+function hasOpenTradeOnSymbol(symbol){ return Object.values(openTrades).some(t=>t.symbol===symbol && t.status==='OPEN'); }
+function updateAccountUI(){
+  el('acctBalance').textContent = fmtMoney(account.balance);
+  el('acctOpenPnl').textContent = fmtMoney(account.openPnl);
+  el('acctRealized').textContent = fmtMoney(account.realizedPnl);
+  account.equity = account.balance + account.openPnl;
+  el('acctEquity').textContent = fmtMoney(account.equity);
+  el('acctOpenCount').textContent = String(countOpenTrades());
+  const total = account.wins + account.losses;
+  el('acctWinrate').textContent = total>0 ? `${(account.wins*100/total).toFixed(1)}%` : '—';
+}
+function renderOpenTrades(){
+  const tbody=el('openTradesBody');
+  const rows = Object.values(openTrades).map(t=>{
+    const dir=t.type==='long'?'LONG':'SHORT';
+    const rr = t.stopDist>0 ? ((Math.abs(t.tp - t.entry))/t.stopDist).toFixed(2)+'R' : '—';
+    const rNow = t.stopDist>0 ? ((t.unrealized / t.riskAmt)).toFixed(2)+'R' : '—';
+    const since = t.openTime ? `${((Date.now()/1000 - t.openTime)/60).toFixed(1)}m` : '—';
+    return `<tr>
+      <td>${t.id}</td>
+      <td>${t.symbol}</td>
+      <td>${dir}</td>
+      <td>${tfToLabel(t.ltf)}</td>
+      <td>${fmt(t.entry)}</td>
+      <td>${fmt(t.sl)}</td>
+      <td>${fmt(t.tp)}</td>
+      <td>${t.slMethod}</td>
+      <td>${fmt(t.size)}</td>
+      <td>${fmtMoney(t.unrealized)}</td>
+      <td>${rNow}</td>
+      <td>${since}</td>
+      <td><button class="btn-sm danger" data-close="${t.id}">Close</button></td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows || `<tr><td colspan="13" class="muted">No open trades.</td></tr>`;
+}function renderTradeHistory(){
+  const tbody=el('tradeHistoryBody');
+  const rows = tradeHistory.slice(-200).reverse().map(h=>{
+    const dir=h.type==='long'?'LONG':'SHORT';
+    const hold = h.holdMins!=null? `${h.holdMins.toFixed(1)}m`:'—';
+    const outPill = h.outcome==='TP'?'<span class="pill green">TP</span>': h.outcome==='SL'?'<span class="pill red">SL</span>':'<span class="pill yellow">MANUAL</span>';
+    const rVal = h.riskAmt>0 ? (h.pnl / h.riskAmt).toFixed(2)+'R' : '—';
+    return `<tr>
+      <td class="nowrap">${epochToStr(h.openTime)}</td>
+      <td>${h.symbol}</td>
+      <td>${dir}</td>
+      <td>${fmt(h.entry)}</td>
+      <td>${fmt(h.exitPrice)}</td>
+      <td>${fmt(h.sl)}</td>
+      <td>${fmt(h.tp)}</td>
+      <td>${outPill}</td>
+      <td>${fmtMoney(h.pnl)}</td>
+      <td>${rVal}</td>
+      <td>${hold}</td>
+    </tr>`;
+  }).join('');
+  tbody.innerHTML = rows || `<tr><td colspan="11" class="muted">No history yet.</td></tr>`;
+}
+function updateTradePnL(t){
+  if(!t.lastOhlc) return;
+  const price = toNum(t.lastOhlc.close);
+  const dir = (t.type==='long')? 1 : -1;
+  t.unrealized = (price - t.entry) * dir * t.size;
+  account.openPnl = Object.values(openTrades).reduce((s,x)=>s+(x.unrealized||0),0);
+  updateAccountUI();
+  renderOpenTrades();
+}
+function checkTradeExits(t){
+  if(!t.lastOhlc) return;
+  const c=t.lastOhlc;
+  const hitSL = (t.type==='long') ? (c.low<=t.sl) : (c.high>=t.sl);
+  const hitTP = (t.type==='long') ? (c.high>=t.tp) : (c.low<=t.tp);
+  if(hitSL || hitTP){
+    const outcome = hitSL ? 'SL' : 'TP';
+    const exitPrice = hitSL ? (t.sl) : (t.tp);
+    closeTrade(t.id, outcome, exitPrice);
+  }
+}
+function openPaperTradeFromScan(r){
+  const conf=r._conf, st=r._st, ltfArr=r._ltfArr, mkt=getSymbolMeta(r.symbol)?.market;
+  if(!conf || !st || !ltfArr) return;
+  const opt = computeOptimalSL(conf, ltfArr, st, mkt);
+  const entry = opt.entry, sl=opt.sl, tp=opt.tp, method=opt.method;
+  const stopDist = (conf.type==='long') ? (entry - sl) : (sl - entry);
+  if(!(stopDist>0)){ log('Skip trade (invalid stop distance)', r.symbol); return; }
+  const riskAmt = account.equity * (account.riskPct/100);
+  const size = riskAmt / stopDist;
+  const id = tradeSeq++;
+  const t = {
+    id, symbol:r.symbol, type:conf.type, ltf:r.bos_tf || Number(el('ltf').value),
+    entry, sl, tp, slMethod:method, size, riskAmt, stopDist,
+    openTime: st.breakCandle?.open_time || Math.floor(Date.now()/1000), status:'OPEN',
+    unrealized:0, lastOhlc:null
+  };
+  openTrades[id]=t;
+  subscribeTrade(t.symbol, t.ltf, 300, id);
+  log('Opened paper trade', { id, symbol:t.symbol, type:t.type, entry, sl, tp, size:fmt(size), method });
+  renderOpenTrades(); updateTradePnL(t);
+}
+function closeTrade(id, outcome='MANUAL', exitPrice=null){
+  const t=openTrades[id]; if(!t) return;
+  const px = exitPrice!=null ? exitPrice : (t.lastOhlc? toNum(t.lastOhlc.close) : t.entry);
+  const dir = (t.type==='long')?1:-1;
+  const pnl = (px - t.entry) * dir * t.size;
+  account.balance += pnl;
+  account.realizedPnl += pnl;
+  if(outcome==='TP') account.wins++; else if(outcome==='SL') account.losses++;
+  const holdMins = t.openTime ? ((Math.floor(Date.now()/1000)-t.openTime)/60) : null;
+  tradeHistory.push({ symbol:t.symbol, type:t.type, entry:t.entry, exitPrice:px, sl:t.sl, tp:t.tp, pnl, riskAmt:t.riskAmt, outcome, openTime:t.openTime, holdMins });
+  for(const idSub in subs){
+    const s=subs[idSub];
+    if(s.role==='TRADE' && s.symbol===t.symbol && s.granularity===t.ltf){
+      forget(idSub); delete subs[idSub];
+    }
+  }
+  delete openTrades[id];
+  log(`Closed trade #${id} ${t.symbol} ${outcome} PnL=${fmtMoney(pnl)}`);
+  account.openPnl = Object.values(openTrades).reduce((s,x)=>s+(x.unrealized||0),0);
+  updateAccountUI(); renderOpenTrades(); renderTradeHistory();
+}
+function closeAllTrades(){ Object.keys(openTrades).forEach(id=>closeTrade(Number(id),'MANUAL')); }
+function resetAccount(){
+  closeAllTrades();
+  account = {
+    balance: 10000, equity: 10000, openPnl: 0, realizedPnl: 0, wins: 0, losses: 0,
+    riskPct: Number(el('riskPct').value) || 1.0,    maxTrades: Number(el('maxTrades').value) || 5,
+    autoTrade: el('autoTradeToggle').checked
+  };
+  tradeHistory = [];
+  updateAccountUI(); renderTradeHistory(); renderOpenTrades();
+}
+
+// Events
+el('startBtn').addEventListener('click', start);
+el('stopBtn').addEventListener('click', () => { stop(); });
+
+el('scanStartBtn').addEventListener('click', startAutoscan);
+el('scanStopBtn').addEventListener('click', stopAutoscan);
+document.getElementById('scanTableBody').addEventListener('click', (e)=>{
+  const sym=e.target?.dataset?.golive;
+  if(sym){
+    el('symbol').value=sym;
+    const meta=getSymbolMeta(sym);
+    el('openClosedHint').textContent= meta?.is_open?'Market Status: OPEN':'Market Status: CLOSED';
+    stopAutoscan(); start();
+  }
+});
+
+el('incOpen').addEventListener('change', updateUniverseSummary);
+el('incClosed').addEventListener('change', updateUniverseSummary);
+el('symbol').addEventListener('change', ()=>{
+  const meta=getSymbolMeta(el('symbol').value);
+  el('openClosedHint').textContent= meta?.is_open?'Market Status: OPEN':'Market Status: CLOSED';
+});
+
+el('autoTradeToggle').addEventListener('change', (e)=>{ account.autoTrade = e.target.checked; });
+el('riskPct').addEventListener('change', (e)=>{ const v=Number(e.target.value); if(v>0) account.riskPct=v; });
+el('maxTrades').addEventListener('change', (e)=>{ const v=Number(e.target.value); if(v>0) account.maxTrades=v; });
+el('closeAllBtn').addEventListener('click', closeAllTrades);
+el('resetAcctBtn').addEventListener('click', resetAccount);
+document.getElementById('openTradesBody').addEventListener('click', (e)=>{
+  const id=e.target?.dataset?.close; if(id){ closeTrade(Number(id),'MANUAL'); }
+});
+
+// Init
+setAppIdBadge();
+ensureWS();
+updateAccountUI(); renderOpenTrades(); renderTradeHistory();
+
+// Heartbeat
+setInterval(()=>{ if(isOpen){ try{ ws.send(JSON.stringify({ping:1})); }catch{} } }, 30000);
+</script>
+</body>
+</html>
