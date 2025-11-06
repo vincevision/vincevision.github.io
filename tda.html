@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Institutional Timeframe Planner — Top‑Down Analysis</title>
+  <style>
+    :root {
+      --bg:#0b0e11; --panel:#12161c; --panel2:#171b22; --text:#e6e8ea; --muted:#9aa4af;
+      --green:#22c55e; --red:#ef4444; --yellow:#f59e0b; --blue:#3b82f6; --border:#232a34; --card:#0f1318;
+      --accent:#8ab4ff;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .app{max-width:1100px;margin:0 auto;padding:22px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+    .title{font-weight:700;font-size:22px}
+    .subtitle{color:var(--muted);font-size:12px}
+    .panel{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px}
+    .panel h3{margin:0 0 10px 0;font-size:16px}
+    .controls{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:12px}
+    .controls.wide{grid-template-columns:repeat(2,minmax(220px,1fr))}
+    .field{display:flex;flex-direction:column;gap:6px}
+    label{font-size:12px;color:var(--muted)}
+    input,select,button,textarea{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:9px 10px;font-size:14px}
+    button{cursor:pointer;transition:.15s}
+    button.primary{background:linear-gradient(180deg,#1e293b,#0f172a);border-color:#334155}
+    button.primary:hover{filter:brightness(1.06)}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    .right{margin-left:auto}
+    .hint{color:var(--muted);font-size:12px}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px;border:1px solid var(--border);background:rgba(255,255,255,.05)}
+    .stack{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:8px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:6px}
+    .label{font-size:12px;color:var(--muted)}
+    .value{font-weight:700}
+    .caps{letter-spacing:.4px;text-transform:uppercase}
+    .kicker{color:#cbd5e1}
+    .pill{display:inline-block;background:#0f172a;border:1px solid #334155;border-radius:999px;padding:4px 8px;font-size:12px;color:#cbd5e1}
+    .copy{color:var(--accent);cursor:pointer}
+    .grid-2{display:grid;grid-template-columns:repeat(2,minmax(220px,1fr));gap:10px}
+    .foot{color:var(--muted);font-size:12px;margin-top:12px}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div>
+      <div class="title">🏛️ Institutional Timeframe Planner</div>
+      <div class="subtitle">Auto-suggests clean top‑down stacks for analysis and execution (Anchor → Bias → Structure → Setup → Execution)</div>
+    </div>
+    <div class="row">
+      <span class="badge">Shareable URL ready</span>
+    </div>
+  </header>
+
+  <div class="panel">
+    <h3>Planner Controls</h3>
+    <div class="controls">
+      <div class="field">
+        <label>Trading Style</label>
+        <select id="style">
+          <option value="intraday" selected>Intraday (hours)</option>
+          <option value="scalper">Scalper (minutes)</option>
+          <option value="swing">Swing (days)</option>
+          <option value="position">Position (weeks+)</option>
+        </select>
+        <div class="hint">Pick a style OR set your preferred Setup (entry) timeframe below.</div>
+      </div>
+
+      <div class="field">
+        <label>Preferred Setup Timeframe (optional)</label>
+        <select id="setupTf">
+          <option value="">— auto from style —</option>
+          <option value="1m">1m</option>
+          <option value="3m">3m</option>
+          <option value="5m">5m</option>
+          <option value="10m">10m</option>
+          <option value="15m">15m</option>
+          <option value="20m">20m</option>
+          <option value="30m">30m</option>
+          <option value="1h">1h</option>
+          <option value="2h">2h</option>
+          <option value="4h">4h</option>
+        </select>
+        <div class="hint">Example: choose 15m if you like executing on 15m.</div>
+      </div>
+
+      <div class="field">
+        <label>Platform Availability</label>
+        <select id="platform">
+          <option value="standard" selected>Standard (MT4/MT5/CFDs): 1m,5m,15m,30m,1h,4h,1d,1w,1M</option>
+          <option value="extended">Extended (TradingView-like): adds 2m,3m,10m,20m,2h,8h</option>
+        </select>
+        <div class="hint">Unavailable frames (e.g., 8h) will snap to nearest available.</div>
+      </div>
+
+      <div class="field">
+        <label>Execution Detail</label>
+        <select id="execDetail">
+          <option value="normal" selected>Balanced</option>
+          <option value="fine">Finer (one step lower exec)</option>
+          <option value="coarse">Coarser (same as setup)</option>
+        </select>
+        <div class="hint">Controls Execution granularity vs Setup.</div>
+      </div>
+
+      <div class="field">
+        <label>Number of Levels</label>
+        <select id="levels">
+          <option value="5" selected>5 (Anchor, Bias, Structure, Setup, Execution)</option>
+          <option value="4">4 (Anchor, Bias, Setup, Execution)</option>
+          <option value="3">3 (Bias, Setup, Execution)</option>
+        </select>
+        <div class="hint">Hide intermediate level(s) if you want a simpler stack.</div>
+      </div>
+
+      <div class="field">
+        <label>Preset Examples</label>
+        <select id="preset">
+          <option value="">— choose —</option>
+          <option value="ict-intraday">ICT‑style Intraday: D1→H4→H1→15m→5m</option>
+          <option value="ict-scalp">ICT‑style Scalp: H4→H1→15m→5m→1m</option>
+          <option value="swing-classic">Swing Classic: W1→D1→H4→H1→15m</option>
+          <option value="position-classic">Position: MN→W1→D1→H4→H1</option>
+        </select>
+        <div class="hint">Quickly load a popular stack.</div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <button id="buildBtn" class="primary">Build Stack</button>
+      <span class="badge">Tip: You can also change inputs and it updates automatically.</span>
+      <span class="right copy" id="copyUrl">Copy shareable URL</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Your Top‑Down Stack</h3>
+    <div id="stackWrap" class="stack">
+      <!-- Cards inserted by JS -->
+    </div>
+    <div class="row" style="margin-top:10px">
+      <div class="badge">Reasoning:
+        <span id="reason" class="kicker" style="margin-left:6px">—</span>
+      </div>
+      <span class="right copy" id="copyText">Copy as text</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h3>Why these timeframes?</h3>
+    <div class="grid-2">
+      <div class="card">
+        <div class="label caps">Anchor</div>
+        <div class="value">Monthly/Weekly or Daily</div>
+        <div class="hint">Defines macro structure, key swing highs/lows, and premium/discount zones. You don’t trade it—use it to frame where you want to be a buyer or seller.</div>
+      </div>
+      <div class="card">
+        <div class="label caps">Bias</div>
+        <div class="value">Weekly or Daily or 4H</div>
+        <div class="hint">Sets bullish/bearish bias and HTF PD arrays. Avoid fighting a strong bias—wait for dips/rallies into draw‑on liquidity or mean reversion spots.</div>
+      </div>
+      <div class="card">
+        <div class="label caps">Structure</div>
+        <div class="value">4H / 1H</div>
+        <div class="hint">Tracks breaks of structure (BOS), fair value gaps, and the path towards your draw. Confirms your bias is “in play.”</div>
+      </div>
+      <div class="card">
+        <div class="label caps">Setup</div>
+        <div class="value">15m / 5m / 1H</div>
+        <div class="hint">Where you plan the trade: entries, stop placement, partials. Align with structure (BOS) and key levels from higher frames.</div>
+      </div>
+      <div class="card">
+        <div class="label caps">Execution</div>
+        <div class="value">5m / 1m</div>
+        <div class="hint">Fine‑tune the entry (retrace, rejection, or FVG tap) and confirm with immediate LTF flow. Helps tighten stop and improve RR.</div>
+      </div>
+    </div>
+    <div class="foot">Rule of thumb: each level down is ~3–6× faster than the previous. We target ~4× for clean handoffs (e.g., D1→H4→H1→15m→5m).</div>
+  </div>
+</div>
+
+<script>
+/* ============================
+   Timeframe definitions
+============================ */
+const TF_ORDER = [
+  {id:'1m', label:'1m', sec:60},
+  {id:'2m', label:'2m', sec:120},
+  {id:'3m', label:'3m', sec:180},
+  {id:'5m', label:'5m', sec:300},
+  {id:'10m', label:'10m', sec:600},
+  {id:'15m', label:'15m', sec:900},
+  {id:'20m', label:'20m', sec:1200},
+  {id:'30m', label:'30m', sec:1800},
+  {id:'1h', label:'1h', sec:3600},
+  {id:'2h', label:'2h', sec:7200},
+  {id:'4h', label:'4h', sec:14400},
+  {id:'8h', label:'8h', sec:28800},
+  {id:'1d', label:'1d', sec:86400},
+  {id:'1w', label:'1w', sec:604800},
+  {id:'1M', label:'1M', sec:2592000} // approx 30d
+];
+
+const TF_INDEX = Object.fromEntries(TF_ORDER.map((t,i)=>[t.id,i]));
+
+function tfById(id){ return TF_ORDER[TF_INDEX[id]]; }
+function nearestBySec(sec, availableIds){
+  // find the closest timeframe >= target sec; fallback to closest overall
+  let best=null, bestDiff=Infinity, bestGE=null, bestGEDiff=Infinity;
+  for(const id of availableIds){
+    const t=tfById(id); if(!t) continue;
+    const diff=Math.abs(t.sec-sec);
+    if(diff < bestDiff){ best=t; bestDiff=diff; }
+    if(t.sec>=sec && (t.sec-sec) < bestGEDiff){ bestGE=t; bestGEDiff=(t.sec-sec); }
+  }
+  return bestGE || best;
+}
+
+/* ============================
+   Platform availability
+============================ */
+const PLATFORM = {
+  standard: ['1m','5m','15m','30m','1h','4h','1d','1w','1M'],
+  extended: ['1m','2m','3m','5m','10m','15m','20m','30m','1h','2h','4h','8h','1d','1w','1M']
+};
+
+/* ============================
+   Style presets (institutional-ish)
+============================ */
+const STYLE_SETS = {
+  scalper:  { anchor:'4h', bias:'1h', structure:'15m', setup:'5m',  exec:'1m'  },
+  intraday: { anchor:'1d', bias:'4h', structure:'1h',  setup:'15m', exec:'5m'  },
+  swing:    { anchor:'1w', bias:'1d', structure:'4h',  setup:'1h',  exec:'15m' },
+  position: { anchor:'1M', bias:'1w', structure:'1d',  setup:'4h',  exec:'1h'  }
+};
+
+const PRESETS = {
+  'ict-intraday': { anchor:'1d', bias:'4h', structure:'1h', setup:'15m', exec:'5m' },
+  'ict-scalp':    { anchor:'4h', bias:'1h', structure:'15m', setup:'5m', exec:'1m' },
+  'swing-classic':{ anchor:'1w', bias:'1d', structure:'4h', setup:'1h', exec:'15m' },
+  'position-classic': { anchor:'1M', bias:'1w', structure:'1d', setup:'4h', exec:'1h' }
+};
+
+/* ============================
+   Core logic
+============================ */
+function availableIds(){
+  const plat = document.getElementById('platform').value || 'standard';
+  return PLATFORM[plat];
+}
+
+function snapToAvailable(id){
+  const avail = availableIds();
+  if(avail.includes(id)) return id;
+  const sec = tfById(id).sec;
+  const nearest = nearestBySec(sec, avail);
+  return nearest?.id || id;
+}
+
+function buildFromStyle(style){
+  const set = STYLE_SETS[style] || STYLE_SETS.intraday;
+  return {
+    anchor: snapToAvailable(set.anchor),
+    bias: snapToAvailable(set.bias),
+    structure: snapToAvailable(set.structure),
+    setup: snapToAvailable(set.setup),
+    exec: snapToAvailable(set.exec)
+  };
+}
+
+function buildAroundSetup(setupId){
+  const avail = availableIds();
+  const setup = tfById(setupId);
+  if(!setup) return null;
+
+  // Target ~4× each hop upward
+  const structure = nearestBySec(setup.sec * 4, avail).id;
+  const bias = nearestBySec(tfById(structure).sec * 4, avail).id;
+  const anchor = nearestBySec(tfById(bias).sec * 4, avail).id;
+
+  // Execution detail
+  const execDetail = document.getElementById('execDetail').value;
+  let execId = setupId;
+  if(execDetail==='fine'){
+    // One step down if available
+    const idx = TF_INDEX[setupId];
+    for(let j=idx-1; j>=0; j--){
+      const candidate = TF_ORDER[j].id;
+      if(avail.includes(candidate)){ execId=candidate; break; }
+    }
+  }else if(execDetail==='coarse'){
+    execId = setupId; // same as setup
+  }else{ // normal: pick nearest one step lower or same if none
+    const idx = TF_INDEX[setupId];
+    let chosen = setupId;
+    for(let j=idx-1; j>=0; j--){
+      const candidate = TF_ORDER[j].id;
+      if(avail.includes(candidate)){ chosen=candidate; break; }
+    }
+    execId = chosen;
+  }
+
+  return {
+    anchor: snapToAvailable(anchor),
+    bias: snapToAvailable(bias),
+    structure: snapToAvailable(structure),
+    setup: snapToAvailable(setupId),
+    exec: snapToAvailable(execId)
+  };
+}
+
+function applyPreset(key){
+  const p = PRESETS[key]; if(!p) return null;
+  return {
+    anchor: snapToAvailable(p.anchor),
+    bias: snapToAvailable(p.bias),
+    structure: snapToAvailable(p.structure),
+    setup: snapToAvailable(p.setup),
+    exec: snapToAvailable(p.exec)
+  };
+}
+
+function formatStackText(stack, levels=5){
+  const parts = [];
+  const push = (name,id)=>parts.push(`${name}: ${tfById(id).label}`);
+  if(levels>=5){ push('Anchor',stack.anchor); push('Bias',stack.bias); push('Structure',stack.structure); push('Setup',stack.setup); push('Execution',stack.exec); }
+  else if(levels===4){ push('Anchor',stack.anchor); push('Bias',stack.bias); push('Setup',stack.setup); push('Execution',stack.exec); }
+  else { push('Bias',stack.bias); push('Setup',stack.setup); push('Execution',stack.exec); }
+  return parts.join(' | ');
+}
+
+function reasoning(stack, levels){
+  if(levels>=5){
+    return `~4× hops: ${tfById(stack.anchor).label} → ${tfById(stack.bias).label} → ${tfById(stack.structure).label} → ${tfById(stack.setup).label} → ${tfById(stack.exec).label}. Anchor/Bias give macro direction; Structure confirms BOS; Setup/Execution refine entries.`;
+  }else if(levels===4){
+    return `Anchor → Bias (macro), then Setup → Execution (plan and trigger). Frames spaced ~4× for clean top‑down flow.`;
+  }else{
+    return `Bias sets direction; Setup/Execution refine the entry. Use higher frames for levels; ~4× spacing is ideal.`;
+  }
+}
+
+/* ============================
+   UI rendering
+============================ */
+function renderStack(stack){
+  const levels = Number(document.getElementById('levels').value||5);
+  const wrap = document.getElementById('stackWrap');
+  const show = (name, id, color)=>{
+    return `<div class="card">
+      <div class="label caps">${name}</div>
+      <div class="value" style="color:${color}">${tfById(id).label}</div>
+      <div class="hint">ID: ${id}</div>
+    </div>`;
+  };
+  let html = '';
+  if(levels>=5){
+    html += show('Anchor', stack.anchor, '#f59e0b');
+    html += show('Bias', stack.bias, '#38bdf8');
+    html += show('Structure', stack.structure, '#a78bfa');
+    html += show('Setup', stack.setup, '#22c55e');
+    html += show('Execution', stack.exec, '#ef4444');
+  }else if(levels===4){
+    html += show('Anchor', stack.anchor, '#f59e0b');
+    html += show('Bias', stack.bias, '#38bdf8');
+    html += show('Setup', stack.setup, '#22c55e');
+    html += show('Execution', stack.exec, '#ef4444');
+  }else{
+    html += show('Bias', stack.bias, '#38bdf8');
+    html += show('Setup', stack.setup, '#22c55e');
+    html += show('Execution', stack.exec, '#ef4444');
+  }
+  wrap.innerHTML = html;
+  document.getElementById('reason').textContent = reasoning(stack, levels);
+  // store for copy
+  wrap.dataset.stackText = formatStackText(stack, levels);
+}
+
+function currentStack(){
+  const preset = document.getElementById('preset').value;
+  if(preset){
+    return applyPreset(preset);
+  }
+  const setupTf = document.getElementById('setupTf').value;
+  if(setupTf){
+    return buildAroundSetup(setupTf);
+  }
+  const style = document.getElementById('style').value || 'intraday';
+  return buildFromStyle(style);
+}
+
+function update(){
+  const stack = currentStack();
+  if(stack) renderStack(stack);
+  updateURL();
+}
+
+/* ============================
+   Shareable URL + copy
+============================ */
+function updateURL(){
+  const qs = new URLSearchParams();
+  const ids = ['style','setupTf','platform','execDetail','levels','preset'];
+  ids.forEach(id=>{
+    const v = document.getElementById(id).value;
+    if(v) qs.set(id, v);
+  });
+  const url = location.origin + location.pathname + (qs.toString()? ('?'+qs.toString()):'');
+  history.replaceState(null,'',url);
+  return url;
+}
+
+function applyFromURL(){
+  const qs = new URLSearchParams(location.search);
+  const setIf = (id)=>{
+    const el = document.getElementById(id);
+    if(qs.has(id)){ el.value = qs.get(id); }
+  };
+  ['style','setupTf','platform','execDetail','levels','preset'].forEach(setIf);
+}
+
+function copy(text){
+  try{
+    navigator.clipboard.writeText(text);
+    alert('Copied!');
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); document.body.removeChild(ta);
+    alert('Copied!');
+  }
+}
+
+/* ============================
+   Boot
+============================ */
+function bind(){
+  const ids = ['style','setupTf','platform','execDetail','levels','preset'];
+  ids.forEach(id=> document.getElementById(id).addEventListener('change', update));
+  document.getElementById('buildBtn').addEventListener('click', update);
+  document.getElementById('copyUrl').addEventListener('click', ()=> copy(updateURL()));
+  document.getElementById('copyText').addEventListener('click', ()=>{
+    const txt = document.getElementById('stackWrap').dataset.stackText || '';
+    copy(txt);
+  });
+}
+
+applyFromURL();
+bind();
+update();
+</script>
+</body>
+</html>
