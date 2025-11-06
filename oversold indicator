@@ -1,0 +1,137 @@
+@version=6
+strategy("HTF Range → BB Mid Reversion + BoS (StochRSI)",
+     overlay=true, pyramiding=0, initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=10,
+     calc_on_every_tick=false, calc_on_order_fills=true)
+
+// ---------- Inputs ----------
+higherTF     = input.timeframe("60", "Higher Timeframe (HTF)")
+bbLen        = input.int(20, "BB Length", 5, 200)
+bbMult       = input.float(2.0, "BB StdDev", 0.1, 6.0)
+rsiLen       = input.int(14, "RSI Length", 2, 100)
+stochLen     = input.int(14, "StochRSI Length", 2, 100)
+kLen         = input.int(3, "Stoch K Smoothing", 1, 20)
+dLen         = input.int(3, "Stoch D Smoothing", 1, 20)
+obLevel      = input.int(80, "Overbought (K)", 50, 100)
+osLevel      = input.int(20, "Oversold (K)", 0, 50)
+fractL       = input.int(2, "Fractal Left", 1, 5)
+fractR       = input.int(2, "Fractal Right", 1, 5)
+atrMult      = input.float(1.0, "ATR Buffer (SL)", 0.1, 5.0)
+useRegime    = input.bool(true, "Regime filter (stay inside HTF range)")
+showLabels   = input.bool(true, "Show signal labels")
+
+// ---------- HTF previous candle range ----------
+htfHighPrev = request.security(syminfo.tickerid, higherTF, high[1], barmerge.gaps_on, barmerge.lookahead_off)
+htfLowPrev  = request.security(syminfo.tickerid, higherTF, low[1],  barmerge.gaps_on, barmerge.lookahead_off)
+inHTFRange  = na(htfHighPrev) or na(htfLowPrev) ? false : (close <= htfHighPrev and close >= htfLowPrev)
+
+// Plot HTF lines
+plot(htfHighPrev, "HTF Prev High", color=color.new(color.red, 0), linewidth=1, style=plot.style_linebr)
+plot(htfLowPrev,  "HTF Prev Low",  color=color.new(color.green, 0), linewidth=1, style=plot.style_linebr)
+fill(plot(htfHighPrev, "", color=color.new(color.red, 90)),
+     plot(htfLowPrev, "", color=color.new(color.green, 90)), color=color.new(color.gray, 92))
+
+// ---------- LTF Bollinger ----------
+basis  = ta.sma(close, bbLen)
+dev    = ta.stdev(close, bbLen)
+upper  = basis + bbMult * dev
+lower  = basis - bbMult * dev
+plot(basis, "BB Mid", color=color.new(color.blue, 0))
+plot(upper, "BB Upper", color=color.new(color.blue, 70))
+plot(lower, "BB Lower", color=color.new(color.blue, 70))
+
+// ---------- StochRSI ----------
+rsi      = ta.rsi(close, rsiLen)
+rsiMin   = ta.lowest(rsi, stochLen)
+rsiMax   = ta.highest(rsi, stochLen)
+rawStoch = (rsiMax - rsiMin != 0) ? 100 * (rsi - rsiMin) / (rsiMax - rsiMin) : 0
+k        = ta.sma(rawStoch, kLen)
+d        = ta.sma(k, dLen)
+plot(k, "StochRSI %K", color=color.new(color.orange, 0), display=display.none)
+plot(d, "StochRSI %D", color=color.new(color.purple, 0), display=display.none)
+hline(obLevel, "OB", color=color.new(color.red, 60))
+hline(osLevel, "OS", color=color.new(color.green, 60))
+
+kCrossUp   = ta.crossover(k, d) and k <= osLevel
+kCrossDown = ta.crossunder(k, d) and k >= obLevel
+
+// ---------- Fractal swings for BoS ----------
+pivotH = ta.pivothigh(high, fractL, fractR)  // value at pivot bar; confirmed fractR bars later
+pivotL = ta.pivotlow(low, fractL, fractR)
+pivotH_idx = not na(pivotH) ? bar_index - fractR : na
+pivotL_idx = not na(pivotL) ? bar_index - fractR : na
+
+// Track last reference swings formed AFTER a signal
+var float lastRefHighAfterLong = na
+var float lastRefLowAfterShort = na
+var int   lastLongSignalBar = na
+var int   lastShortSignalBar = na
+var bool  longArmed = false
+var bool  shortArmed = false
+
+// Arm on StochRSI extreme (inside regime if enabled)
+if kCrossUp and (not useRegime or inHTFRange)
+    longArmed := true
+    shortArmed := false
+    lastLongSignalBar := bar_index
+    lastRefHighAfterLong := na
+
+if kCrossDown and (not useRegime or inHTFRange)
+    shortArmed := true
+    longArmed := false
+    lastShortSignalBar := bar_index
+    lastRefLowAfterShort := na
+
+// Update reference swings only if formed after the signal
+if longArmed and not na(pivotH) and not na(pivotH_idx) and not na(lastLongSignalBar) and pivotH_idx >= lastLongSignalBar
+    lastRefHighAfterLong := pivotH
+
+if shortArmed and not na(pivotL) and not na(pivotL_idx) and not na(lastShortSignalBar) and pivotL_idx >= lastShortSignalBar
+    lastRefLowAfterShort := pivotL
+
+// ---------- BoS confirmation ----------
+bosUp   = longArmed  and not na(lastRefHighAfterLong) and close > lastRefHighAfterLong
+bosDown = shortArmed and not na(lastRefLowAfterShort) and close < lastRefLowAfterShort
+
+// ---------- Orders, TP/SL ----------
+atr = ta.atr(14)
+
+// Cache TP/SL at entry time
+var float longTP = na, longSL = na
+var float shortTP = na, shortSL = na
+
+newLong = bosUp and strategy.position_size == 0
+newShort = bosDown and strategy.position_size == 0
+
+if newLong
+    longTP := basis  // BB mid at signal bar
+    // Stop under the most recent pivot low since the signal, or fallback to current low
+    recentLowSince = ta.valuewhen(not na(pivotL) and not na(pivotL_idx) and pivotL_idx >= nz(lastLongSignalBar, bar_index), pivotL, 0)
+    slBase = na(recentLowSince) ? low : recentLowSince
+    longSL := slBase - atrMult * atr
+    strategy.entry("L", strategy.long)
+    longArmed := false
+
+if newShort
+    shortTP := basis
+    recentHighSince = ta.valuewhen(not na(pivotH) and not na(pivotH_idx) and pivotH_idx >= nz(lastShortSignalBar, bar_index), pivotH, 0)
+    slBaseS = na(recentHighSince) ? high : recentHighSince
+    shortSL := slBaseS + atrMult * atr
+    strategy.entry("S", strategy.short)
+    shortArmed := false
+
+// Maintain exits (reposted each bar)
+if strategy.position_size > 0
+    strategy.exit("L-EXIT", from_entry="L", stop=longSL, limit=longTP)
+if strategy.position_size < 0
+    strategy.exit("S-EXIT", from_entry="S", stop=shortSL, limit=shortTP)
+
+// ---------- Visuals ----------
+plotshape(bosUp,   title="BoS UP",   style=shape.triangleup,  color=color.new(color.lime, 0), location=location.belowbar, size=size.tiny, text="BoS↑")
+plotshape(bosDown, title="BoS DOWN", style=shape.triangledown,color=color.new(color.red, 0),  location=location.abovebar, size=size.tiny, text="BoS↓")
+plotshape(showLabels and kCrossUp and (not useRegime or inHTFRange),   title="Stoch OS Cross", style=shape.circle, color=color.new(color.green, 0), size=size.tiny, location=location.belowbar, text="OS")
+plotshape(showLabels and kCrossDown and (not useRegime or inHTFRange), title="Stoch OB Cross", style=shape.circle, color=color.new(color.red, 0), size=size.tiny, location=location.abovebar, text="OB")
+
+// Alerts
+alertcondition(bosUp,   "BoS Long",  "BoS up (LTF) within HTF range; mean-revert to BB mid")
+alertcondition(bosDown, "BoS Short", "BoS down (LTF) within HTF range; mean-revert to BB mid")
