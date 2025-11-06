@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SL/TP Planner — Bollinger Mid (TP) + ATR-buffered Band (SL)</title>
+  <style>
+    :root{
+      --bg:#0d1117; --bg2:#0f1522; --panel:#111827; --panel2:#0b1020;
+      --text:#e6edf3; --muted:#a9b1ba; --accent:#22d3ee; --accent2:#7c3aed;
+      --up:#22c55e; --down:#ef4444; --warn:#f59e0b; --border:#1f2937;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family: ui-sans-serif,system-ui,Segoe UI,Roboto,Arial;
+      color:var(--text); background:linear-gradient(180deg,var(--bg),var(--bg2));
+    }
+    header{
+      display:flex; align-items:center; justify-content:space-between;
+      padding:14px 16px; border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg,#0b1220,#0a0f1c); position:sticky; top:0; z-index:3;
+    }
+    .brand{display:flex;align-items:center;gap:10px;font-weight:700}
+    .badge{font-size:11px;background:rgba(34,211,238,.12);color:#bff6ff;padding:4px 8px;border:1px solid rgba(34,211,238,.35);border-radius:999px}
+    .status{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+    .dot{width:8px;height:8px;border-radius:50%;background:#ef4444}
+    .dot.on{background:#22c55e}
+    .wrap{max-width:1100px;margin:18px auto;padding:0 14px;display:grid;grid-template-columns:1fr;gap:14px}
+    .panel{background:linear-gradient(180deg,var(--panel),var(--panel2)); border:1px solid var(--border);
+      border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,.25); overflow:hidden}
+    .panel-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg,#0f1628,#0b1222)}
+    .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+    label{font-size:12px;color:var(--muted)}
+    select,input[type="number"],input[type="text"]{
+      background:#0b1324;border:1px solid var(--border);color:var(--text);
+      padding:8px 10px;border-radius:8px;outline:none;min-width:120px
+    }
+    .switch{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+    .btn{background:linear-gradient(180deg,#16324a,#0f2538);border:1px solid #1e3a57;color:#d7ecff;padding:8px 12px;border-radius:10px;
+      cursor:pointer;font-weight:700;letter-spacing:.2px;transition:.2s}
+    .btn:hover{transform:translateY(-1px);filter:brightness(1.06)}
+    .section{padding:12px 14px;border-bottom:1px solid var(--border)}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+    .card{background:#0b1324;border:1px solid #1f2a44;border-radius:12px;padding:12px}
+    .title{font-size:12px;color:#9fb3c8;margin-bottom:6px}
+    .big{font-weight:800;font-size:18px}
+    .muted{color:var(--muted)} .good{color:var(--up)} .bad{color:var(--down)} .warn{color:var(--warn)}
+    .kv{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #1f2a44}
+    .kv:last-child{border-bottom:0}
+    .hint{color:var(--muted);font-size:12px}
+    .footer-note{padding:10px 14px;font-size:12px;color:#94a3b8}
+    @media (max-width: 900px){
+      .grid-2,.grid-3{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span style="display:inline-flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:linear-gradient(135deg,#22d3ee,#7c3aed)">🎯</span>
+    <span>SL/TP Planner — BB Mid (TP) + ATR-buffered Band (SL)</span>
+    <span class="badge">For confluence only — no signals</span>
+  </div>
+  <div class="status">
+    <span id="ws-dot" class="dot"></span><span id="ws-status">Disconnected</span>
+    <span class="badge">Deriv App ID: <b id="appIdBadge">—</b></span>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="panel">
+    <div class="panel-header">
+      <div class="controls">
+        <div>
+          <label>Symbol</label><br/>
+          <select id="symbol"></select>
+        </div>
+        <div>
+          <label>Timeframe</label><br/>
+          <select id="tf">
+            <option value="60">1m</option>
+            <option value="120">2m</option>
+            <option value="180">3m</option>
+            <option value="300">5m</option>
+            <option value="600">10m</option>
+            <option value="900" selected>15m</option>
+            <option value="1200">20m</option>
+            <option value="1800">30m</option>
+            <option value="3600">1h</option>
+            <option value="7200">2h</option>
+            <option value="14400">4h</option>
+            <option value="28800">8h</option>
+            <option value="86400">1d</option>
+          </select>
+        </div>
+        <div class="switch">
+          <input id="useClosed" type="checkbox" checked/>
+          <label for="useClosed">Use last closed candle</label>
+        </div>
+        <div class="switch">
+          <input id="autoEntry" type="checkbox" checked/>
+          <label for="autoEntry">Entry = last close</label>
+        </div>
+        <div>
+          <label>Entry (optional)</label><br/>
+          <input id="entry" type="number" step="0.00001" placeholder="auto from last close"/>
+        </div>
+        <button class="btn" id="refresh">Refresh</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="grid-3">
+        <div class="card">
+          <div class="title">Bollinger (length, std dev)</div>
+          <div class="controls" style="gap:8px">
+            <input id="bbLen" type="number" min="5" max="200" value="20" title="Length"/>
+            <input id="bbMult" type="number" step="0.1" min="0.5" max="5" value="2" title="Std Dev mult"/>
+          </div>
+          <div class="hint" style="margin-top:6px">TP = Mid band (basis SMA)</div>
+        </div>
+        <div class="card">
+          <div class="title">ATR (length, buffer x)</div>
+          <div class="controls" style="gap:8px">
+            <input id="atrLen" type="number" min="5" max="200" value="14" title="ATR Length"/>
+            <input id="atrMult" type="number" step="0.1" min="0.1" max="3" value="1.0" title="ATR buffer x"/>
+          </div>
+          <div class="hint" style="margin-top:6px">SL uses band ± (ATR × buffer)</div>
+        </div>
+        <div class="card">
+          <div class="title">Data status</div>
+          <div class="kv"><span>Used bar</span><span id="barTime">—</span></div>
+          <div class="kv"><span>Last close</span><span id="lastClose">—</span></div>
+          <div class="kv"><span>ATR</span><span id="atrVal">—</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3 style="margin:0 0 8px 0">Reference levels</h3>
+      <div class="grid-3">
+        <div class="card">
+          <div class="title">Bollinger Bands</div>
+          <div class="kv"><span>Upper band</span><span id="bbU">—</span></div>
+          <div class="kv"><span>Mid band (TP)</span><span id="bbM" class="good">—</span></div>
+          <div class="kv"><span>Lower band</span><span id="bbL">—</span></div>
+        </div>
+        <div class="card">
+          <div class="title">Long plan (for reference)</div>
+          <div class="kv"><span>SL (band − ATR×buf)</span><span id="longSL" class="bad">—</span></div>
+          <div class="kv"><span>TP (mid band)</span><span id="longTP" class="good">—</span></div>
+          <div class="kv"><span>Risk to SL</span><span id="longRisk">—</span></div>
+          <div class="kv"><span>Reward to TP</span><span id="longReward">—</span></div>
+          <div class="kv"><span>RR (TP:SL)</span><span id="longRR">—</span></div>
+        </div>
+        <div class="card">
+          <div class="title">Short plan (for reference)</div>
+          <div class="kv"><span>SL (band + ATR×buf)</span><span id="shortSL" class="bad">—</span></div>
+          <div class="kv"><span>TP (mid band)</span><span id="shortTP" class="good">—</span></div>
+          <div class="kv"><span>Risk to SL</span><span id="shortRisk">—</span></div>
+          <div class="kv"><span>Reward to TP</span><span id="shortReward">—</span></div>
+          <div class="kv"><span>RR (TP:SL)</span><span id="shortRR">—</span></div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:8px">
+        This tool only outputs TP = mid band and SL = band ± ATR buffer on the selected timeframe. Use your own bias/entry rules.
+      </div>
+    </div>
+
+    <div class="footer-note">Educational use only. Markets involve risk. This shows mechanical TP/SL references from BB + ATR only.</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // ========== Config / WS ==========
+  const URL_APP_ID = Number(new URLSearchParams(location.search).get('app_id'));
+  const APP_ID = (URL_APP_ID && !isNaN(URL_APP_ID)) ? URL_APP_ID : 1089;
+  const WS_URLS = ['wss://ws.derivws.com/websockets/v3','wss://ws.binaryws.com/websockets/v3'];
+  let WS_IDX=0, ws=null, isOpen=false, REQ=1, pending={};
+  document.getElementById('appIdBadge').textContent = String(APP_ID);
+  const wsDot = document.getElementById('ws-dot');
+  const wsStatus = document.getElementById('ws-status');
+
+  // ========== DOM ==========
+  const selSymbol = document.getElementById('symbol');
+  const selTF = document.getElementById('tf');
+  const useClosed = document.getElementById('useClosed');
+  const autoEntry = document.getElementById('autoEntry');
+  const entryEl = document.getElementById('entry');
+  const refreshBtn = document.getElementById('refresh');
+
+  const bbLenEl = document.getElementById('bbLen');
+  const bbMultEl = document.getElementById('bbMult');
+  const atrLenEl = document.getElementById('atrLen');
+  const atrMultEl = document.getElementById('atrMult');
+
+  const barTime = document.getElementById('barTime');
+  const lastCloseEl = document.getElementById('lastClose');
+  const atrValEl = document.getElementById('atrVal');
+  const bbU = document.getElementById('bbU');
+  const bbM = document.getElementById('bbM');
+  const bbL = document.getElementById('bbL');
+
+  const longSL = document.getElementById('longSL');
+  const longTP = document.getElementById('longTP');
+  const longRisk = document.getElementById('longRisk');
+  const longReward = document.getElementById('longReward');
+  const longRR = document.getElementById('longRR');
+
+  const shortSL = document.getElementById('shortSL');
+  const shortTP = document.getElementById('shortTP');
+  const shortRisk = document.getElementById('shortRisk');
+  const shortReward = document.getElementById('shortReward');
+  const shortRR = document.getElementById('shortRR');
+
+  // ========== Stores ==========
+  let subsId=null, candles=[]; // HTF only
+
+  // ========== Utils ==========
+  function setConn(state){
+    if(state==='open'){ wsDot.classList.add('on'); wsStatus.textContent='Connected'; }
+    else if(state==='connecting'){ wsDot.classList.remove('on'); wsStatus.textContent='Connecting...'; }
+    else { wsDot.classList.remove('on'); wsStatus.textContent='Disconnected'; }
+  }
+  function fmt(n, p){ if(n==null || !isFinite(n)) return '—'; const a=Math.abs(n); let f=5;
+    if(a>=100) f=2; else if(a>=10) f=4; else f=5;
+    return Number(n).toFixed(p ?? f).replace(/(\.\d*?[1-9])0+$/,'$1').replace(/\.0+$/,'');
+  }
+  function epochToStr(e){ try{return new Date(e*1000).toLocaleString();}catch{return '—';} }
+
+  // ========== Indicators ==========
+  function SMA(arr,len){ const out=new Array(arr.length).fill(null); let s=0;
+    for(let i=0;i<arr.length;i++){ const v=arr[i]; if(v==null){ out[i]=null; continue; } s+=v; if(i>=len) s-=arr[i-len]; if(i>=len-1) out[i]=s/len; }
+    return out;
+  }
+  function STDDEV(arr,len){ const out=new Array(arr.length).fill(null); let s=0,s2=0;
+    for(let i=0;i<arr.length;i++){ const v=arr[i]; if(v==null){ out[i]=null; continue; } s+=v; s2+=v*v; if(i>=len){ s-=arr[i-len]; s2-=arr[i-len]*arr[i-len]; }
+      if(i>=len-1){ const m=s/len; const varr=(s2/len)-m*m; out[i]=Math.sqrt(Math.max(0,varr)); } }
+    return out;
+  }
+  function BB(closes,len=20,mult=2){
+    const basis=SMA(closes,len), std=STDDEV(closes,len);
+    const upper=basis.map((b,i)=> (b!=null && std[i]!=null) ? b+mult*std[i] : null);
+    const lower=basis.map((b,i)=> (b!=null && std[i]!=null) ? b-mult*std[i] : null);
+    return {basis,upper,lower};
+  }
+  function ATR(c,len=14){
+    const n=c.length; if(n<2) return new Array(n).fill(null);
+    const tr=new Array(n).fill(null);
+    for(let i=0;i<n;i++){
+      const h=c[i].high, l=c[i].low, pc=i>0?c[i-1].close:null;
+      const r1=h-l, r2=pc!=null?Math.abs(h-pc):r1, r3=pc!=null?Math.abs(l-pc):r1;
+      tr[i]=Math.max(r1,r2,r3);
+    }
+    if(n<len){ return new Array(n).fill(null); }
+    const out=new Array(n).fill(null);
+    let sum=0; for(let i=0;i<len;i++) sum+=tr[i];
+    out[len-1]=sum/len;
+    for(let i=len;i<n;i++){ out[i]= (out[i-1]*(len-1)+tr[i])/len; }
+    return out;
+  }
+
+  // ========== Deriv API ==========
+  function wsConnect(){
+    if(ws && (ws.readyState===0 || ws.readyState===1)) return;
+    setConn('connecting');
+    ws = new WebSocket(`${WS_URLS[WS_IDX]}?app_id=${APP_ID}`);
+    ws.onopen = ()=>{ isOpen=true; setConn('open'); send({active_symbols:'brief', product_type:'basic'}).then(populateSymbols); };
+    ws.onclose = ()=>{ isOpen=false; setConn('disconnected'); WS_IDX=(WS_IDX+1)%WS_URLS.length; setTimeout(wsConnect, 1200); };
+    ws.onmessage = evt=>{
+      let msg; try{ msg=JSON.parse(evt.data); }catch{return;}
+      if(msg.error){ console.warn('API error', msg.error); }
+      if(msg.req_id && pending[msg.req_id]){ pending[msg.req_id](msg); delete pending[msg.req_id]; return; }
+      if(msg.msg_type==='ohlc' && msg.ohlc){ onOHLC(msg.ohlc); }
+    };
+    setInterval(()=>{ try{ ws.send(JSON.stringify({ping:1})); }catch{} }, 30000);
+  }
+  function send(payload){
+    return new Promise((res)=>{ const req_id=REQ++; pending[req_id]=res; ws.send(JSON.stringify({...payload, req_id})); });
+  }
+  async function subscribe(symbol, granularity){
+    // seed history
+    const r = await send({ticks_history:symbol, end:'latest', count:600, granularity, style:'candles'});
+    candles = (r.candles||[]).map(c=>({epoch:+c.epoch, open:+c.open, high:+c.high, low:+c.low, close:+c.close})).sort((a,b)=>a.epoch-b.epoch);
+    // subscribe
+    const r2 = await send({ticks_history:symbol, end:'latest', granularity, style:'candles', subscribe:1});
+    const subId = r2.subscription?.id || r2.ohlc?.subscription?.id;
+    return subId;
+  }
+  function forget(subId){ try{ ws.send(JSON.stringify({forget:subId})); }catch{} }
+  function onOHLC(ohlc){
+    const rec = {epoch:+ohlc.open_time, open:+ohlc.open, high:+ohlc.high, low:+ohlc.low, close:+ohlc.close};
+    const last = candles[candles.length-1];
+    if(!last || rec.epoch>last.epoch){ candles.push(rec); if(candles.length>1500) candles.shift(); }
+    else if(rec.epoch===last.epoch){
+      last.open=rec.open; last.high=Math.max(last.high,rec.high); last.low=Math.min(last.low,rec.low); last.close=rec.close;
+    }
+    computeAndRender();
+  }
+
+  // ========== Populate Symbols ==========
+  function populateSymbols(resp){
+    const arr = (resp.active_symbols||[])
+      .filter(s=>s.is_trading_suspended===0)
+      .sort((a,b)=> a.market_display_name===b.market_display_name ? (a.display_order-b.display_order) : a.market_display_name.localeCompare(b.market_display_name));
+    selSymbol.innerHTML = '';
+    for(const s of arr){
+      const opt = document.createElement('option');
+      opt.value = s.symbol;
+      opt.textContent = `${s.display_name} — ${s.market_display_name}`;
+      selSymbol.appendChild(opt);
+    }
+    // default
+    const def = ['frxEURUSD','frxGBPUSD','R_100'];
+    for(const d of def){
+      const opt = Array.from(selSymbol.options).find(o=>o.value===d);
+      if(opt){ selSymbol.value=d; break; }
+    }
+    startStream();
+  }
+
+  async function startStream(){
+    if(!selSymbol.value) return;
+    if(subsId){ forget(subsId); subsId=null; }
+    candles=[];
+    subsId = await subscribe(selSymbol.value, Number(selTF.value));
+    computeAndRender();
+  }
+
+  function getParams(){
+    return {
+      bbLen: Math.max(5, Number(bbLenEl.value)||20),
+      bbMult: Math.max(0.1, Number(bbMultEl.value)||2),
+      atrLen: Math.max(5, Number(atrLenEl.value)||14),
+      atrMult: Math.max(0.01, Number(atrMultEl.value)||1.0),
+      useClosed: useClosed.checked
+    };
+  }
+
+  function computeAndRender(){
+    if(!candles.length) return;
+    // index to use
+    const idx = useClosed.checked ? Math.max(0, candles.length-2) : candles.length-1;
+    const usedBar = candles[idx];
+    const closes = candles.map(c=>c.close);
+    const {bbLen, bbMult, atrLen, atrMult} = getParams();
+    if(candles.length < Math.max(bbLen+2, atrLen+2)){ // need more data
+      barTime.textContent = '—';
+      return;
+    }
+    const bb = BB(closes, bbLen, bbMult);
+    const atrArr = ATR(candles, atrLen);
+    const mid = bb.basis[idx], up = bb.upper[idx], lo = bb.lower[idx], atr = atrArr[idx];
+    const lastClose = usedBar.close;
+    const bw = (up!=null && lo!=null) ? (up - lo) : null;
+
+    // entry
+    let entry = null;
+    if(autoEntry.checked || !entryEl.value){ entry = lastClose; }
+    else { const v = Number(entryEl.value); entry = isFinite(v) ? v : lastClose; }
+
+    // Derived TP/SL
+    const long_tp = mid!=null? mid : null;
+    const long_sl = (lo!=null && atr!=null) ? (lo - atrMult*atr) : null;
+
+    const short_tp = mid!=null? mid : null;
+    const short_sl = (up!=null && atr!=null) ? (up + atrMult*atr) : null;
+
+    // Distances / RR (only if entry available)
+    let l_risk=null,l_reward=null,l_rr=null, s_risk=null,s_reward=null,s_rr=null;
+    if(entry!=null && isFinite(entry)){
+      if(long_sl!=null) l_risk = Math.max(entry - long_sl, 0);
+      if(long_tp!=null) l_reward = Math.max(long_tp - entry, 0);
+      if(l_risk>0 && l_reward!=null) l_rr = l_reward / l_risk;
+
+      if(short_sl!=null) s_risk = Math.max(short_sl - entry, 0);
+      if(short_tp!=null) s_reward = Math.max(entry - short_tp, 0);
+      if(s_risk>0 && s_reward!=null) s_rr = s_reward / s_risk;
+    }
+
+    // Fill UI
+    barTime.textContent = usedBar ? epochToStr(usedBar.epoch) : '—';
+    lastCloseEl.textContent = fmt(lastClose);
+    atrValEl.textContent = atr!=null? fmt(atr) : '—';
+
+    bbU.textContent = up!=null? fmt(up):'—';
+    bbM.textContent = mid!=null? fmt(mid):'—';
+    bbL.textContent = lo!=null? fmt(lo):'—';
+
+    longSL.textContent = long_sl!=null? fmt(long_sl):'—';
+    longTP.textContent = long_tp!=null? fmt(long_tp):'—';
+    longRisk.textContent = l_risk!=null? fmt(l_risk):'—';
+    longReward.textContent = l_reward!=null? fmt(l_reward):'—';
+    longRR.textContent = l_rr!=null? l_rr.toFixed(2)+'R':'—';
+
+    shortSL.textContent = short_sl!=null? fmt(short_sl):'—';
+    shortTP.textContent = short_tp!=null? fmt(short_tp):'—';
+    shortRisk.textContent = s_risk!=null? fmt(s_risk):'—';
+    shortReward.textContent = s_reward!=null? fmt(s_reward):'—';
+    shortRR.textContent = s_rr!=null? s_rr.toFixed(2)+'R':'—';
+
+    // if auto entry, keep entry field in sync
+    if(autoEntry.checked){
+      entryEl.value = fmt(entry);
+    }
+  }
+
+  // Events
+  selSymbol.addEventListener('change', startStream);
+  selTF.addEventListener('change', startStream);
+  useClosed.addEventListener('change', computeAndRender);
+  autoEntry.addEventListener('change', ()=>{ if(autoEntry.checked) entryEl.value=''; computeAndRender(); });
+  entryEl.addEventListener('input', computeAndRender);
+  [bbLenEl,bbMultEl,atrLenEl,atrMultEl].forEach(el=> el.addEventListener('input', computeAndRender));
+  refreshBtn.addEventListener('click', startStream);
+
+  // Boot
+  wsConnect();
+})();
+</script>
+</body>
+</html>
