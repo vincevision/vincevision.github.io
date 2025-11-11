@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VINCEVISION TOOLS EMPIRE</title>
+  <meta name="description" content="A simple, clean page that lists links with automatic styling." />
+
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --card-bg: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --shadow: 0 1px 2px rgba(0,0,0,0.05);
+      --shadow-hover: 0 8px 20px rgba(0,0,0,0.06);
+      --ring: 0 0 0 3px rgba(37,99,235,0.15);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f141a;
+        --card-bg: #121821;
+        --text: #e5e7eb;
+        --muted: #9aa4b2;
+        --border: #243244;
+        --accent: #60a5fa;
+        --shadow: 0 1px 2px rgba(0,0,0,0.3);
+        --shadow-hover: 0 8px 24px rgba(0,0,0,0.35);
+        --ring: 0 0 0 3px rgba(96,165,250,0.2);
+      }
+    }
+    [data-theme="dark"] {
+      --bg: #0f141a;
+      --card-bg: #121821;
+      --text: #e5e7eb;
+      --muted: #9aa4b2;
+      --border: #243244;
+      --accent: #60a5fa;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3);
+      --shadow-hover: 0 8px 24px rgba(0,0,0,0.35);
+      --ring: 0 0 0 3px rgba(96,165,250,0.2);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font: 15px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: var(--bg);
+      color: var(--text);
+    }
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 28px 16px 80px;
+    }
+
+    header {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: -0.02em;
+    }
+    .sub {
+      color: var(--muted);
+      margin-top: 2px;
+      font-size: 14px;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .search {
+      flex: 1 1 300px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      box-shadow: var(--shadow);
+    }
+    .search input {
+      width: 100%;
+      font: inherit;
+      color: var(--text);
+      background: transparent;
+      border: 0;
+      outline: 0;
+    }
+    .search input::placeholder { color: var(--muted); }
+    .count {
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    #theme-toggle {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+    }
+    #theme-toggle:hover { border-color: var(--accent); }
+    #theme-toggle:focus-visible { outline: none; box-shadow: var(--ring); }
+
+    /* Link grid */
+    ul.link-grid {
+      list-style: none;
+      padding: 0;
+      margin: 18px 0 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 12px;
+    }
+    .link-grid li { margin: 0; }
+
+    /* Base styling for anchors so they look good even without JS enhancement */
+    .link-grid a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: var(--shadow);
+      transition: border-color .15s ease, box-shadow .2s ease, transform .1s ease;
+      min-height: 56px;
+    }
+    .link-grid a:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow-hover);
+      transform: translateY(-1px);
+    }
+    .link-grid a:focus-visible { outline: none; box-shadow: var(--ring); }
+
+    /* Enhanced layout pieces (added by JS) */
+    .favicon-wrap {
+      width: 28px; height: 28px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(0,0,0,0.02), rgba(0,0,0,0));
+      display: grid;
+      place-items: center;
+      flex: 0 0 28px;
+      font-size: 16px;
+    }
+    .favicon {
+      width: 18px; height: 18px;
+      border-radius: 4px;
+      display: block;
+    }
+    .meta { flex: 1 1 auto; min-width: 0; }
+    .title {
+      font-weight: 600;
+      letter-spacing: -.01em;
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .domain {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .arrow {
+      color: var(--muted);
+      transition: transform .15s ease, color .15s ease;
+    }
+    a:hover .arrow { transform: translateX(3px); color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>My Links</h1>
+        <div class="sub">Quick list of links with auto styling</div>
+      </div>
+      <div class="toolbar" role="region" aria-label="Tools">
+        <div class="search" role="search">
+          <input id="search" type="search" placeholder="Filter links..." aria-label="Filter links" />
+          <span class="count" id="count">0 / 0</span>
+        </div>
+        <button id="theme-toggle" type="button" aria-pressed="false" title="Toggle theme">Dark</button>
+      </div>
+    </header>
+
+    <!--
+      HOW TO ADD LINKS:
+      - Add your links as <li><a href="URL">Your Title</a></li> inside the <ul> below.
+      - That’s it. The page will automatically style them on load.
+    -->
+    <ul id="links" class="link-grid">
+      <li><a href="https://developer.mozilla.org/">MDN Web Docs</a></li>
+      <li><a href="https://news.ycombinator.com/">Hacker News</a></li>
+      <li><a href="mailto:hello@example.com">Email me</a></li>
+      <li><a href="tel:+1234567890">Call support</a></li>
+      <!-- Add more links below -->
+      <!-- <li><a href="https://example.com">Example</a></li> -->
+    </ul>
+  </div>
+
+  <script>
+    // Enhances any <li><a> inside #links:
+    // - Adds favicon (for http/https), or a generic icon for others
+    // - Shows domain or label detail
+    // - Opens in new tab with rel security
+    // - Enables search filter and a theme toggle
+    (function () {
+      const list = document.getElementById('links');
+      const anchors = list.querySelectorAll('a');
+
+      anchors.forEach(a => enhanceLink(a));
+      setupSearch();
+      setupTheme();
+
+      function enhanceLink(a) {
+        const rawText = (a.textContent || '').trim() || a.getAttribute('href') || '';
+        const li = a.closest('li');
+        let url, kind = 'link', domainLabel = '', favicon = '';
+
+        // Normalize the URL relative to current location so relative links don't throw
+        try { url = new URL(a.getAttribute('href'), location.href); } catch (e) {}
+
+        if (url && (url.protocol === 'http:' || url.protocol === 'https:')) {
+          const domain = url.hostname.replace(/^www\./, '');
+          domainLabel = domain;
+          favicon = 'https://icons.duckduckgo.com/ip3/' + domain + '.ico';
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        } else if (url && url.protocol === 'mailto:') {
+          kind = 'mail';
+          domainLabel = url.href.replace(/^mailto:/, '').split('?')[0];
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        } else if (url && url.protocol === 'tel:') {
+          kind = 'phone';
+          domainLabel = url.href.replace(/^tel:/, '');
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        } else if (url) {
+          kind = url.protocol.replace(':', '') || 'link';
+          domainLabel = a.getAttribute('href') || '';
+          a.setAttribute('target', '_blank');
+          a.setAttribute('rel', 'noopener noreferrer');
+        }
+
+        // Build enhanced content
+        const title = escapeHTML(rawText);
+        const subtitle = escapeHTML(domainLabel);
+
+        a.classList.add('card');
+        a.innerHTML = [
+          '<span class="favicon-wrap">',
+            '<img class="favicon" alt="" loading="lazy" />',
+          '</span>',
+          '<span class="meta">',
+            '<span class="title">' + title + '</span>',
+            (subtitle ? '<span class="domain">' + subtitle + '</span>' : ''),
+          '</span>',
+          '<span class="arrow" aria-hidden="true">↗</span>'
+        ].join('');
+
+        const img = a.querySelector('.favicon');
+        const wrap = a.querySelector('.favicon-wrap');
+
+        // Choose icon
+        if (favicon) {
+          img.src = favicon;
+          img.addEventListener('error', () => {
+            img.remove();
+            wrap.textContent = iconFor(kind);
+          });
+        } else {
+          img.remove();
+          wrap.textContent = iconFor(kind);
+        }
+
+        if (li) {
+          li.dataset.search = (rawText + ' ' + domainLabel).toLowerCase();
+        }
+      }
+
+      function iconFor(kind) {
+        // Simple emoji fallback for non-favicon cases
+        if (kind === 'mail') return '✉️';
+        if (kind === 'phone') return '📞';
+        return '🔗';
+      }
+
+      function escapeHTML(str) {
+        return String(str).replace(/[&<>"']/g, m => (
+          ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m])
+        ));
+      }
+
+      function setupSearch() {
+        const input = document.getElementById('search');
+        const count = document.getElementById('count');
+        const items = Array.from(list.querySelectorAll('li'));
+
+        const filter = () => {
+          const q = (input.value || '').toLowerCase().trim();
+          let visible = 0;
+          items.forEach(li => {
+            const hay = (li.dataset.search || li.textContent.toLowerCase());
+            const show = !q || hay.includes(q);
+            li.style.display = show ? '' : 'none';
+            if (show) visible++;
+          });
+          if (count) count.textContent = visible + ' / ' + items.length;
+        };
+
+        if (input) {
+          input.addEventListener('input', filter);
+          filter();
+        }
+      }
+
+      function setupTheme() {
+        const toggle = document.getElementById('theme-toggle');
+        if (!toggle) return;
+
+        const preferred = localStorage.getItem('theme') ||
+          (matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+
+        applyTheme(preferred);
+        toggle.addEventListener('click', () => {
+          applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+        });
+
+        function applyTheme(mode) {
+          document.documentElement.dataset.theme = mode;
+          localStorage.setItem('theme', mode);
+          toggle.setAttribute('aria-pressed', mode === 'dark');
+          toggle.textContent = mode === 'dark' ? 'Light' : 'Dark';
+        }
+      }
+    })();
+  </script>
+</body>
+</html>
