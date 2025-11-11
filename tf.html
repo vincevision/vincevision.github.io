@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Timeframe Mapper — Entry TF Calculator</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#111827;
+      --panel-2:#0f172a;
+      --text:#e5e7eb;
+      --muted:#9ca3af;
+      --accent:#22d3ee;
+      --accent-2:#60a5fa;
+      --ok:#34d399;
+      --warn:#f59e0b;
+      --danger:#f87171;
+      --border:#1f2937;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, Apple Color Emoji, Segoe UI Emoji;
+      background:
+        radial-gradient(1200px 800px at 10% 0%, rgba(96,165,250,.08), transparent 60%),
+        radial-gradient(1000px 700px at 100% 10%, rgba(34,211,238,.08), transparent 60%),
+        linear-gradient(180deg, #0b1220 0%, #0b1220 100%);
+      color:var(--text);
+      line-height:1.45;
+    }
+    a{color:var(--accent)}
+    .container{
+      max-width:1100px;
+      margin:0 auto;
+      padding:24px;
+    }
+    header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:16px;
+    }
+    .title{
+      display:flex; gap:12px; align-items:center;
+    }
+    .logo{
+      width:40px; height:40px; border-radius:10px;
+      background:linear-gradient(135deg,var(--accent),var(--accent-2));
+      display:grid; place-items:center; color:#061016;
+      font-weight:900; letter-spacing:.5px;
+      box-shadow:0 10px 30px rgba(34,211,238,.25);
+    }
+    h1{margin:0; font-size:24px}
+    .sub{color:var(--muted); font-size:14px; margin-top:4px}
+
+    .panel{
+      background:linear-gradient(180deg,rgba(255,255,255,.02), transparent),
+                 var(--panel);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:16px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns:1.1fr 1fr;
+      gap:16px;
+    }
+    @media (max-width:900px){
+      .grid{grid-template-columns:1fr}
+    }
+
+    .controls{
+      display:grid; gap:12px;
+      grid-template-columns:repeat(12,1fr);
+      align-items:end;
+    }
+    .field{grid-column:span 6}
+    .field.full{grid-column:1/-1}
+    .field label{
+      display:block; font-size:12px; color:var(--muted); margin-bottom:6px;
+      letter-spacing:.2px;
+    }
+    select, input[type="number"]{
+      width:100%; padding:10px 12px; border-radius:10px;
+      border:1px solid var(--border); background:var(--panel-2);
+      color:var(--text); outline:none; font-size:14px;
+    }
+    .radio-row{
+      display:flex; gap:10px; flex-wrap:wrap;
+      background:var(--panel-2); border:1px solid var(--border);
+      padding:8px; border-radius:10px;
+    }
+    .chip{
+      display:flex; align-items:center; gap:6px;
+      background:#0b1327; border:1px solid var(--border);
+      padding:8px 10px; border-radius:999px; font-size:13px; color:var(--muted);
+    }
+    .chip strong{color:var(--text)}
+    .kpi{
+      display:flex; gap:12px; flex-wrap:wrap; margin-top:10px;
+    }
+    .card{
+      flex:1 1 240px;
+      background:linear-gradient(180deg, rgba(255,255,255,.02), transparent),
+                 var(--panel-2);
+      border:1px solid var(--border);
+      border-radius:12px; padding:14px;
+    }
+    .card h3{margin:0 0 6px 0; font-size:14px; color:var(--muted)}
+    .big{
+      font-size:26px; font-weight:800; letter-spacing:.3px;
+      display:flex; align-items:center; gap:8px;
+    }
+    .big .ok{color:var(--ok)}
+    .big .warn{color:var(--warn)}
+    .muted{color:var(--muted)}
+    .note{font-size:12px; color:var(--muted)}
+    .divider{height:1px; background:var(--border); margin:14px 0}
+
+    table{
+      width:100%; border-collapse:separate; border-spacing:0; overflow:hidden;
+      border-radius:12px; border:1px solid var(--border);
+    }
+    thead th{
+      background:rgba(255,255,255,.03); color:var(--muted); font-weight:600;
+      font-size:12px; text-transform:uppercase; letter-spacing:.4px;
+      padding:10px; text-align:left;
+      border-bottom:1px solid var(--border);
+    }
+    tbody td{
+      padding:10px; border-bottom:1px solid var(--border);
+    }
+    tbody tr:nth-child(even) td{background:rgba(255,255,255,.01)}
+    .hl{background:linear-gradient(180deg, rgba(34,211,238,.08), transparent)}
+    .badge{
+      display:inline-block;
+      background:rgba(34,211,238,.15);
+      color:#a5f3fc; border:1px solid rgba(34,211,238,.35);
+      padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700;
+    }
+    .footer{
+      color:var(--muted); font-size:12px; text-align:center; margin-top:18px;
+    }
+    .help{
+      font-size:13px; color:var(--muted)
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="title">
+        <div class="logo">TF</div>
+        <div>
+          <h1>Timeframe Mapper — Entry TF Calculator</h1>
+          <div class="sub">Pick your trading timeframe and get the recommended entry timeframe. Default rule: Entry = Base ÷ 4 (e.g., 2h → 30m).</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="controls">
+          <div class="field" style="grid-column:span 6">
+            <label for="baseTf">Base/Trading timeframe</label>
+            <select id="baseTf"></select>
+          </div>
+
+          <div class="field" style="grid-column:span 3">
+            <label for="ratio">Ratio (how many entry candles per base)</label>
+            <input id="ratio" type="number" min="2" max="10" step="0.5" value="4" />
+          </div>
+
+          <div class="field" style="grid-column:span 3">
+            <label>Rounding</label>
+            <div class="radio-row" id="roundingOptions">
+              <label><input type="radio" name="rounding" value="nearest" checked /> Nearest</label>
+              <label><input type="radio" name="rounding" value="lower" /> Lower/equal</label>
+              <label><input type="radio" name="rounding" value="upper" /> Upper (but < base)</label>
+            </div>
+          </div>
+
+          <div class="field full">
+            <div class="chip"><span>Rule</span> <strong>Entry = Base ÷ <span id="ratioEcho">4</span></strong></div>
+          </div>
+        </div>
+
+        <div class="kpi">
+          <div class="card">
+            <h3>Selected base timeframe</h3>
+            <div class="big"><span id="baseLabel">2h</span></div>
+            <div class="note">The timeframe you analyze or plan your trades on.</div>
+          </div>
+          <div class="card">
+            <h3>Recommended entry timeframe</h3>
+            <div class="big">
+              <span id="entryLabel" class="ok">30m</span>
+            </div>
+            <div class="note" id="entryNote">Using Nearest rounding. Ensures entry TF is still lower than base.</div>
+          </div>
+          <div class="card">
+            <h3>Target (Base ÷ Ratio)</h3>
+            <div class="big"><span id="targetLabel" class="warn">30m</span></div>
+            <div class="note">Computed target before rounding.</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+        <div class="help">
+          Tip: Adjust the ratio if your strategy prefers a tighter or looser entry (e.g., 3x or 5x).
+        </div>
+      </section>
+
+      <section class="panel">
+        <h3 style="margin-top:0">All timeframes map</h3>
+        <div class="note" style="margin-bottom:8px">
+          Based on current ratio and rounding. The highlighted row reflects your selected base timeframe.
+        </div>
+        <table id="mapTable" aria-label="Timeframe map">
+          <thead>
+            <tr>
+              <th>Base timeframe</th>
+              <th>Entry target (Base ÷ Ratio)</th>
+              <th>Recommended entry timeframe</th>
+            </tr>
+          </thead>
+          <tbody id="mapBody"></tbody>
+        </table>
+        <div class="footer">Not financial advice. Use with your own strategy and risk management.</div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    // Common timeframes (minutes); months/weeks are approximations: 1W=10080, 1M≈43200 (30D)
+    const TIMEFRAMES = [
+      { label: '1m',  m: 1 },
+      { label: '3m',  m: 3 },
+      { label: '5m',  m: 5 },
+      { label: '10m', m: 10 },
+      { label: '15m', m: 15 },
+      { label: '20m', m: 20 },
+      { label: '30m', m: 30 },
+      { label: '45m', m: 45 },
+      { label: '1h',  m: 60 },
+      { label: '2h',  m: 120 },
+      { label: '3h',  m: 180 },
+      { label: '4h',  m: 240 },
+      { label: '6h',  m: 360 },
+      { label: '8h',  m: 480 },
+      { label: '12h', m: 720 },
+      { label: '1D',  m: 1440 },
+      { label: '2D',  m: 2880 },
+      { label: '3D',  m: 4320 },
+      { label: '1W',  m: 10080 },
+      { label: '2W',  m: 20160 },
+      { label: '1M',  m: 43200 },
+    ];
+
+    // DOM elements
+    const baseTf = document.getElementById('baseTf');
+    const ratioInput = document.getElementById('ratio');
+    const ratioEcho = document.getElementById('ratioEcho');
+    const baseLabel = document.getElementById('baseLabel');
+    const targetLabel = document.getElementById('targetLabel');
+    const entryLabel = document.getElementById('entryLabel');
+    const entryNote = document.getElementById('entryNote');
+    const mapBody = document.getElementById('mapBody');
+    const roundingOptions = document.getElementById('roundingOptions');
+
+    // Populate base TF select
+    function populateSelect(){
+      baseTf.innerHTML = '';
+      TIMEFRAMES.forEach((tf, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = tf.label;
+        baseTf.appendChild(opt);
+      });
+      // Default to 2h (index lookup)
+      const idx2h = TIMEFRAMES.findIndex(t => t.label === '2h');
+      baseTf.value = String(idx2h >= 0 ? idx2h : 9);
+    }
+
+    function minutesToPretty(m){
+      if (m < 60) return `${m}m`;
+      if (m % 60 === 0 && m < 1440) return `${m/60}h`;
+      if (m % 1440 === 0 && m < 10080) return `${m/1440}D`;
+      if (m % 10080 === 0 && m < 43200) return `${m/10080}W`;
+      if (m % 43200 === 0) return `${m/43200}M`;
+      // Fallback as Xh Ym
+      const days = Math.floor(m/1440);
+      const remM = m%1440;
+      const hours = Math.floor(remM/60);
+      const mins = remM%60;
+      let out = [];
+      if (days) out.push(`${days}D`);
+      if (hours) out.push(`${hours}h`);
+      if (mins) out.push(`${mins}m`);
+      return out.join(' ');
+    }
+
+    function getRoundingMethod(){
+      const checked = roundingOptions.querySelector('input[name="rounding"]:checked');
+      return checked ? checked.value : 'nearest';
+    }
+
+    // Choose an entry timeframe from TIMEFRAMES below the base
+    function pickEntryTF(baseMinutes, targetMinutes, method){
+      const candidates = TIMEFRAMES.filter(t => t.m < baseMinutes); // must be lower than base
+      if (candidates.length === 0) return null;
+
+      if (method === 'lower'){
+        const lows = candidates.filter(t => t.m <= targetMinutes);
+        if (lows.length === 0) return null;
+        return lows.reduce((a,b) => a.m > b.m ? a : b);
+      } else if (method === 'upper'){
+        const ups = candidates.filter(t => t.m >= targetMinutes);
+        if (ups.length === 0) return candidates.reduce((a,b) => a.m > b.m ? a : b); // pick max lower as fallback
+        return ups.reduce((a,b) => a.m < b.m ? a : b);
+      } else { // nearest
+        let best = null, bestDiff = Infinity;
+        for (const t of candidates){
+          const diff = Math.abs(t.m - targetMinutes);
+          if (diff < bestDiff){ best = t; bestDiff = diff; }
+          // If tie, prefer lower one
+          else if (diff === bestDiff && best && t.m < best.m){ best = t; }
+        }
+        return best;
+      }
+    }
+
+    function updateUI(){
+      const baseIdx = parseInt(baseTf.value, 10);
+      const base = TIMEFRAMES[baseIdx];
+      const ratio = Math.max(0.5, parseFloat(ratioInput.value || '4'));
+      const method = getRoundingMethod();
+
+      ratioEcho.textContent = ratio;
+      baseLabel.textContent = base.label;
+
+      const target = base.m / ratio;
+      targetLabel.textContent = minutesToPretty(Math.round(target));
+
+      const picked = pickEntryTF(base.m, target, method);
+      if (!picked){
+        entryLabel.textContent = 'N/A';
+        entryLabel.className = 'big danger';
+        entryNote.textContent = 'No lower timeframe available for the current rule.';
+      } else {
+        entryLabel.textContent = picked.label;
+        entryLabel.className = 'ok';
+        entryNote.textContent = `Using ${method[0].toUpperCase()+method.slice(1)} rounding. Ensures entry TF remains below base.`;
+      }
+
+      renderMap(baseIdx, ratio, method);
+    }
+
+    function renderMap(activeIdx, ratio, method){
+      const rows = [];
+      TIMEFRAMES.forEach((base, idx) => {
+        const target = base.m / ratio;
+        const rec = pickEntryTF(base.m, target, method);
+        const tr = document.createElement('tr');
+        if (idx === activeIdx) tr.classList.add('hl');
+        tr.innerHTML = `
+          <td><strong>${base.label}</strong> ${idx === activeIdx ? ' <span class="badge">Selected</span>' : ''}</td>
+          <td>${minutesToPretty(Math.round(target))}</td>
+          <td>${rec ? `<strong>${rec.label}</strong>` : '—'}</td>
+        `;
+        rows.push(tr);
+      });
+      mapBody.innerHTML = '';
+      rows.forEach(r => mapBody.appendChild(r));
+    }
+
+    // Init
+    populateSelect();
+    updateUI();
+
+    // Events
+    baseTf.addEventListener('change', updateUI);
+    ratioInput.addEventListener('input', updateUI);
+    roundingOptions.addEventListener('change', updateUI);
+  </script>
+</body>
+</html>
