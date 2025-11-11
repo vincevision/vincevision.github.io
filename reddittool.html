@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1"
+  />
+  <title>Subreddit Similarity Finder</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --bg-soft: #111723;
+      --card: #141b26;
+      --muted: #8aa0b9;
+      --text: #e9eef5;
+      --accent: #4ea1ff;
+      --accent-2: #7bd389;
+      --danger: #ff6b6b;
+      --border: #263241;
+      --shadow: 0 10px 30px rgba(0,0,0,0.25);
+      --radius: 12px;
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f7f9fc;
+        --bg-soft: #f0f4fa;
+        --card: #ffffff;
+        --muted: #5b6b7c;
+        --text: #0d1420;
+        --accent: #2563eb;
+        --accent-2: #2ea44f;
+        --danger: #d14343;
+        --border: #e5ebf3;
+        --shadow: 0 8px 24px rgba(0,0,0,0.08);
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 800px at 20% -10%, rgba(78,161,255,.15), transparent 60%),
+                  linear-gradient(180deg, var(--bg), var(--bg));
+      color: var(--text);
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .wrap {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 28px 18px 80px;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 16px; margin-bottom: 18px;
+    }
+    .title {
+      display: flex; align-items: center; gap: 14px;
+    }
+    .title h1 {
+      font-size: 1.6rem; margin: 0; letter-spacing: 0.2px;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 10px; border-radius: 999px; font-size: 12px;
+      color: var(--muted); background: var(--bg-soft); border: 1px solid var(--border);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    .controls {
+      padding: 18px; display: grid; gap: 12px;
+    }
+    .row {
+      display: grid; grid-template-columns: 1fr; gap: 12px;
+    }
+    @media (min-width: 720px) {
+      .row.two { grid-template-columns: 1fr 1fr; }
+      .row.three { grid-template-columns: 2fr 1fr 1fr; }
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .field label { font-size: 13px; color: var(--muted); }
+    .input, textarea {
+      width: 100%; padding: 12px 14px;
+      color: var(--text); background: var(--bg-soft);
+      border: 1px solid var(--border); border-radius: 8px;
+      outline: none; transition: border 0.15s ease;
+    }
+    .input:focus, textarea:focus { border-color: var(--accent); }
+    textarea { min-height: 64px; resize: vertical; }
+    .segmented {
+      display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+      background: var(--bg-soft);
+    }
+    .segmented button {
+      appearance: none; background: transparent; color: var(--text);
+      padding: 10px 12px; border: none; cursor: pointer; font-weight: 600;
+      transition: background 0.15s ease;
+    }
+    .segmented button.active { background: var(--accent); color: white; }
+    .actions {
+      display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+    }
+    .btn {
+      appearance: none; border: 1px solid var(--border); background: var(--bg-soft);
+      color: var(--text); padding: 12px 14px; border-radius: 10px; cursor: pointer;
+      font-weight: 700; transition: transform .05s ease, background .15s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn.primary { background: var(--accent); color: white; border-color: transparent; }
+    .btn.ghost { background: transparent; }
+    .hint { font-size: 12px; color: var(--muted); }
+    .status {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 14px 16px; border-top: 1px dashed var(--border); color: var(--muted);
+      font-size: 13px;
+    }
+    .progress {
+      height: 6px; background: var(--bg-soft); border: 1px solid var(--border);
+      border-radius: 999px; overflow: hidden;
+    }
+    .progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); width: 0%; transition: width .25s ease; }
+    .results {
+      margin-top: 22px; display: grid; gap: 14px;
+    }
+    .grid {
+      display: grid; gap: 14px;
+      grid-template-columns: 1fr;
+    }
+    @media (min-width: 680px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (min-width: 990px) {
+      .grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .sub-card {
+      display: grid; gap: 10px; padding: 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--card);
+    }
+    .sub-head {
+      display: flex; gap: 10px; align-items: center; justify-content: space-between;
+    }
+    .sub-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .sub-icon {
+      width: 32px; height: 32px; border-radius: 8px; background: var(--bg-soft); border: 1px solid var(--border);
+      display: grid; place-items: center; font-weight: 800; color: var(--muted);
+      overflow: hidden;
+    }
+    .sub-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .sub-title { display: grid; line-height: 1.2; }
+    .sub-title a { font-weight: 800; font-size: 15px; color: var(--text); }
+    .sub-stats { font-size: 12px; color: var(--muted); }
+    .sub-desc {
+      font-size: 13px; color: var(--muted); min-height: 38px;
+    }
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip {
+      padding: 4px 8px; border-radius: 999px; font-size: 11px; color: var(--muted);
+      background: var(--bg-soft); border: 1px solid var(--border);
+    }
+    .meta {
+      display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--muted); font-size: 12px;
+    }
+    .muted { color: var(--muted); }
+    .warn { color: var(--danger); }
+    .footer {
+      margin-top: 26px; color: var(--muted); font-size: 12px; text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <div class="badge">🔎 Find similar subreddits</div>
+        <h1>Subreddit Similarity Finder</h1>
+      </div>
+      <div class="badge">No login • Uses public Reddit JSON</div>
+    </header>
+
+    <section class="card">
+      <div class="controls">
+        <div class="row two">
+          <div class="field">
+            <label for="input">Enter subreddits or a topic</label>
+            <textarea id="input" placeholder="Examples:
+- Subreddits: r/Python, r/learnprogramming
+- Topic: data science career advice"></textarea>
+            <div class="hint">Tip: You can paste multiple subreddits separated by commas, spaces, or new lines.</div>
+          </div>
+          <div class="field">
+            <label>Mode</label>
+            <div class="segmented" role="tablist" aria-label="Mode">
+              <button id="mode-subs" class="active" type="button">I have subreddits</button>
+              <button id="mode-topic" type="button">I have a topic</button>
+            </div>
+            <div class="field">
+              <label class="hint">
+                The app can analyze subreddit descriptions and top posts, or treat your text as a topic.
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="row three">
+          <div class="field">
+            <label for="limit">How many results</label>
+            <input type="number" id="limit" class="input" min="10" max="50" value="10" />
+          </div>
+          <div class="field">
+            <label for="nsfw">NSFW</label>
+            <select id="nsfw" class="input">
+              <option value="hide" selected>Hide NSFW</option>
+              <option value="show">Show NSFW</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="time">Post window for keyword extraction</label>
+            <select id="time" class="input">
+              <option value="year" selected>Top from past year</option>
+              <option value="all">Top of all time</option>
+              <option value="month">Top past month</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="go" class="btn primary">Find similar subreddits</button>
+          <button id="clear" class="btn ghost">Clear</button>
+          <span class="hint">We’ll rank and dedupe across multiple sources to ensure at least 10 good matches.</span>
+        </div>
+      </div>
+
+      <div class="status">
+        <div id="status-text">Idle</div>
+        <div class="progress" style="min-width: 180px;">
+          <span id="progress-bar" style="width:0%"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="results" id="results" hidden>
+      <div class="meta">
+        <div><strong id="count">0</strong> recommendations</div>
+        <div class="actions">
+          <button class="btn" id="copy">Copy list</button>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+      <div class="actions" style="justify-content:center;margin-top:10px;">
+        <button class="btn" id="load-more" hidden>Load more</button>
+      </div>
+    </section>
+
+    <p class="footer">
+      Data from reddit.com public JSON. If you hit rate limits or CORS hiccups, try again in a bit or reduce the number of input subreddits.
+    </p>
+  </div>
+
+  <script>
+    // -------- Utilities
+    const sleep = (ms) => new Promise(res => setTimeout(res, ms));
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+    const el = (id) => document.getElementById(id);
+    const setText = (id, txt) => (el(id).textContent = txt);
+    const setProgress = (pct) => (el('progress-bar').style.width = pct + '%');
+    const setStatus = (txt) => setText('status-text', txt);
+    const escapeHTML = (s='') => s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+    const uniq = (arr) => Array.from(new Set(arr));
+
+    // Minimal English stopwords (+ a few Reddity fillers)
+    const STOPWORDS = new Set(`a an and are as at be but by com for from has have i i'm if in into is it its it's just like me my of on or so that the their them there they this to too u up was we were what when where which who will with you your you're reddit amp can can't could couldn't would wouldn't should shouldn't did didn't does doesn't do don't how why which &`.split(/\s+/));
+
+    // Tokenize and rank keywords (uni+bi-grams)
+    function extractKeywords(texts, topN=8) {
+      const freq = new Map();
+      const bi = new Map();
+
+      for (const raw of texts) {
+        const clean = (raw || '').toLowerCase().replace(/https?:\/\/\S+/g, ' ');
+        const tokens = clean
+          .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+          .split(/\s+/)
+          .filter(w => w && w.length > 2 && !STOPWORDS.has(w));
+
+        for (const t of tokens) freq.set(t, (freq.get(t) || 0) + 1);
+
+        for (let i = 0; i < tokens.length - 1; i++) {
+          const bigram = tokens[i] + ' ' + tokens[i+1];
+          if (!bigram.includes(' r ') && !bigram.includes(' u '))
+            bi.set(bigram, (bi.get(bigram) || 0) + 1);
+        }
+      }
+
+      // Combine scores: bigrams weighted higher
+      const scored = [];
+      for (const [k, v] of freq) scored.push([k, v]);
+      for (const [k, v] of bi) scored.push([k, v * 1.6]);
+
+      scored.sort((a,b) => b[1] - a[1]);
+      return scored.slice(0, topN).map(([k]) => k);
+    }
+
+    // Parse input: detect mode, clean subreddit names or topic text
+    function parseInput(text, mode) {
+      const raw = (text || '').trim();
+      if (!raw) return { subs: [], topic: '' };
+
+      if (mode === 'topic') {
+        return { subs: [], topic: raw };
+      }
+
+      // subs mode
+      const subs = raw
+        .split(/[\s,;]+/)
+        .map(s => s.trim().replace(/^\/?r\//i, ''))
+        .filter(Boolean)
+        .filter(s => /^[A-Za-z0-9_]+$/.test(s));
+      if (subs.length === 0) {
+        // If nothing looks like subreddits, treat whole input as topic
+        return { subs: [], topic: raw };
+      }
+      return { subs: uniq(subs), topic: '' };
+    }
+
+    // -------- Reddit fetchers (no auth)
+    async function fetchJSON(url, {retries=1, delay=300} = {}) {
+      for (let i = 0; i <= retries; i++) {
+        try {
+          const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return await res.json();
+        } catch (e) {
+          if (i === retries) throw e;
+          await sleep(delay * (i+1));
+        }
+      }
+    }
+
+    async function getSubredditAbout(name) {
+      const url = `https://www.reddit.com/r/${encodeURIComponent(name)}/about.json`;
+      const json = await fetchJSON(url, {retries: 1});
+      const d = json?.data || {};
+      return {
+        name: d.display_name || name,
+        title: d.title || d.public_description || d.description || '',
+        description: d.public_description || d.description || '',
+        over18: !!d.over18,
+        subscribers: d.subscribers || 0,
+        icon: pickIcon(d),
+        url: d.url || `/r/${name}`
+      };
+    }
+
+    function pickIcon(d) {
+      const candidates = [d.community_icon, d.icon_img, d.header_img, d.banner_img]
+        .filter(Boolean)
+        .map(u => String(u).split('?')[0].split(',')[0]); // some fields are "url,..." format
+      return candidates[0] || '';
+    }
+
+    async function getTopTitles(name, limit=30, t='year') {
+      const url = `https://www.reddit.com/r/${encodeURIComponent(name)}/top.json?limit=${limit}&t=${t}`;
+      const json = await fetchJSON(url, {retries: 1});
+      const children = json?.data?.children || [];
+      return children.map(c => c?.data?.title || '').filter(Boolean);
+    }
+
+    // Search endpoints
+    async function apiAutocomplete(query, includeNSFW, limit=25) {
+      const url = `https://www.reddit.com/api/subreddit_autocomplete_v2.json?query=${encodeURIComponent(query)}&limit=${limit}&include_over_18=${includeNSFW?'on':'off'}&include_profiles=false`;
+      const json = await fetchJSON(url, {retries: 1});
+      const children = json?.data?.children || [];
+      return children.map(c => normalizeChild(c, 'autocomplete', query));
+    }
+
+    async function apiByTopic(query, limit=25) {
+      const url = `https://www.reddit.com/api/subreddits_by_topic.json?query=${encodeURIComponent(query)}`;
+      const json = await fetchJSON(url, {retries: 1});
+      const arr = Array.isArray(json) ? json : [];
+      // This endpoint returns thinner objects; normalize as best as possible
+      return arr.slice(0, limit).map(item => {
+        const path = item.path || '';
+        const name = (item.name || path.replace(/^\/?r\//i, '')).replace(/^\/?r\//i, '');
+        return {
+          name,
+          title: item.name || name,
+          subscribers: item.subscribers || 0,
+          over18: !!item.over_18,
+          icon: (item.icon_img || '').split('?')[0],
+          description: item.description || '',
+          url: `/r/${name}`,
+          source: 'by_topic',
+          queryHit: query
+        };
+      });
+    }
+
+    async function apiSubredditSearch(query, limit=25, includeNSFW=true) {
+      const url = `https://www.reddit.com/subreddits/search.json?q=${encodeURIComponent(query)}&limit=${limit}`;
+      const json = await fetchJSON(url, {retries: 1});
+      const children = json?.data?.children || [];
+      const out = children.map(c => normalizeChild(c, 'search', query));
+      return includeNSFW ? out : out.filter(x => !x.over18);
+    }
+
+    function normalizeChild(child, source, query) {
+      const d = child?.data || {};
+      const name = d.display_name || d.name || '';
+      return {
+        name,
+        title: d.title || name,
+        subscribers: d.subscribers || 0,
+        over18: !!d.over18,
+        icon: pickIcon(d),
+        description: d.public_description || d.description || '',
+        url: d.url || `/r/${name}`,
+        source,
+        queryHit: query
+      };
+    }
+
+    // Concurrency helper
+    async function pMap(items, limit, mapper) {
+      const ret = [];
+      let idx = 0;
+      const workers = new Array(limit).fill(0).map(async () => {
+        while (idx < items.length) {
+          const i = idx++;
+          ret[i] = await mapper(items[i], i);
+        }
+      });
+      await Promise.all(workers);
+      return ret;
+    }
+
+    // Rank candidates by combined signals
+    function rankCandidates(candidates, {originalSubs = [], hideNSFW = true}) {
+      const subSet = new Set(originalSubs.map(s => s.toLowerCase()));
+      const map = new Map();
+
+      for (const c of candidates) {
+        const key = c.name?.toLowerCase();
+        if (!key || subSet.has(key)) continue;
+
+        const existing = map.get(key) || {
+          name: c.name,
+          title: c.title || c.name,
+          subscribers: 0,
+          over18: !!c.over18,
+          icon: c.icon || '',
+          description: c.description || '',
+          url: c.url || `/r/${c.name}`,
+          sources: new Set(),
+          hits: new Set(),
+          baseScore: 0
+        };
+
+        existing.subscribers = Math.max(existing.subscribers || 0, c.subscribers || 0);
+        existing.over18 = existing.over18 || c.over18;
+        existing.icon = existing.icon || c.icon || '';
+        if (!existing.description && c.description) existing.description = c.description;
+        existing.sources.add(c.source || 'unknown');
+        if (c.queryHit) existing.hits.add(c.queryHit);
+
+        // scoring increments
+        existing.baseScore += (c.source === 'autocomplete' ? 2.1 : c.source === 'search' ? 1.6 : c.source === 'by_topic' ? 1.8 : 1.0);
+        if (c.title && c.queryHit && c.title.toLowerCase().includes(String(c.queryHit).toLowerCase())) existing.baseScore += 0.4;
+        if (c.name && c.queryHit && c.name.toLowerCase().includes(String(c.queryHit).toLowerCase())) existing.baseScore += 0.6;
+
+        map.set(key, existing);
+      }
+
+      let list = Array.from(map.values());
+      if (hideNSFW) list = list.filter(x => !x.over18);
+
+      // final score: sources count + hits + subscribers weight
+      list.forEach(x => {
+        const sourcesWeight = Math.min(3, x.sources.size) * 1.2;
+        const hitsWeight = Math.min(4, x.hits.size) * 0.5;
+        const subsWeight = x.subscribers ? Math.log10(1 + x.subscribers) * 0.45 : 0;
+        x.score = x.baseScore + sourcesWeight + hitsWeight + subsWeight;
+      });
+
+      list.sort((a, b) => b.score - a.score);
+      return list;
+    }
+
+    // -------- Main logic
+    const $input = el('input');
+    const $limit = el('limit');
+    const $nsfw = el('nsfw');
+    const $time = el('time');
+    const $results = el('results');
+    const $grid = el('grid');
+    const $count = el('count');
+
+    // Mode switching
+    let currentMode = 'subs';
+    el('mode-subs').addEventListener('click', () => {
+      currentMode = 'subs';
+      el('mode-subs').classList.add('active');
+      el('mode-topic').classList.remove('active');
+    });
+    el('mode-topic').addEventListener('click', () => {
+      currentMode = 'topic';
+      el('mode-topic').classList.add('active');
+      el('mode-subs').classList.remove('active');
+    });
+
+    el('clear').addEventListener('click', () => {
+      $input.value = '';
+      setStatus('Idle');
+      setProgress(0);
+      $results.hidden = true;
+      $grid.innerHTML = '';
+      $count.textContent = '0';
+    });
+
+    el('go').addEventListener('click', () => {
+      run().catch(err => {
+        console.error(err);
+        setStatus('Something went wrong. Try again.');
+      });
+    });
+
+    async function run() {
+      const { subs, topic } = parseInput($input.value, currentMode);
+      const want = clamp(parseInt($limit.value || '10', 10), 10, 50);
+      const showNSFW = $nsfw.value === 'show';
+      const t = $time.value;
+
+      $results.hidden = true;
+      $grid.innerHTML = '';
+      setStatus('Analyzing your input...');
+      setProgress(5);
+
+      let keywords = [];
+      const originalSubs = subs.slice();
+
+      if (subs.length > 0) {
+        // Analyze subs: descriptions + top titles
+        const contexts = await pMap(subs, 4, async (s) => {
+          try {
+            const [about, titles] = await Promise.all([
+              getSubredditAbout(s),
+              getTopTitles(s, 30, t)
+            ]);
+            const descKw = extractKeywords([about.title, about.description], 5);
+            const titleKw = extractKeywords(titles, 6);
+            return {
+              sub: s,
+              about,
+              keywords: uniq([s, ...descKw, ...titleKw])
+            };
+          } catch (e) {
+            return { sub: s, about: { name: s }, keywords: [s] };
+          }
+        });
+
+        // Pick top keywords across contexts
+        const allKws = [];
+        contexts.forEach(ctx => allKws.push(...ctx.keywords));
+        // Count freq
+        const counts = new Map();
+        allKws.forEach(k => counts.set(k, (counts.get(k) || 0) + 1));
+        const ranked = Array.from(counts.entries()).sort((a,b) => b[1]-a[1]).map(([k]) => k);
+        // Keep a good mix
+        keywords = uniq([...subs, ...ranked]).slice(0, 9);
+      } else {
+        // Topic mode: extract keywords from text and include the whole phrase
+        const kw = extractKeywords([topic], 8);
+        keywords = uniq([topic, ...kw]).slice(0, 9);
+      }
+
+      if (keywords.length === 0) {
+        setStatus('Please enter subreddits or a topic.');
+        return;
+      }
+
+      // Show keywords as we search
+      setStatus(`Searching Reddit for: ${keywords.slice(0,6).join(', ')}${keywords.length>6?'…':''}`);
+      setProgress(18);
+
+      // Query multiple endpoints for each keyword
+      const tasks = [];
+      const includeNSFW = showNSFW;
+
+      for (const kw of keywords) {
+        tasks.push((async () => {
+          const [a, b, c] = await Promise.allSettled([
+            apiAutocomplete(kw, includeNSFW, 25),
+            apiByTopic(kw, 20),
+            apiSubredditSearch(kw, 25, includeNSFW)
+          ]);
+          const out = [];
+          if (a.status === 'fulfilled') out.push(...a.value);
+          if (b.status === 'fulfilled') out.push(...b.value);
+          if (c.status === 'fulfilled') out.push(...c.value);
+          // annotate source and query hit already handled
+          return out;
+        })());
+      }
+
+      const chunks = await Promise.all(tasks);
+      setProgress(55);
+
+      const rawCandidates = chunks.flat();
+
+      // If we’re still light on results, try a fallback with just the first subreddit/topic token
+      if (rawCandidates.length < 15 && keywords.length > 0) {
+        try {
+          setStatus('Finding more candidates…');
+          const extra = await apiSubredditSearch(keywords[0], 50, includeNSFW);
+          rawCandidates.push(...extra);
+        } catch {}
+      }
+
+      const ranked = rankCandidates(rawCandidates, { originalSubs, hideNSFW: !showNSFW });
+
+      // If we still lack subscribers info for top ones, enrich with about.json for first 30
+      const topForEnrich = ranked.slice(0, 30);
+      await pMap(topForEnrich, 6, async item => {
+        if (!item.subscribers || item.subscribers < 1) {
+          try {
+            const about = await getSubredditAbout(item.name);
+            item.subscribers = about.subscribers || item.subscribers;
+            item.over18 = about.over18 || item.over18;
+            item.icon = item.icon || about.icon;
+            if (!item.description && about.description) item.description = about.description;
+          } catch {}
+        }
+      });
+
+      // Re-sort after enrichment
+      topForEnrich.forEach(x => {
+        const subsWeight = x.subscribers ? Math.log10(1 + x.subscribers) * 0.45 : 0;
+        x.score = (x.score || 0) + subsWeight * 0.3;
+      });
+      ranked.sort((a,b) => b.score - a.score);
+
+      // Ensure at least the requested amount
+      const finalList = ranked.slice(0, Math.max(want, 10));
+      setProgress(85);
+
+      renderResults(finalList, { total: ranked.length, showNSFW });
+      setProgress(100);
+      setStatus(`Done — showing top ${finalList.length} of ${ranked.length} matches`);
+    }
+
+    function renderResults(list, { total, showNSFW }) {
+      $results.hidden = false;
+      $grid.innerHTML = '';
+      $count.textContent = String(total);
+
+      const toShow = list.slice(0, 10); // first page
+      for (const item of toShow) {
+        $grid.appendChild(renderCard(item));
+      }
+
+      const $loadMore = el('load-more');
+      if (list.length > toShow.length) {
+        let shown = toShow.length;
+        $loadMore.hidden = false;
+        $loadMore.onclick = () => {
+          const next = list.slice(shown, shown + 10);
+          next.forEach(n => $grid.appendChild(renderCard(n)));
+          shown += next.length;
+          if (shown >= list.length) $loadMore.hidden = true;
+        };
+      } else {
+        $loadMore.hidden = true;
+      }
+
+      el('copy').onclick = async () => {
+        const names = list.slice(0, 50).map(x => `r/${x.name}`).join('\n');
+        try {
+          await navigator.clipboard.writeText(names);
+          setStatus('Copied to clipboard!');
+        } catch {
+          setStatus('Copy failed — your browser may block clipboard access.');
+        }
+      };
+    }
+
+    function renderCard(item) {
+      const div = document.createElement('div');
+      div.className = 'sub-card';
+      const icon = item.icon ? `<img src="${escapeHTML(item.icon)}" alt="" />` : `<span>${escapeHTML((item.name || 'R')[0].toUpperCase())}</span>`;
+      const desc = (item.description || '').replace(/\s+/g, ' ').trim();
+      const descShort = desc ? escapeHTML(desc).slice(0, 180) + (desc.length > 180 ? '…' : '') : '<span class="muted">No description</span>';
+
+      const subs = item.subscribers ? new Intl.NumberFormat().format(item.subscribers) : '—';
+
+      div.innerHTML = `
+        <div class="sub-head">
+          <div class="sub-left">
+            <div class="sub-icon">${icon}</div>
+            <div class="sub-title">
+              <a href="https://www.reddit.com/r/${encodeURIComponent(item.name)}" target="_blank" rel="noopener">r/${escapeHTML(item.name)}</a>
+              <span class="sub-stats">${subs} subscribers ${item.over18 ? '• NSFW' : ''}</span>
+            </div>
+          </div>
+          <div class="chip">Score ${Math.round((item.score || 0) * 10) / 10}</div>
+        </div>
+        <div class="sub-desc">${descShort}</div>
+        <div class="chips">
+          ${Array.from(item.sources || []).slice(0,3).map(s => `<span class="chip">via ${escapeHTML(s)}</span>`).join('')}
+          ${Array.from(item.hits || []).slice(0,2).map(h => `<span class="chip">matches “${escapeHTML(h)}”</span>`).join('')}
+        </div>
+      `;
+      return div;
+    }
+
+    // Enter key shortcut
+    $input.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'enter') {
+        el('go').click();
+      }
+    });
+
+    // Prefill a small hint for quick testing
+    $input.value = 'r/Python, r/learnprogramming';
+  </script>
+</body>
+</html>
