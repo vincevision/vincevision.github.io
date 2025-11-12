@@ -99,6 +99,14 @@
         </div>
       </div>
       <div class="field">
+        <label>StochRSI Signal</label>
+        <div class="row">
+          <label><input id="requireCross" type="checkbox" checked/> Require K/D crossover</label>
+        </div>
+        <!-- If off, OB/OS level only (no crossover required) -->
+        <div class="hint">If off, OB/OS level only (no crossover required)</div>
+      </div>
+      <div class="field">
         <label>Bollinger Bands</label>
         <div class="row">
           <input id="bbLen" type="number" min="10" max="200" value="20" style="width:48%" />
@@ -333,7 +341,7 @@ function bufferMultForMarket(mkt){ switch(mkt){ case 'forex': return 0.8; case '
 function currentSymbolMarket(sym){ return symbolsAll.find(s=>s.symbol===sym)?.market || ''; }
 
 function detectSignal(candles, params, sym){
-  // params: { ob, os, bbLen, bbMult, maLen, requireBodyTap, atrMult, freshBars }
+  // params: { ob, os, bbLen, bbMult, maLen, requireBodyTap, atrMult, freshBars, requireCross }
   if(!candles || candles.length<Math.max(60, params.bbLen+20)) return null;
   const closes = candles.map(c=>toNum(c.close)), highs=candles.map(c=>toNum(c.high)), lows=candles.map(c=>toNum(c.low));
   const bb = bollinger(closes, params.bbLen, params.bbMult);
@@ -347,12 +355,19 @@ function detectSignal(candles, params, sym){
   for(let i=candles.length-1; i>=candles.length - lookback; i--){
     if(i<=0) break;
 
-    const stUp = crossedAbove(st.k, st.d, i) && st.k[i]!=null && st.k[i] <= params.os;
+    // StochRSI conditions: level-only or crossover-within-level
+    const kVal = st.k[i];
+    const stUpRaw = kVal!=null && kVal <= params.os;
+    const stDnRaw = kVal!=null && kVal >= params.ob;
+    const stUpCross = crossedAbove(st.k, st.d, i) && stUpRaw;
+    const stDnCross = crossedBelow(st.k, st.d, i) && stDnRaw;
+    const stUp = params.requireCross ? stUpCross : stUpRaw;
+    const stDn = params.requireCross ? stDnCross : stDnRaw;
+
     const tapL = params.requireBodyTap ? (closes[i] <= bb.lower[i]) : (lows[i] <= bb.lower[i]);
     const bodyAboveMA = ma3[i]!=null && closes[i] > ma3[i];
     const longOK = stUp && tapL && bodyAboveMA;
 
-    const stDn = crossedBelow(st.k, st.d, i) && st.k[i]!=null && st.k[i] >= params.ob;
     const tapU = params.requireBodyTap ? (closes[i] >= bb.upper[i]) : (highs[i] >= bb.upper[i]);
     const bodyBelowMA = ma3[i]!=null && closes[i] < ma3[i];
     const shortOK = stDn && tapU && bodyBelowMA;
@@ -415,7 +430,8 @@ function paramsFromUI(){
     ob:Number(el('ob').value), os:Number(el('os').value),
     bbLen:Number(el('bbLen').value), bbMult:Number(el('bbMult').value),
     maLen:Number(el('maLen').value), requireBodyTap: el('requireBodyTap').checked,
-    atrMult: Number(el('atrMult').value), freshBars:Number(el('freshBars').value)
+    atrMult: Number(el('atrMult').value), freshBars:Number(el('freshBars').value),
+    requireCross: el('requireCross').checked
   };
 }
 function renderLiveSignal(){
