@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>All Markets Scanner — StochRSI + 3MA + Bollinger (Deriv API)</title>
+  <title>All Markets Scanner — StochRSI + 3MA + Bollinger + MACD (Deriv API)</title>
   <style>
     :root {
       --bg:#0b0e11; --panel:#12161c; --panel2:#171b22; --text:#e6e8ea; --muted:#9aa4af;
@@ -47,8 +47,8 @@
 <div class="app">
   <header>
     <div>
-      <div class="title">📈 All Markets Scanner — StochRSI + 3MA + Bollinger</div>
-      <div class="subtitle">Deriv WebSocket API • Auto Scanner (all markets) • TP = Mid Band • SL suggestion</div>
+      <div class="title">📈 All Markets Scanner — StochRSI + 3MA + Bollinger + MACD(VINCEVISION/+254742850266)</div>
+      <div class="subtitle">Deriv WebSocket API • Auto Scanner (all markets) • TP = Mid Band • SL suggestion • MACD grey/slowdown filter</div>
     </div>
     <div class="row">
       <span class="badge">App ID: <strong id="appIdBadge">1089</strong></span>
@@ -67,21 +67,20 @@
       <div class="field">
         <label>Timeframe (granularity)</label>
         <select id="tf">
-  <option value="60" selected>1m</option>
-  <option value="120">2m</option>
-  <option value="180">3m</option>
-  <option value="300">5m</option>
-  <option value="600">10m</option>
-  <option value="900">15m</option>
-  <option value="1200">20m</option>
-  <option value="1800">30m</option>
-  <option value="3600">1h</option>
-  <option value="7200">2h</option>
-  <option value="14400">4h</option>
-  <option value="28800">8h</option>
-  <option value="86400">1d</option>
-</select>
-
+          <option value="60" selected>1m</option>
+          <option value="120">2m</option>
+          <option value="180">3m</option>
+          <option value="300">5m</option>
+          <option value="600">10m</option>
+          <option value="900">15m</option>
+          <option value="1200">20m</option>
+          <option value="1800">30m</option>
+          <option value="3600">1h</option>
+          <option value="7200">2h</option>
+          <option value="14400">4h</option>
+          <option value="28800">8h</option>
+          <option value="86400">1d</option>
+        </select>
       </div>
       <div class="field">
         <label>History Candles</label>
@@ -103,7 +102,6 @@
         <div class="row">
           <label><input id="requireCross" type="checkbox" checked/> Require K/D crossover</label>
         </div>
-        <!-- If off, OB/OS level only (no crossover required) -->
         <div class="hint">If off, OB/OS level only (no crossover required)</div>
       </div>
       <div class="field">
@@ -117,6 +115,25 @@
         <label>3MA Length</label>
         <input id="maLen" type="number" min="2" max="20" value="3"/>
       </div>
+
+      <!-- MACD controls -->
+      <div class="field">
+        <label>MACD</label>
+        <div class="row">
+          <input id="macdFast" type="number" min="2" max="50" value="12" style="width:32%"/>
+          <input id="macdSlow" type="number" min="5" max="100" value="26" style="width:32%"/>
+          <input id="macdSig" type="number" min="2" max="50" value="9" style="width:32%"/>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <label><input id="useMACD" type="checkbox" checked/> Require MACD grey/slowdown</label>
+          <span class="right" style="display:flex;align-items:center;gap:8px">
+            <span class="hint">Consecutive grey bars</span>
+            <input id="macdBars" type="number" min="1" max="3" value="1" style="width:66px"/>
+          </span>
+        </div>
+        <div class="hint">Grey = histogram decelerating toward zero or crossing zero (momentum slowing/turning).</div>
+      </div>
+
       <div class="field">
         <label>Tap requirement</label>
         <div class="row">
@@ -199,7 +216,7 @@
       <table>
         <thead>
           <tr>
-            <th>Symbol</th><th>Market</th><th>Status</th><th>Dir</th><th>Time</th><th>Entry</th><th>TP</th><th>SL</th><th>RR</th><th>Tap</th><th></th>
+            <th>Symbol</th><th>Market</th><th>Status</th><th>Dir</th><th>Time</th><th>Entry</th><th>TP</th><th>SL</th><th>RR</th><th>MACD</th><th>Tap</th><th></th>
           </tr>
         </thead>
         <tbody id="scanBody"></tbody>
@@ -334,6 +351,78 @@ function crossedAbove(a,b,i){ return i>0 && a[i-1]!=null && b[i-1]!=null && a[i]
 function crossedBelow(a,b,i){ return i>0 && a[i-1]!=null && b[i-1]!=null && a[i]!=null && b[i]!=null && a[i-1]>b[i-1] && a[i]<=b[i]; }
 function ATR(candles, len=14){ const n=candles.length; if(n<len) return new Array(n).fill(null); const tr=new Array(n).fill(null); for(let i=0;i<n;i++){ const h=toNum(candles[i].high), l=toNum(candles[i].low), pc=i>0?toNum(candles[i-1].close):null; const r1=h-l, r2=pc!=null?Math.abs(h-pc):r1, r3=pc!=null?Math.abs(l-pc):r1; tr[i]=Math.max(r1,r2,r3); } const atr=new Array(n).fill(null); let sum=0; for(let i=0;i<len;i++) sum+=tr[i]; atr[len-1]=sum/len; for(let i=len;i<n;i++) atr[i]=(atr[i-1]*(len-1)+tr[i])/len; return atr; }
 
+// EMA / MACD helpers
+function EMA(values, len){
+  const out = Array(values.length).fill(null);
+  if(values.length < len) return out;
+  let sum=0;
+  for(let i=0;i<len;i++) sum += values[i];
+  let ema = sum/len; out[len-1]=ema;
+  const k = 2/(len+1);
+  for(let i=len;i<values.length;i++){ ema = values[i]*k + ema*(1-k); out[i]=ema; }
+  return out;
+}
+function EMA_skipNull(series, len){
+  const out = Array(series.length).fill(null);
+  const k = 2/(len+1);
+  let seeded=false, ema=0, acc=[], start=-1;
+  for(let i=0;i<series.length;i++){
+    const v = series[i];
+    if(v==null) continue;
+    if(!seeded){
+      acc.push(v);
+      if(start===-1) start=i;
+      if(acc.length===len){
+        const sum = acc.reduce((a,b)=>a+b,0);
+        ema = sum/len;
+        out[i]=ema;
+        seeded=true;
+      }
+    }else{
+      ema = v*k + ema*(1-k);
+      out[i]=ema;
+    }
+  }
+  return out;
+}
+function MACD_vals(closes, fastLen=12, slowLen=26, signalLen=9){
+  const emaFast = EMA(closes, fastLen);
+  const emaSlow = EMA(closes, slowLen);
+  const macd = Array(closes.length).fill(null);
+  for(let i=0;i<closes.length;i++){
+    if(emaFast[i]!=null && emaSlow[i]!=null) macd[i] = emaFast[i] - emaSlow[i];
+  }
+  const signal = EMA_skipNull(macd, signalLen);
+  const hist = macd.map((m,i)=> (m!=null && signal[i]!=null) ? (m - signal[i]) : null);
+  return {macd, signal, hist};
+}
+// Grey/slowdown logic: longs = histogram <=0 and rising or crossing up; shorts = histogram >=0 and falling or crossing down.
+function macdGrey(hist, i, bars, type){
+  const need = Math.max(1, bars||1);
+  for(let k=i; k>i-need; k--){
+    if(k<=0) return false;
+    const h = hist[k], p = hist[k-1];
+    if(h==null || p==null) return false;
+    if(type==='long'){
+      const ok = (h<=0 && h>p) || (p<=0 && h>0);
+      if(!ok) return false;
+    }else{
+      const ok = (h>=0 && h<p) || (p>=0 && h<0);
+      if(!ok) return false;
+    }
+  }
+  return true;
+}
+function macdTagForBar(hist, i){
+  if(i<=0 || hist[i]==null || hist[i-1]==null) return '';
+  const h=hist[i], p=hist[i-1];
+  if(p<=0 && h>0) return 'CrossUp';
+  if(p>=0 && h<0) return 'CrossDown';
+  if(h<=0 && h>p) return 'Grey';
+  if(h>=0 && h<p) return 'Grey';
+  return '';
+}
+
 // ============================
 // Strategy Detection
 // ============================
@@ -341,7 +430,7 @@ function bufferMultForMarket(mkt){ switch(mkt){ case 'forex': return 0.8; case '
 function currentSymbolMarket(sym){ return symbolsAll.find(s=>s.symbol===sym)?.market || ''; }
 
 function detectSignal(candles, params, sym){
-  // params: { ob, os, bbLen, bbMult, maLen, requireBodyTap, atrMult, freshBars, requireCross }
+  // params: { ob, os, bbLen, bbMult, maLen, requireBodyTap, atrMult, freshBars, requireCross, useMACD, macdFast, macdSlow, macdSig, macdBars }
   if(!candles || candles.length<Math.max(60, params.bbLen+20)) return null;
   const closes = candles.map(c=>toNum(c.close)), highs=candles.map(c=>toNum(c.high)), lows=candles.map(c=>toNum(c.low));
   const bb = bollinger(closes, params.bbLen, params.bbMult);
@@ -350,12 +439,13 @@ function detectSignal(candles, params, sym){
   const atrArr = ATR(candles, 14);
   const market = currentSymbolMarket(sym);
   const mult = params.atrMult * bufferMultForMarket(market);
+  const mac = params.useMACD ? MACD_vals(closes, params.macdFast, params.macdSlow, params.macdSig) : null;
 
   const lookback = Math.max(2, params.freshBars||3);
   for(let i=candles.length-1; i>=candles.length - lookback; i--){
     if(i<=0) break;
 
-    // StochRSI conditions: level-only or crossover-within-level
+    // StochRSI: level-only or crossover-within-level
     const kVal = st.k[i];
     const stUpRaw = kVal!=null && kVal <= params.os;
     const stDnRaw = kVal!=null && kVal >= params.ob;
@@ -364,13 +454,18 @@ function detectSignal(candles, params, sym){
     const stUp = params.requireCross ? stUpCross : stUpRaw;
     const stDn = params.requireCross ? stDnCross : stDnRaw;
 
+    // Band taps and 3MA bias
     const tapL = params.requireBodyTap ? (closes[i] <= bb.lower[i]) : (lows[i] <= bb.lower[i]);
     const bodyAboveMA = ma3[i]!=null && closes[i] > ma3[i];
-    const longOK = stUp && tapL && bodyAboveMA;
-
     const tapU = params.requireBodyTap ? (closes[i] >= bb.upper[i]) : (highs[i] >= bb.upper[i]);
     const bodyBelowMA = ma3[i]!=null && closes[i] < ma3[i];
-    const shortOK = stDn && tapU && bodyBelowMA;
+
+    // MACD grey/slowdown confluence
+    const macGreyLong = params.useMACD ? macdGrey(mac.hist, i, params.macdBars, 'long') : true;
+    const macGreyShort = params.useMACD ? macdGrey(mac.hist, i, params.macdBars, 'short') : true;
+
+    const longOK = stUp && tapL && bodyAboveMA && macGreyLong;
+    const shortOK = stDn && tapU && bodyBelowMA && macGreyShort;
 
     if(longOK || shortOK){
       const type = longOK ? 'long' : 'short';
@@ -384,13 +479,15 @@ function detectSignal(candles, params, sym){
       const risk = type==='long' ? Math.max(entry - sl, 0) : Math.max(sl - entry, 0);
       const reward = (tp!=null) ? Math.abs(tp - entry) : null;
       const rr = (risk>0 && reward!=null) ? (reward/risk) : null;
+      const macTag = params.useMACD ? macdTagForBar(mac.hist, i) : '';
 
       return {
         type, index:i, time:candles[i].open_time,
         bodyTap: (type==='long') ? (closes[i] <= bb.lower[i]) : (closes[i] >= bb.upper[i]),
         entry, tp, sl, rr,
         bb: {lower: bb.lower[i], mid: bb.ma[i], upper: bb.upper[i]},
-        atr, swingLow, swingHigh
+        atr, swingLow, swingHigh,
+        macd: params.useMACD ? { macd: mac.macd[i], signal: mac.signal[i], hist: mac.hist[i], tag: macTag } : null
       };
     }
   }
@@ -431,7 +528,12 @@ function paramsFromUI(){
     bbLen:Number(el('bbLen').value), bbMult:Number(el('bbMult').value),
     maLen:Number(el('maLen').value), requireBodyTap: el('requireBodyTap').checked,
     atrMult: Number(el('atrMult').value), freshBars:Number(el('freshBars').value),
-    requireCross: el('requireCross').checked
+    requireCross: el('requireCross').checked,
+    useMACD: el('useMACD')?.checked ?? false,
+    macdFast: Number(el('macdFast')?.value ?? 12),
+    macdSlow: Number(el('macdSlow')?.value ?? 26),
+    macdSig: Number(el('macdSig')?.value ?? 9),
+    macdBars: Number(el('macdBars')?.value ?? 1),
   };
 }
 function renderLiveSignal(){
@@ -455,7 +557,8 @@ function renderLiveSignal(){
   el('slVal').textContent = fmt(sig.sl);
   el('rrVal').textContent = sig.rr!=null? `${sig.rr.toFixed(2)}R`:'—';
   const tapTxt = sig.bodyTap ? 'Body tap' : 'Wick tap';
-  el('liveNote').textContent = `${tapTxt} | Candle: ${epochToStr(sig.time)}`;
+  const macTxt = sig.macd?.tag ? ` | MACD: ${sig.macd.tag}` : '';
+  el('liveNote').textContent = `${tapTxt} | Candle: ${epochToStr(sig.time)}${macTxt}`;
 }
 
 // ============================
@@ -504,6 +607,7 @@ function renderScanTable(){
       const dir = r.type ? (r.type==='long'? '<span style="color:#98f7bf">LONG</span>' : '<span style="color:#ffb3b3">SHORT</span>') : '—';
       const rr = r.rr!=null ? r.rr.toFixed(2)+'R' : '—';
       const tapTxt = r.bodyTap? 'Body' : (r.tap ? 'Wick' : '—');
+      const macTxt = r.macdTag || '—';
       return `<tr>
         <td>${r.display||r.symbol}</td>
         <td>${(r.market||'').replace(/_/g,' ')}</td>
@@ -514,11 +618,12 @@ function renderScanTable(){
         <td>${r.tp? fmt(r.tp):'—'}</td>
         <td>${r.sl? fmt(r.sl):'—'}</td>
         <td>${rr}</td>
+        <td>${macTxt}</td>
         <td>${tapTxt}</td>
         <td><span class="link" data-golive="${r.symbol}">Go Live</span></td>
       </tr>`;
     }).join('');
-  tbody.innerHTML = rows || `<tr><td colspan="11" class="hint">No signals yet.</td></tr>`;
+  tbody.innerHTML = rows || `<tr><td colspan="12" class="hint">No signals yet.</td></tr>`;
 }
 document.getElementById('scanBody').addEventListener('click', (e)=>{
   const sym=e.target?.dataset?.golive; if(sym){ el('symbol').value=sym; updateSymStatus(); startLive(); }
@@ -560,6 +665,7 @@ async function scanSymbolOnce(s, tf, hist, params){
       scanResults[s.symbol] = {
         symbol: s.symbol, display: s.display_name, market: s.market, is_open: s.is_open,
         type: sig.type, time: sig.time, entry: sig.entry, tp: sig.tp, sl: sig.sl, rr: sig.rr, bodyTap: sig.bodyTap, tap:true,
+        macdTag: sig.macd?.tag || '',
         updated: Date.now()
       };
       return true;
