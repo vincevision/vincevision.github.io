@@ -1,0 +1,184 @@
+Full Step-by-Step Trading Guide — Bollinger + StochRSI + MACD (4H → 30m)
+
+1) Exact indicator & chart setup (copy these)
+
+Bollinger Bands: Length = 20, StdDev = 2 (apply on all TFs you use).
+Stochastic RSI: RSI length 14, Stoch length 14, %K smooth 3, %D smooth 3 (platform default ok).
+MACD: Fast = 12, Slow = 26, Signal = 9 (show histogram).
+EMA9 & EMA20 on the entry TF (30m) — optional but recommended for pullback clarity.
+ATR(14) on the entry TF to size stop buffers.
+
+Timeframes:
+
+Higher (bias) TF: 4H — decides trade direction and TP (4H mid band).
+Entry TF: 30m — where you watch for pullbacks, confirmation candles, and place SL.
+
+
+2) Daily pre-session routine (10–15 minutes)
+
+Check global sessions & major economic calendar (skip trading around high-impact news).
+Open 4H chart — mark current Bollinger mid band, lower and upper bands, and note whether price recently touched an outer band and is moving toward mid.
+Look at 4H MACD: is histogram shrinking (grey) or flipping? If MACD still strongly against your intended direction → don’t trade that direction.
+Identify nearby structural SR zones that might block your 4H TP.
+Decide maximum risk for the day (e.g., 1% per trade, max 3 trades).
+
+
+3) Higher-TF (4H) filter — must pass these before searching lower TF
+Do not trade unless the 4H shows one of:
+
+Price touched the lower band and started up → look for buys.
+Price touched the upper band and started down → look for sells.
+4H MACD histogram is shrinking or flipped in your favor (grey → color change).
+If none of the above → no trades from this bias.
+
+
+4) Move to entry TF (30m) — step-by-step entry checklist
+Follow in order. Skip trade if any required item is missing.
+
+
+Wait for a pullback inside the 4H move:
+
+Price should retrace toward the 30m lower band for buys (or 30m upper band for sells) or pull to EMA9/20 cluster.
+
+
+
+Stochastic RSI:
+
+Buy: StochRSI crosses up (ideally from below 20, but a cross from ~30–50 is acceptable if higher TF supports).
+Sell: StochRSI crosses down (preferably from above 80).
+
+
+
+MACD (30m):
+
+Prefer histogram shrinking (opposing color getting smaller) then flipping or at least showing grey bars and starting to expand in trade direction.
+If MACD is expanding strongly against you → skip.
+
+
+
+Price action candle confirmation:
+
+Wait for a rejection candle (hammer, bullish engulfing, strong-bodied close) at/near 30m band or EMA cluster.
+Enter at the open of the next candle after that confirmation close.
+
+
+
+Entry only if all the above align.
+
+
+
+5) Stop-loss (SL) rules (protect first, win later)
+
+Primary SL: place SL below the recent 30m swing low for buys (or above recent 30m swing high for sells).
+If that swing coincides with the 30m outer band — great. If not, still use the swing + buffer.
+Buffer: add 0.5 × ATR(14) on 30m to reduce noise (use 1× ATR if you want fewer stopouts).
+Alternative simple SL: set SL just below 30m outer band minus a small buffer (1–2 pips/points).
+
+
+6) Take-profit (TP) & trade management
+
+Primary TP: 4H middle band (mean reversion).
+Partial take approach (recommended):
+
+Take 30–50% at the 30m middle band (quick profit).
+Take remaining at the 4H middle band.
+
+
+If momentum fades before 4H mid, scale out earlier and trail SL.
+Trailing rules: after price clears 30m mid band, move SL to break-even + small buffer; then trail with 30m swing lows or EMA9.
+
+
+7) Position sizing (explicit formula & example)
+Rule: max 1% of account per trade (conservative). Up to 2% if you accept more risk.
+Formula:
+RiskAmount = AccountBalance × Risk%
+DistanceToSL_inPips = |EntryPrice - SLPrice| in pips
+PipValue_perStandardLot = instrument dependent (e.g., $10 for most USD-quoted pairs)
+PositionSize_inLots = RiskAmount / (DistanceToSL_inPips × PipValue_perStandardLot)
+
+Worked example (digit-by-digit):
+
+Account = $1,000, Risk% = 1% → RiskAmount = 1000 × 0.01 = $10.
+Entry = 1.1000, SL = 1.0980 → Distance = 1.1000 − 1.0980 = 0.0020 = 20 pips.
+Pip value per standard lot = $10.
+Denominator: DistanceToSL_inPips × PipValue = 20 × 10 = 200.
+PositionSize = RiskAmount / Denominator = 10 ÷ 200 = 0.05 lots.
+
+(If pip value differs for your instrument, substitute actual pip value.)
+
+8) Re-entry plan (if you missed initial move)
+
+If the 4H bounce has started and you missed it, drop to 30m.
+Wait for a 30m pullback to its lower band or EMA9/20 cluster.
+Require the same confirmations: Stoch cross, MACD showing momentum returning, and rejection candle.
+SL = 30m swing + ATR buffer; TP = 4H mid band.
+Size smaller when re-entering missed moves (reduce risk) because trade is less in your favor.
+
+
+9) Hard stop / skip filters (do not trade if...)
+
+4H MACD is strongly expanding against the trade.
+Price is riding the outer band (continuation momentum) — not a mean reversion.
+Poor risk-reward (< 1:1 after partials).
+Major news release within ±30–60 minutes of your planned entry.
+Correlated instruments show opposite behavior (e.g., EURUSD and GBPUSD diverging unusually).
+
+
+10) Psychology, journaling & rules
+
+Journal each trade: date/time, TFs, entry, SL, TP, reason (tick checklist), screenshot, emotion, outcome.
+Daily review: at least 5 minutes reviewing open trades and market context.
+End of day: log results; if 3 losers in a row → stop trading for the day.
+Weekly review: compute win rate, average R:R, expectancy; refine one variable only.
+
+Journal template (copy into notebook):
+
+Date / Pair / TFs
+Entry price / SL / TP
+Position size / Risk %
+Reasons for entry (tick checklist)
+Outcome (P/L)
+Notes: what went right, what to improve
+
+
+11) Common mistakes & how to avoid them
+
+Entering while MACD still grey — wait for flip or expanding bars in your favor.
+Placing SL exactly on the band — use swing + ATR buffer.
+Chasing price past mid band — take partials.
+Ignoring higher TF — always respect 4H bias.
+Overleveraging on missed moves — reduce size on re-entries.
+
+
+12) Example trade walkthrough (concise)
+
+4H shows bounce from lower band → bias = buy. 4H MACD histogram shrinking.
+On 30m: price pulls back to lower band; StochRSI crosses up; MACD greys then shows first green; candle closes bullish (hammer).
+Enter at next candle open. SL = below recent 30m swing low + 0.5×ATR. TP1 = 30m middle band (take 40%); TP2 = 4H middle band (hold rest). Move SL to break-even after TP1; trail thereafter.
+
+
+13) Edge tuning & metrics to track
+
+Track: win rate, average win : average loss, average RR, expectancy.
+Aim for positive expectancy: Expectancy = (Win% × AvgWin) - (Loss% × AvgLoss).
+If expectancy < 0 after 50 trades, review: entry timing, SL sizing, TF alignment.
+
+
+14) Quick checklist you can copy/paste before entry
+
+4H bias = bounce toward mid? ✅/❌
+4H MACD not strongly against me? ✅/❌
+30m pullback to 30m band / EMA9-20? ✅/❌
+StochRSI crossed in direction? ✅/❌
+30m MACD shrinking → flipping/confirming? ✅/❌
+Rejection candle closed on 30m? ✅/❌
+SL placed (swing + ATR buffer)? ✅/❌
+Position size = risk ≤ 1%? ✅/❌
+If any NO → skip.
+
+
+That’s the complete, battle-tested guide — from setup to entries, SLs, TPs, re-entries, sizing, psychology and journaling.
+Want me to:
+
+Turn this into a one-page printable checklist (I can create it now), or
+Mark a real chart example step-by-step (I’ll annotate a sample 4H → 30m trade)?
