@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Swing SL Helper (Deriv Realtime)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #151a2f;
+      --accent: #6ee7b7;
+      --accent2: #60a5fa;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --danger: #f87171;
+      --warn: #fbbf24;
+      --ok: #10b981;
+      --card: #1b203a;
+      --chip: #252b4a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 10% -10%, rgba(96,165,250,.12), transparent 50%),
+                  radial-gradient(1200px 600px at 90% -10%, rgba(110,231,183,.08), transparent 50%),
+                  var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 18px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+      background: linear-gradient(180deg, rgba(255,255,255,.03), transparent);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    h1 {
+      font-size: 18px;
+      margin: 0;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .badge {
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--chip);
+      color: var(--muted);
+    }
+    .container {
+      padding: 16px;
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 16px;
+    }
+    @media (max-width: 950px) {
+      .container { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 14px;
+      padding: 14px;
+    }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    .col { flex: 1; min-width: 180px; }
+    label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 6px; }
+    select, input[type="number"], input[type="text"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: var(--chip);
+      color: var(--text);
+      outline: none;
+    }
+    select:focus, input:focus { border-color: rgba(110,231,183,.5); }
+    button {
+      background: linear-gradient(180deg, rgba(110,231,183,.18), rgba(16,185,129,.18));
+      color: #d1fae5;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(110,231,183,.35);
+      cursor: pointer;
+    }
+    button.secondary {
+      background: linear-gradient(180deg, rgba(96,165,250,.15), rgba(59,130,246,.14));
+      color: #dbeafe;
+      border: 1px solid rgba(96,165,250,.35);
+    }
+    button.warn {
+      background: linear-gradient(180deg, rgba(251,191,36,.20), rgba(217,119,6,.18));
+      color: #fffbeb;
+      border: 1px solid rgba(251,191,36,.45);
+    }
+    .status {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted);
+      background: var(--chip);
+      padding: 6px 10px; border-radius: 999px;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--warn);
+      box-shadow: 0 0 0 3px rgba(251,191,36,.2);
+    }
+    .dot.ok { background: var(--ok); box-shadow: 0 0 0 3px rgba(16,185,129,.2); }
+    .dot.bad { background: var(--danger); box-shadow: 0 0 0 3px rgba(248,113,113,.25); }
+    .statgrid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 550px) {
+      .statgrid { grid-template-columns: 1fr; }
+    }
+    .stat {
+      background: linear-gradient(180deg, rgba(255,255,255,.02), transparent);
+      border: 1px solid rgba(255,255,255,.06);
+      border-radius: 12px;
+      padding: 12px;
+    }
+    .stat .k { font-size: 11px; color: var(--muted); }
+    .stat .v { font-size: 20px; margin-top: 6px; }
+    .stat .v small { color: var(--muted); font-size: 12px; }
+    .list {
+      display: grid; gap: 8px;
+    }
+    .item {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--chip);
+      border: 1px solid rgba(255,255,255,.06);
+      padding: 10px 12px; border-radius: 10px;
+      font-size: 14px;
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .muted { color: var(--muted); }
+    .hl { color: var(--accent); }
+    .hl2 { color: var(--accent2); }
+    .danger { color: var(--danger); }
+    .footnote { color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .grid-2 {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .grid-2 > div { background: var(--chip); border: 1px solid rgba(255,255,255,.06); padding: 10px; border-radius: 10px; }
+    .rightcol .card { position: sticky; top: 78px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .pill {
+      padding: 4px 8px; font-size: 12px; border-radius: 999px; background: rgba(255,255,255,.06); color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>
+    Swing SL Helper
+    <span class="badge">Deriv Realtime</span>
+    <span class="badge">App ID: 1089</span>
+  </h1>
+  <div class="status">
+    <span id="conn-dot" class="dot"></span>
+    <span id="conn-text">Disconnected</span>
+  </div>
+</header>
+
+<div class="container">
+  <div class="leftcol">
+    <div class="card">
+      <div class="row">
+        <div class="col">
+          <label>Symbol</label>
+          <select id="symbol"></select>
+        </div>
+        <div class="col">
+          <label>Timeframe</label>
+          <select id="granularity">
+            <option value="60">1 min</option>
+            <option value="120">2 min</option>
+            <option value="300" selected>5 min</option>
+            <option value="600">10 min</option>
+            <option value="900">15 min</option>
+            <option value="3600">1 hour</option>
+            <option value="14400">4 hours</option>
+            <option value="86400">1 day</option>
+          </select>
+        </div>
+        <div class="col">
+          <label>Pivot length (left=right)</label>
+          <input type="number" id="pivotLen" min="1" max="10" value="3" />
+        </div>
+        <div class="col">
+          <label>SL buffer (price units)</label>
+          <input type="number" id="buffer" step="0.0001" value="0.0" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div class="col">
+          <label>BB period</label>
+          <input type="number" id="bbPeriod" min="5" max="200" value="20" />
+        </div>
+        <div class="col">
+          <label>BB deviation</label>
+          <input type="number" id="bbDev" step="0.1" min="0.5" max="4" value="2" />
+        </div>
+        <div class="col">
+          <label>&nbsp;</label>
+          <div class="actions">
+            <button id="btn-resub">Apply / Resubscribe</button>
+            <button id="btn-copy" class="secondary">Copy values</button>
+            <button id="btn-stop" class="warn">Stop stream</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="statgrid">
+        <div class="stat">
+          <div class="k">Last price</div>
+          <div class="v mono"><span id="lastPrice">—</span></div>
+        </div>
+        <div class="stat">
+          <div class="k">Candle status</div>
+          <div class="v"><span id="candleStatus" class="pill">—</span></div>
+        </div>
+        <div class="stat">
+          <div class="k">Last swing HIGH</div>
+          <div class="v mono"><span id="lastHigh">—</span><br><small id="lastHighTime" class="muted">—</small></div>
+        </div>
+        <div class="stat">
+          <div class="k">Last swing LOW</div>
+          <div class="v mono"><span id="lastLow">—</span><br><small id="lastLowTime" class="muted">—</small></div>
+        </div>
+      </div>
+
+      <div style="height:10px;"></div>
+
+      <div class="grid-2">
+        <div>
+          <div class="k">Suggested SL for LONG</div>
+          <div class="v mono"><span id="longSL" class="hl">—</span></div>
+          <div class="k">Basis: last swing low − buffer</div>
+        </div>
+        <div>
+          <div class="k">Suggested SL for SHORT</div>
+          <div class="v mono"><span id="shortSL" class="hl2">—</span></div>
+          <div class="k">Basis: last swing high + buffer</div>
+        </div>
+      </div>
+
+      <div style="height:10px;"></div>
+
+      <div class="list">
+        <div class="item"><span class="muted">BB Upper</span> <span id="bbUpper" class="mono">—</span></div>
+        <div class="item"><span class="muted">BB Basis (SMA)</span> <span id="bbBasis" class="mono">—</span></div>
+        <div class="item"><span class="muted">BB Lower</span> <span id="bbLower" class="mono">—</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size: 12px; color: var(--muted); display:flex; gap:10px; flex-wrap:wrap;">
+        <span>Tips:</span>
+        <span class="pill">Swing = fractal: candle high/low is extreme vs N candles left & right</span>
+        <span class="pill">Increase pivot length to reduce noise</span>
+        <span class="pill">Use buffer to avoid stop-outs on wicks</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="rightcol">
+    <div class="card">
+      <h3 style="margin-top:0;">Log</h3>
+      <pre id="log" style="white-space:pre-wrap; max-height: 420px; overflow: auto; background: var(--chip); padding: 10px; border-radius: 10px; border: 1px solid rgba(255,255,255,.06);"></pre>
+      <div class="footnote" style="margin-top:10px;">
+        Disclaimer: For educational purposes only. Market data and calculations may be delayed, incomplete, or wrong due to connectivity or API changes. Always confirm levels on your platform before trading. This is not financial advice.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  // Config
+  const WS_URLS = [
+    "wss://ws.derivws.com/websockets/v3?app_id=1089", // Deriv (primary)
+    "wss://ws.binaryws.com/websockets/v3?app_id=1089" // Fallback
+  ];
+  const MAX_CANDLES = 500; // keep memory reasonable
+
+  // State
+  const state = {
+    ws: null,
+    urlIndex: 0,
+    connected: false,
+    symbols: [],
+    subscriptionId: null,
+    symbol: null,
+    granularity: 300,
+    pivotLen: 3,
+    buffer: 0,
+    bbPeriod: 20,
+    bbDev: 2,
+    candles: [], // {time, open, high, low, close}
+    decimals: 4,
+    lastPrice: null,
+  };
+
+  // UI Elements
+  const el = {
+    symbol: document.getElementById('symbol'),
+    granularity: document.getElementById('granularity'),
+    pivotLen: document.getElementById('pivotLen'),
+    buffer: document.getElementById('buffer'),
+    bbPeriod: document.getElementById('bbPeriod'),
+    bbDev: document.getElementById('bbDev'),
+    btnResub: document.getElementById('btn-resub'),
+    btnCopy: document.getElementById('btn-copy'),
+    btnStop: document.getElementById('btn-stop'),
+    lastPrice: document.getElementById('lastPrice'),
+    candleStatus: document.getElementById('candleStatus'),
+    lastHigh: document.getElementById('lastHigh'),
+    lastHighTime: document.getElementById('lastHighTime'),
+    lastLow: document.getElementById('lastLow'),
+    lastLowTime: document.getElementById('lastLowTime'),
+    longSL: document.getElementById('longSL'),
+    shortSL: document.getElementById('shortSL'),
+    bbUpper: document.getElementById('bbUpper'),
+    bbBasis: document.getElementById('bbBasis'),
+    bbLower: document.getElementById('bbLower'),
+    connDot: document.getElementById('conn-dot'),
+    connText: document.getElementById('conn-text'),
+    log: document.getElementById('log'),
+  };
+
+  // Helpers
+  const log = (...args) => {
+    const s = args.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ');
+    const ts = new Date().toLocaleTimeString();
+    el.log.textContent = `[${ts}] ${s}\n` + el.log.textContent;
+  };
+
+  const setConn = (ok, text) => {
+    state.connected = ok;
+    el.connText.textContent = text || (ok ? "Connected" : "Disconnected");
+    el.connDot.classList.remove('ok', 'bad');
+    el.connDot.classList.add(ok ? 'ok' : 'bad');
+  };
+
+  const toNum = x => (typeof x === 'number' ? x : parseFloat(x));
+  const fmt = (n) => (n == null || isNaN(n)) ? '—' : n.toFixed(state.decimals);
+  const epochToLocal = (sec) => {
+    if (!sec) return '—';
+    try { return new Date(sec * 1000).toLocaleString(); } catch { return '—'; }
+  };
+  const decimalsFrom = (price) => {
+    const s = String(price);
+    const dot = s.indexOf('.');
+    return dot === -1 ? 0 : (s.length - dot - 1);
+  };
+
+  // Math
+  function computeBollinger(closes, period, deviation) {
+    if (!closes || closes.length < period) return null;
+    const arr = closes.slice(-period);
+    const mean = arr.reduce((a, b) => a + b, 0) / period;
+    const variance = arr.reduce((acc, v) => acc + Math.pow(v - mean, 2), 0) / period;
+    const sd = Math.sqrt(variance);
+    return {
+      basis: mean,
+      upper: mean + deviation * sd,
+      lower: mean - deviation * sd
+    };
+  }
+
+  function findPivots(candles, span) {
+    // Using only closed candles (exclude the last forming bar)
+    const closed = candles.length > 1 ? candles.slice(0, -1) : candles.slice();
+    const n = closed.length;
+    if (n < span * 2 + 1) return { lastHigh: null, lastLow: null };
+
+    let lastHigh = null, lastLow = null;
+    for (let i = span; i <= n - span - 1; i++) {
+      const c = closed[i];
+      let isHigh = true, isLow = true;
+
+      for (let j = i - span; j <= i + span; j++) {
+        if (j === i) continue;
+        if (closed[j].high >= c.high) isHigh = false;
+        if (closed[j].low <= c.low) isLow = false;
+        if (!isHigh && !isLow) break;
+      }
+      if (isHigh) lastHigh = c;
+      if (isLow) lastLow = c;
+    }
+    return { lastHigh, lastLow };
+  }
+
+  // WS Connection + API
+  function connectWS() {
+    try {
+      const url = WS_URLS[state.urlIndex % WS_URLS.length];
+      state.ws = new WebSocket(url);
+      log("Connecting:", url);
+
+      state.ws.onopen = () => {
+        setConn(true, "Connected");
+        log("Connected");
+        // Request active symbols
+        send({ active_symbols: "brief", product_type: "basic" });
+      };
+
+      state.ws.onclose = () => {
+        setConn(false, "Disconnected");
+        log("Disconnected. Reconnecting in 2s...");
+        setTimeout(() => {
+          state.urlIndex++;
+          connectWS();
+        }, 2000);
+      };
+
+      state.ws.onerror = (e) => {
+        log("WS error:", e.message || String(e));
+      };
+
+      state.ws.onmessage = (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          handleMessage(msg);
+        } catch (err) {
+          log("Parse error:", err.message);
+        }
+      };
+    } catch (err) {
+      log("Connect error:", err.message);
+    }
+  }
+
+  function send(obj) {
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+      state.ws.send(JSON.stringify(obj));
+    } else {
+      log("Send failed, WS not open:", obj);
+    }
+  }
+
+  function handleMessage(msg) {
+    if (msg.error) {
+      log("API error:", msg.error.message || JSON.stringify(msg.error));
+      return;
+    }
+
+    switch (msg.msg_type) {
+      case 'active_symbols': {
+        state.symbols = (msg.active_symbols || []).filter(s => s.is_trading_suspended === 0);
+        populateSymbols(state.symbols);
+        // Auto-select a default and start
+        if (!state.symbol && state.symbols[0]) {
+          state.symbol = state.symbols[0].symbol;
+          el.symbol.value = state.symbol;
+          resubscribe();
+        }
+        break;
+      }
+      // Candles history + stream (Deriv may send either 'candles' or 'ohlc' updates)
+      case 'candles': {
+        // Initial history
+        if (Array.isArray(msg.candles)) {
+          upsertCandlesArray(msg.candles);
+          if (msg.subscription && msg.subscription.id) {
+            state.subscriptionId = msg.subscription.id;
+          }
+        }
+        // Some implementations send singular 'candle' updates
+        if (msg.candle) {
+          upsertOneCandle(msg.candle);
+        }
+        break;
+      }
+      case 'ohlc': {
+        if (msg.ohlc) {
+          upsertOneCandle(msg.ohlc);
+          if (msg.subscription && msg.subscription.id) {
+            state.subscriptionId = msg.subscription.id;
+          }
+        }
+        break;
+      }
+      case 'tick': {
+        // not used directly; but if you later want LTP you can subscribe to ticks
+        break;
+      }
+      case 'tick_history': {
+        // Some servers respond with 'tick_history' + candles array
+        if (Array.isArray(msg.candles)) {
+          upsertCandlesArray(msg.candles);
+          if (msg.subscription && msg.subscription.id) {
+            state.subscriptionId = msg.subscription.id;
+          }
+        }
+        break;
+      }
+      case 'forget': {
+        // ack
+        break;
+      }
+      default: {
+        // log("Unhandled:", msg.msg_type);
+      }
+    }
+  }
+
+  function normalizeCandle(rc) {
+    // rc may be: {epoch, open, high, low, close} OR {open_time, open, high, low, close, ...}
+    const t = rc.epoch != null ? rc.epoch : (rc.open_time != null ? rc.open_time : null);
+    if (t == null) return null;
+    return {
+      time: Number(t),
+      open: toNum(rc.open),
+      high: toNum(rc.high),
+      low: toNum(rc.low),
+      close: toNum(rc.close),
+    };
+  }
+
+  function upsertCandlesArray(arr) {
+    let changed = false;
+    for (const rc of arr) {
+      const c = normalizeCandle(rc);
+      if (!c) continue;
+      if (state.candles.length === 0) {
+        state.decimals = Math.max(decimalsFrom(c.open), decimalsFrom(c.close), decimalsFrom(c.high), decimalsFrom(c.low));
+      }
+      changed = true;
+      upsertIntoSeries(c);
+    }
+    if (changed) postUpdate();
+  }
+
+  function upsertOneCandle(rc) {
+    const c = normalizeCandle(rc);
+    if (!c) return;
+    if (state.candles.length === 0) {
+      state.decimals = Math.max(decimalsFrom(c.open), decimalsFrom(c.close), decimalsFrom(c.high), decimalsFrom(c.low));
+    }
+    upsertIntoSeries(c);
+    postUpdate();
+  }
+
+  function upsertIntoSeries(c) {
+    const arr = state.candles;
+    const idx = arr.findIndex(x => x.time === c.time);
+    if (idx >= 0) {
+      arr[idx] = c;
+    } else {
+      arr.push(c);
+      arr.sort((a, b) => a.time - b.time);
+      if (arr.length > MAX_CANDLES) arr.splice(0, arr.length - MAX_CANDLES);
+    }
+    state.lastPrice = c.close;
+  }
+
+  // Subscribe / Forget
+  function resubscribe() {
+    if (!state.symbol) return;
+    // Stop previous
+    if (state.subscriptionId) {
+      send({ forget: state.subscriptionId });
+      state.subscriptionId = null;
+    }
+    send({ forget_all: 'candles' }); // extra safety
+
+    state.candles = [];
+    postUpdate(true);
+
+    // Request historical + stream candles
+    const req = {
+      ticks_history: state.symbol,
+      style: 'candles',
+      granularity: state.granularity,
+      start: 1,
+      end: 'latest',
+      count: 500,
+      subscribe: 1
+    };
+    log("Subscribing:", state.symbol, `(${state.granularity}s)`);
+    send(req);
+  }
+
+  // UI populate
+  function populateSymbols(symbols) {
+    el.symbol.innerHTML = '';
+    // Group by market for nicer dropdown
+    const groups = {};
+    symbols.forEach(s => {
+      const key = `${s.market_display_name} / ${s.submarket_display_name}`;
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(s);
+    });
+    Object.keys(groups).forEach(g => {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = g;
+      groups[g].sort((a, b) => a.display_name.localeCompare(b.display_name));
+      groups[g].forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.symbol;
+        opt.textContent = `${s.display_name} (${s.symbol})`;
+        optgroup.appendChild(opt);
+      });
+      el.symbol.appendChild(optgroup);
+    });
+  }
+
+  // Update UI after data change
+  function postUpdate(clear=false) {
+    // Candle status
+    const n = state.candles.length;
+    if (clear || n === 0) {
+      el.candleStatus.textContent = '—';
+      el.lastPrice.textContent = '—';
+      el.lastHigh.textContent = el.lastLow.textContent = '—';
+      el.lastHighTime.textContent = el.lastLowTime.textContent = '—';
+      el.longSL.textContent = el.shortSL.textContent = '—';
+      el.bbUpper.textContent = el.bbBasis.textContent = el.bbLower.textContent = '—';
+      return;
+    }
+
+    // Last price
+    el.lastPrice.textContent = fmt(state.lastPrice);
+
+    // Candle status: show current period start and whether forming
+    if (n >= 1) {
+      const last = state.candles[n - 1];
+      const prev = n >= 2 ? state.candles[n - 2] : null;
+      const forming = !prev || last.time === prev.time ? false : true; // fallback
+      el.candleStatus.textContent = `Last candle at ${epochToLocal(last.time)} (forming)`;
+    }
+
+    // Pivots
+    const piv = findPivots(state.candles, state.pivotLen);
+    if (piv.lastHigh) {
+      el.lastHigh.textContent = fmt(piv.lastHigh.high);
+      el.lastHighTime.textContent = epochToLocal(piv.lastHigh.time);
+    }
+    if (piv.lastLow) {
+      el.lastLow.textContent = fmt(piv.lastLow.low);
+      el.lastLowTime.textContent = epochToLocal(piv.lastLow.time);
+    }
+
+    // SL suggestions
+    const buf = Number(state.buffer) || 0;
+    const longSL = (piv.lastLow && isFinite(piv.lastLow.low)) ? (piv.lastLow.low - buf) : null;
+    const shortSL = (piv.lastHigh && isFinite(piv.lastHigh.high)) ? (piv.lastHigh.high + buf) : null;
+    el.longSL.textContent = fmt(longSL);
+    el.shortSL.textContent = fmt(shortSL);
+
+    // Bollinger
+    const closes = state.candles.map(c => c.close);
+    const bb = computeBollinger(closes, state.bbPeriod, state.bbDev);
+    if (bb) {
+      el.bbUpper.textContent = fmt(bb.upper);
+      el.bbBasis.textContent = fmt(bb.basis);
+      el.bbLower.textContent = fmt(bb.lower);
+    } else {
+      el.bbUpper.textContent = el.bbBasis.textContent = el.bbLower.textContent = '—';
+    }
+  }
+
+  // Events
+  el.symbol.addEventListener('change', () => {
+    state.symbol = el.symbol.value;
+    resubscribe();
+  });
+  el.granularity.addEventListener('change', () => {
+    state.granularity = Number(el.granularity.value);
+    resubscribe();
+  });
+  el.pivotLen.addEventListener('change', () => {
+    state.pivotLen = Math.max(1, Number(el.pivotLen.value));
+    postUpdate();
+  });
+  el.buffer.addEventListener('change', () => {
+    state.buffer = Number(el.buffer.value);
+    postUpdate();
+  });
+  el.bbPeriod.addEventListener('change', () => {
+    state.bbPeriod = Math.max(2, Number(el.bbPeriod.value));
+    postUpdate();
+  });
+  el.bbDev.addEventListener('change', () => {
+    state.bbDev = Math.max(0.1, Number(el.bbDev.value));
+    postUpdate();
+  });
+  el.btnResub.addEventListener('click', () => {
+    state.symbol = el.symbol.value;
+    state.granularity = Number(el.granularity.value);
+    state.pivotLen = Math.max(1, Number(el.pivotLen.value));
+    state.buffer = Number(el.buffer.value);
+    state.bbPeriod = Math.max(2, Number(el.bbPeriod.value));
+    state.bbDev = Math.max(0.1, Number(el.bbDev.value));
+    resubscribe();
+  });
+  el.btnStop.addEventListener('click', () => {
+    if (state.subscriptionId) {
+      send({ forget: state.subscriptionId });
+      state.subscriptionId = null;
+    }
+    send({ forget_all: 'candles' });
+    log("Streaming stopped. Click Apply/Resubscribe to start again.");
+  });
+  el.btnCopy.addEventListener('click', async () => {
+    const text = [
+      `Symbol: ${state.symbol || '—'} TF: ${state.granularity || '—'}s`,
+      `Last Price: ${el.lastPrice.textContent}`,
+      `Last Swing HIGH: ${el.lastHigh.textContent} at ${el.lastHighTime.textContent}`,
+      `Last Swing LOW: ${el.lastLow.textContent} at ${el.lastLowTime.textContent}`,
+      `SL Long: ${el.longSL.textContent}`,
+      `SL Short: ${el.shortSL.textContent}`,
+      `BB( ${state.bbPeriod}, ${state.bbDev} ): Upper ${el.bbUpper.textContent}, Basis ${el.bbBasis.textContent}, Lower ${el.bbLower.textContent}`
+    ].join('\n');
+    try {
+      await navigator.clipboard.writeText(text);
+      log("Copied to clipboard.");
+    } catch {
+      log("Clipboard copy failed.");
+    }
+  });
+
+  // Start
+  connectWS();
+
+})();
+</script>
+</body>
+</html>
