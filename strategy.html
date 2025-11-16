@@ -1,194 +1,518 @@
-<!doctype html>
-
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Timeframe Strategy Hub</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HTF/LTF Confluence Strategy</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <style>
-    :root{
-      --bg:#0f1724; --card:#0b1220; --accent:#38bdf8; --muted:#94a3b8; --glass: rgba(255,255,255,0.04);
-      --radius:14px; font-family:Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    :root {
+      color-scheme: dark;
     }
-    *{box-sizing:border-box}
-    body{margin:0;background:linear-gradient(180deg,#071025 0%, #071827 60%);color:#e6eef8;min-height:100vh}
-    .wrap{max-width:1100px;margin:28px auto;padding:20px}
-    header{display:flex;align-items:center;gap:16px}
-    h1{margin:0;font-size:20px}
-    p.lead{margin:4px 0 18px;color:var(--muted)}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
-    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border:1px solid rgba(255,255,255,0.04);padding:14px;border-radius:var(--radius);backdrop-filter:blur(6px)}
-    .card h3{margin:0 0 6px;font-size:16px}
-    .meta{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
-    .pill{background:var(--glass);padding:6px 8px;border-radius:10px;font-size:13px;color:var(--muted)}
-    .small{font-size:13px;color:var(--muted);margin-bottom:8px}
-    .actions{display:flex;gap:8px}
-    button{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:10px;color:var(--accent);cursor:pointer}
-    .drop{margin-top:10px;border-top:1px dashed rgba(255,255,255,0.03);padding-top:10px}
-    .explain{display:none;margin-top:8px;color:#dff6ff;background:linear-gradient(180deg, rgba(56,189,248,0.06), transparent);padding:10px;border-radius:10px;border:1px solid rgba(56,189,248,0.08)}
-    .show .explain{display:block}
-    .full-strat{margin-top:20px;padding:14px;border-radius:12px;background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);border:1px solid rgba(255,255,255,0.04)}
-    .toggle-all{display:inline-flex;gap:8px;align-items:center}
-    .legend{margin-top:12px;color:var(--muted);font-size:13px}
-    footer{margin-top:20px;color:var(--muted);font-size:13px}
-    .download{margin-left:auto}
-    .controls{display:flex;gap:8px;align-items:center;margin-top:12px}
-    .strategy-list{display:grid;gap:8px}
-    pre{white-space:pre-wrap;background:rgba(0,0,0,0.18);padding:10px;border-radius:8px;color:#dff6ff;overflow:auto}
-    @media (max-width:520px){h1{font-size:18px}}
+    body {
+      @apply bg-slate-950 text-slate-100;
+    }
+    .glass {
+      background: radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 55%),
+                  radial-gradient(circle at bottom right, rgba(129,140,248,0.18), transparent 55%),
+                  rgba(15,23,42,0.92);
+      backdrop-filter: blur(18px);
+      border: 1px solid rgba(148,163,184,0.35);
+    }
+    .pill {
+      background: linear-gradient(135deg, rgba(34,197,94,0.16), rgba(59,130,246,0.1));
+      border: 1px solid rgba(74,222,128,0.5);
+    }
+    .step-active {
+      background: linear-gradient(135deg, rgba(45,212,191,0.16), rgba(59,130,246,0.18));
+      border-color: rgb(56,189,248) !important;
+    }
+    .badge-soft {
+      background: rgba(15,23,42,0.92);
+      border: 1px solid rgba(148,163,184,0.45);
+    }
+    .fade-enter {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    .fade-enter-active {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 250ms ease-out, transform 250ms ease-out;
+    }
   </style>
 </head>
-<body>
-  <div class="wrap">
-    <header>
-      <div>
-        <h1>Timeframe Strategy Hub</h1>
-        <p class="lead">Top-down analysis + re-entry timeframes. Click a timeframe card for details and open the full strategy from the dropdown.</p>
-      </div>
-      <div class="controls" style="margin-left:auto">
-        <button id="toggleAll">Toggle all cards</button>
-        <button id="downloadBtn" class="download">Download HTML</button>
-      </div>
-    </header><section class="grid" id="tfGrid">
-  <!-- Cards injected by JS -->
-</section>
-
-<div class="full-strat" id="fullStrat">
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-    <strong>Full strategy explanation</strong>
-    <div style="display:flex;gap:8px">
-      <button id="collapseFull">Collapse</button>
+<body class="min-h-screen font-sans antialiased">
+  <div class="min-h-screen bg-slate-950 relative overflow-hidden">
+    <!-- background accents -->
+    <div class="pointer-events-none absolute inset-0 opacity-60">
+      <div class="absolute -top-40 -right-32 h-80 w-80 bg-cyan-500/20 blur-3xl rounded-full"></div>
+      <div class="absolute -bottom-40 -left-32 h-96 w-96 bg-indigo-500/25 blur-3xl rounded-full"></div>
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.4),_transparent_60%),radial-gradient(circle_at_bottom,_rgba(15,23,42,0.7),_transparent_55%)]"></div>
     </div>
+
+    <main class="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
+      <!-- Header -->
+      <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-10 lg:mb-12">
+        <div class="max-w-2xl">
+          <div class="inline-flex items-center gap-2 rounded-full pill px-3 py-1 text-xs font-medium text-emerald-200 mb-4 shadow-lg shadow-emerald-500/10">
+            <span class="text-lg">✅</span>
+            <span>Corrected HTF / LTF Confluence Strategy</span>
+          </div>
+          <h1 class="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-slate-50 mb-3">
+            From Confusion to Clarity:
+            <span class="block text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-emerald-300 to-indigo-400">HTF Midband + LTF Execution Playbook</span>
+          </h1>
+          <p class="text-sm sm:text-base text-slate-300 max-w-xl">
+            A simple, rule-based framework to align higher timeframe Bollinger structure with lower timeframe momentum
+            using Stoch RSI, MACD, and clean Break of Structure (BOS).
+          </p>
+        </div>
+        <div class="glass rounded-2xl px-4 py-4 sm:px-6 sm:py-5 flex flex-col gap-3 max-w-sm w-full shadow-xl">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Quick Overview</h2>
+            <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300 border border-emerald-400/40">
+              Rule-Based System
+            </span>
+          </div>
+          <ul class="space-y-1.5 text-xs text-slate-200">
+            <li class="flex items-start gap-2">
+              <span class="mt-[2px] h-1.5 w-1.5 rounded-full bg-cyan-400"></span>
+              <span><strong>STEP 1:</strong> Mark previous HTF candle high / low.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="mt-[2px] h-1.5 w-1.5 rounded-full bg-indigo-400"></span>
+              <span><strong>STEP 2:</strong> Read HTF Bollinger midband slope for trend bias.</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="mt-[2px] h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+              <span><strong>STEP 3:</strong> Execute on LTF with Stoch RSI, MACD, BOS & band rules.</span>
+            </li>
+          </ul>
+        </div>
+      </header>
+
+      <!-- Step Navigator -->
+      <section class="glass rounded-2xl p-4 sm:p-5 lg:p-6 mb-8 shadow-xl">
+        <div class="flex flex-col gap-4 lg:flex-row lg:gap-6">
+          <!-- Steps list -->
+          <div class="w-full lg:w-64 flex-shrink-0">
+            <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 mb-3 flex items-center justify-between">
+              Playbook Steps
+              <span class="text-[10px] text-slate-500">Click to explore</span>
+            </h3>
+            <div class="flex flex-col gap-2 text-sm">
+              <button data-step="1" class="step-btn step-active flex items-center justify-between gap-3 rounded-xl border border-slate-600/70 bg-slate-900/60 px-3 py-2.5 text-left hover:border-cyan-400/70 hover:bg-slate-900 transition">
+                <div>
+                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300/80">Step 1</div>
+                  <div class="font-medium text-slate-50">Mark HTF High / Low</div>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Frame the playing field.</p>
+                </div>
+                <span class="text-xs font-semibold text-cyan-300">HTF</span>
+              </button>
+              <button data-step="2" class="step-btn flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2.5 text-left hover:border-indigo-400/70 hover:bg-slate-900 transition">
+                <div>
+                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300/80">Step 2</div>
+                  <div class="font-medium text-slate-50">Read HTF Midband Direction</div>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Define your trend bias.</p>
+                </div>
+                <span class="text-xs font-semibold text-indigo-300">Trend</span>
+              </button>
+              <button data-step="3" class="step-btn flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2.5 text-left hover:border-emerald-400/70 hover:bg-slate-900 transition">
+                <div>
+                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Step 3</div>
+                  <div class="font-medium text-slate-50">Execute on LTF</div>
+                  <p class="text-[11px] text-slate-400 mt-0.5">Indicators, BOS, entry, TP & SL.</p>
+                </div>
+                <span class="text-xs font-semibold text-emerald-300">LTF</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step content -->
+          <div class="flex-1">
+            <div id="step-content" class="space-y-5 text-sm text-slate-200">
+              <!-- content injected by JS -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Confusion solved section -->
+      <section class="grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2.2fr)] gap-6 mb-10">
+        <div class="glass rounded-2xl p-4 sm:p-5 lg:p-6 shadow-xl">
+          <div class="flex items-center justify-between gap-3 mb-4">
+            <h2 class="text-sm font-semibold tracking-tight text-slate-100">"Outer Band vs Midband" — Confusion Solved</h2>
+            <span class="badge-soft rounded-full px-2 py-1 text-[10px] font-semibold text-amber-300 flex items-center gap-1">
+              <span>🧠</span>
+              <span>Context Matters</span>
+            </span>
+          </div>
+          <div class="grid sm:grid-cols-2 gap-4 text-xs sm:text-sm">
+            <div class="rounded-xl border border-emerald-400/40 bg-emerald-500/5 p-3">
+              <h3 class="text-emerald-300 font-semibold text-xs mb-1.5">First Move of the Trend</h3>
+              <p class="text-slate-200 mb-2">You caught the trend early and HTF bias is fresh.</p>
+              <ul class="list-disc list-inside space-y-1 text-slate-300">
+                <li>Price only needs to retrace to the <span class="font-semibold text-emerald-200">LTF midband</span>.</li>
+                <li>Stoch RSI + MACD confirm momentum shift.</li>
+                <li>BOS in trend direction = green light to enter.</li>
+              </ul>
+              <p class="text-[11px] text-emerald-200/90 mt-2">✔ Use <span class="font-semibold">midband retracement</span> for the first clean opportunity.</p>
+            </div>
+            <div class="rounded-xl border border-cyan-400/40 bg-cyan-500/5 p-3">
+              <h3 class="text-cyan-300 font-semibold text-xs mb-1.5">Second-Chance Entries</h3>
+              <p class="text-slate-200 mb-2">You missed the initial move and price already extended.</p>
+              <ul class="list-disc list-inside space-y-1 text-slate-300">
+                <li>Now you need a deeper pullback to the <span class="font-semibold text-cyan-200">LTF outer band</span>.</li>
+                <li>Wait patiently for premium discount (buys) or premium premium (sells).</li>
+                <li>Same rules: Stoch RSI, MACD, then BOS before entry.</li>
+              </ul>
+              <p class="text-[11px] text-cyan-200/90 mt-2">✔ Use <span class="font-semibold">outer band retracement</span> when chasing extensions.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass rounded-2xl p-4 sm:p-5 lg:p-6 shadow-xl flex flex-col gap-4">
+          <div class="flex items-center justify-between gap-3">
+            <h2 class="text-sm font-semibold text-slate-100">Risk Framework</h2>
+            <span class="badge-soft rounded-full px-2 py-1 text-[10px] font-semibold text-sky-300 flex items-center gap-1">
+              <span>🎯</span>
+              <span>TP & SL Logic</span>
+            </span>
+          </div>
+          <div class="space-y-3 text-xs sm:text-sm text-slate-200">
+            <div class="rounded-lg border border-emerald-400/50 bg-emerald-500/5 px-3 py-2.5 flex items-start gap-2">
+              <div class="mt-0.5 h-2 w-2 rounded-full bg-emerald-400"></div>
+              <div>
+                <div class="font-semibold text-emerald-200 text-xs uppercase tracking-[0.16em] mb-1">Take Profit</div>
+                <p class="leading-relaxed">
+                  <span class="font-semibold">TP = HTF midband.</span> You are trading in the direction of the
+                  higher timeframe trend, so your natural target is where price mean-reverts on that HTF.
+                </p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-rose-400/60 bg-rose-500/5 px-3 py-2.5 flex items-start gap-2">
+              <div class="mt-0.5 h-2 w-2 rounded-full bg-rose-400"></div>
+              <div>
+                <div class="font-semibold text-rose-200 text-xs uppercase tracking-[0.16em] mb-1">Stop Loss</div>
+                <p class="leading-relaxed">
+                  <span class="font-semibold">SL = LTF outer band, behind the pullback.</span>
+                  If price closes beyond that band, your pullback idea is invalidated and you want to be out.
+                </p>
+              </div>
+            </div>
+            <div class="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2.5 text-[11px] text-slate-300">
+              <p class="mb-1">
+                <span class="font-semibold text-slate-100">Position sizing tip:</span> Size your trade so that a stop
+                beyond the LTF outer band is within your risk tolerance (e.g. 0.5–1% per trade).
+              </p>
+              <p>
+                The framework is fixed. Only <span class="font-semibold text-slate-100">risk per trade</span> and
+                <span class="font-semibold text-slate-100">timeframe choice</span> are flexible.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Visual example section -->
+      <section class="glass rounded-2xl p-4 sm:p-5 lg:p-6 mb-10 shadow-xl">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <h2 class="text-sm font-semibold text-slate-100">Buy Scenario Walkthrough</h2>
+          <div class="flex gap-2 items-center">
+            <button id="view-buy" class="view-toggle text-[11px] rounded-full px-2.5 py-1 font-medium border border-emerald-400/70 bg-emerald-500/10 text-emerald-200">Buy Example</button>
+            <button id="view-sell" class="view-toggle text-[11px] rounded-full px-2.5 py-1 font-medium border border-slate-700 bg-slate-900/70 text-slate-300">Sell Mirror</button>
+          </div>
+        </div>
+        <div id="example-buy" class="space-y-4 text-xs sm:text-sm text-slate-200">
+          <div class="grid md:grid-cols-[minmax(0,2.3fr)_minmax(0,2fr)] gap-4">
+            <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-slate-100">Higher Timeframe (e.g. 4H)</h3>
+                <span class="text-[10px] text-cyan-300 font-semibold uppercase tracking-[0.16em]">Context</span>
+              </div>
+              <ul class="list-disc list-inside space-y-1.5">
+                <li>Mark previous 4H candle <span class="font-semibold text-cyan-200">high and low</span>.</li>
+                <li>Bollinger <span class="font-semibold text-emerald-200">midband is sloping up → bullish bias</span>.</li>
+                <li>Price is pulling back toward the midband inside last candle's range.</li>
+              </ul>
+            </div>
+            <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-slate-100">Lower Timeframe (e.g. 5m)</h3>
+                <span class="text-[10px] text-emerald-300 font-semibold uppercase tracking-[0.16em]">Execution</span>
+              </div>
+              <ol class="list-decimal list-inside space-y-1.5">
+                <li>Wait for price to retrace into the <span class="font-semibold text-cyan-200">5m midband</span> (first move) or <span class="font-semibold text-cyan-200">outer band</span> (second chance).</li>
+                <li>On that pullback, Stoch RSI is <span class="font-semibold text-emerald-200">oversold</span> and crosses up.</li>
+                <li>MACD histogram rises toward 0 or signal line crosses up, supporting the move.</li>
+                <li>Price forms a <span class="font-semibold text-emerald-200">higher low</span> and then <span class="font-semibold">breaks previous minor high (BOS)</span>.</li>
+                <li>Enter after BOS, with SL beyond LTF outer band and TP at the HTF midband.</li>
+              </ol>
+            </div>
+          </div>
+          <div class="rounded-xl border border-slate-700 bg-slate-950/80 p-3 sm:p-4">
+            <h3 class="text-xs font-semibold text-slate-100 mb-2">Flow Summary</h3>
+            <div class="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs">
+              <span class="badge-soft px-2 py-1 rounded-full">HTF: Mark previous candle H / L</span>
+              <span class="text-slate-500">→</span>
+              <span class="badge-soft px-2 py-1 rounded-full">HTF: Read midband slope (trend)</span>
+              <span class="text-slate-500">→</span>
+              <span class="badge-soft px-2 py-1 rounded-full">LTF: Wait for band retrace (mid / outer)</span>
+              <span class="text-slate-500">→</span>
+              <span class="badge-soft px-2 py-1 rounded-full">LTF: Stoch RSI + MACD agree</span>
+              <span class="text-slate-500">→</span>
+              <span class="badge-soft px-2 py-1 rounded-full">LTF: BOS in trend direction</span>
+              <span class="text-slate-500">→</span>
+              <span class="badge-soft px-2 py-1 rounded-full">Enter → TP = HTF midband, SL = LTF outer band</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sell mirror text (hidden by default) -->
+        <div id="example-sell" class="hidden space-y-4 text-xs sm:text-sm text-slate-200">
+          <div class="grid md:grid-cols-[minmax(0,2.3fr)_minmax(0,2fr)] gap-4">
+            <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-slate-100">Higher Timeframe (e.g. 4H)</h3>
+                <span class="text-[10px] text-rose-300 font-semibold uppercase tracking-[0.16em]">Bearish Context</span>
+              </div>
+              <ul class="list-disc list-inside space-y-1.5">
+                <li>Mark previous 4H candle <span class="font-semibold text-cyan-200">high and low</span>.</li>
+                <li>Bollinger <span class="font-semibold text-rose-200">midband is sloping down → bearish bias</span>.</li>
+                <li>Price is pulling back up toward the midband inside the last candle's range.</li>
+              </ul>
+            </div>
+            <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold text-slate-100">Lower Timeframe (e.g. 5m)</h3>
+                <span class="text-[10px] text-rose-300 font-semibold uppercase tracking-[0.16em]">Execution</span>
+              </div>
+              <ol class="list-decimal list-inside space-y-1.5">
+                <li>Wait for price to retrace into the <span class="font-semibold text-cyan-200">5m midband</span> (first move) or <span class="font-semibold text-cyan-200">outer band</span> (second chance).</li>
+                <li>On that pullback, Stoch RSI is <span class="font-semibold text-rose-200">overbought</span> and crosses down.</li>
+                <li>MACD histogram falls toward 0 or signal line crosses down, supporting the drop.</li>
+                <li>Price forms a <span class="font-semibold text-rose-200">lower high</span> and then <span class="font-semibold">breaks previous minor low (BOS)</span>.</li>
+                <li>Enter after BOS, with SL beyond LTF outer band and TP at the HTF midband.
+                </li>
+              </ol>
+            </div>
+          </div>
+          <div class="rounded-xl border border-slate-700 bg-slate-950/80 p-3 sm:p-4">
+            <h3 class="text-xs font-semibold text-slate-100 mb-2">Same Rules, Inverted Direction</h3>
+            <p class="leading-relaxed">
+              The logic of the system does not change between buys and sells. Only the direction of the midband,
+              the type of Stoch RSI extreme (oversold vs overbought), and the BOS (breaking highs vs lows) are mirrored.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Checklist -->
+      <section class="glass rounded-2xl p-4 sm:p-5 lg:p-6 mb-8 shadow-xl">
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <h2 class="text-sm font-semibold text-slate-100">Execution Checklist</h2>
+          <span class="badge-soft rounded-full px-2 py-1 text-[10px] font-semibold text-cyan-200 flex items-center gap-1">
+            <span>✅</span>
+            <span>Tick before you click</span>
+          </span>
+        </div>
+        <p class="text-xs sm:text-sm text-slate-300 mb-3">Use this before every trade to stay consistent:</p>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs sm:text-sm">
+          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-emerald-400/60 transition">
+            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+            <span>
+              <span class="block font-medium text-slate-100 mb-0.5">HTF levels marked</span>
+              <span class="text-slate-400">Previous candle high & low are on your chart.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-cyan-400/60 transition">
+            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+            <span>
+              <span class="block font-medium text-slate-100 mb-0.5">Trend bias clear</span>
+              <span class="text-slate-400">HTF midband clearly sloping up or down.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-emerald-400/60 transition">
+            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+            <span>
+              <span class="block font-medium text-slate-100 mb-0.5">Band context understood</span>
+              <span class="text-slate-400">You know if it's a first move (midband) or second chance (outer band).</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-indigo-400/60 transition">
+            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+            <span>
+              <span class="block font-medium text-slate-100 mb-0.5">Stoch RSI aligned</span>
+              <span class="text-slate-400">Oversold / overbought with a clear crossover in your direction.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-sky-400/60 transition">
+            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+            <span>
+              <span class="block font-medium text-slate-100 mb-0.5">MACD supporting</span>
+              <span class="text-slate-400">Histogram or signal line confirms momentum shift.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-rose-400/60 transition">
+            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+            <span>
+              <span class="block font-medium text-slate-100 mb-0.5">BOS completed</span>
+              <span class="text-slate-400">Structure broke in the HTF trend direction before you enter.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-emerald-400/60 transition">
+            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+            <span>
+              <span class="block font-medium text-slate-100 mb-0.5">TP & SL defined</span>
+              <span class="text-slate-400">TP = HTF midband, SL beyond LTF outer band, sized correctly.</span>
+            </span>
+          </label>
+        </div>
+      </section>
+
+      <!-- Footer -->
+      <footer class="pb-4 pt-2 text-[11px] text-slate-500 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-800/80">
+        <p>
+          This page is an educational visualization of your corrected strategy: HTF levels + midband trend, executed on
+          LTF with Stoch RSI, MACD, BOS, and band-based risk.
+        </p>
+        <p class="sm:text-right">Trade responsibly. No indicator replaces risk management.</p>
+      </footer>
+    </main>
   </div>
-  <div style="margin-top:10px;" id="fullContent">
-    <!-- Full content injected by JS -->
-  </div>
-</div>
 
-<div class="legend">Mapping rules used: <span style="color:var(--accent)">Top-down TF = the higher timeframe used to set bias</span> • <span style="color:var(--accent)">Re-entry TF = the lower timeframe used to re-enter/scale</span></div>
+  <script>
+    const steps = {
+      1: {
+        title: 'STEP 1 — Mark Previous HTF Candle High + Low',
+        subtitle: 'Choose your higher timeframe (4H, Daily, or Weekly) and frame the playing field.',
+        bullets: [
+          'Pick a single higher timeframe for context: 4H, Daily, or Weekly.',
+          "Mark the previous candle's high and low on your chart.",
+          'Treat that range as the zone price is currently working inside.',
+          'Do not skip this: every trade should be taken with HTF levels visible.',
+        ],
+        notes: [
+          'This step is correct exactly as you had it — you were already doing this right.',
+          'Think of these levels as the court boundaries you must respect when trading the LTF.',
+        ],
+      },
+      2: {
+        title: 'STEP 2 — Identify HTF Mid-Band Direction (Bollinger Middle Band)',
+        subtitle:
+          'Use the midband slope on your HTF to decide if you should only be looking for buys or sells.',
+        bullets: [
+          'Look at the Bollinger midband on your chosen HTF (the moving average in the middle).',
+          'If the midband is clearly sloping up → you have a bullish bias (look for buys only).',
+          'If the midband is clearly sloping down → you have a bearish bias (look for sells only).',
+          'If the midband is flat and choppy → stay patient or reduce size; trend is unclear.',
+        ],
+        notes: [
+          'This step gives you your trend and directional bias. No guessing, no counter-trend sniping.',
+          'The HTF midband is where you will target later (TP), so you are trading toward the HTF mean.',
+        ],
+      },
+      3: {
+        title: 'STEP 3 — LTF Execution: Indicators, Bands, BOS, Entry, TP & SL',
+        subtitle:
+          'All execution happens on your lower timeframe (15m / 5m / 1m) while respecting HTF bias.',
+        bullets: [
+          'Stoch RSI: must be oversold (for buys) or overbought (for sells) with a clear crossover in trend direction.',
+          'MACD: must support that direction — histogram moving toward 0, or signal line crossing in trend direction.',
+          'Price: must retrace into the LTF midband (first move) or outer band (second-chance entry).',
+          'Structure: you need a Break of Structure (BOS) in trend direction before entering.',
+          'Entry: after BOS, not before. Avoid predicting the break; trade the confirmation.',
+          'Take Profit (TP): at the HTF midband (your trend target).',
+          'Stop Loss (SL): beyond the LTF outer band, behind the pullback that created your entry.',
+        ],
+        notes: [
+          'BOS example for a buy: higher low + break of previous minor high.',
+          'BOS example for a sell: lower high + break of previous minor low.',
+          'MACD does not need to be fully green/red yet. It is a lagging indicator; you just need supportive direction.',
+        ],
+      },
+    };
 
-<footer>Made for VinceVision — edit freely. Want different TF mappings? Tell me which ones and I’ll update this page.</footer>
+    const stepContent = document.getElementById('step-content');
+    const stepButtons = document.querySelectorAll('.step-btn');
 
-  </div><script>
-// Timeframe data (you can edit these mappings)
-const timeframeData = [
-  {tf:'Weekly', topDown:'Monthly', reentry:'Daily', notes:'Weekly is used for structural bias; re-entry commonly happens on the Daily when missing the weekly pull.'},
-  {tf:'Daily', topDown:'Weekly', reentry:'4H', notes:'Daily bias — look for entries on 4H and re-entries on 1H/4H micro pullbacks.'},
-  {tf:'4H', topDown:'Daily', reentry:'1H', notes:'4H bias, use 1H as your entry refinement and 15m/5m for re-entries.'},
-  {tf:'1H', topDown:'4H', reentry:'5M', notes:'Your standard workflow: 1H bias → 15m for entries → 5m for re-entry (as we discussed).'},
-  {tf:'15M', topDown:'1H', reentry:'1M', notes:'15m entries, re-enter on 1m micro pullbacks if needed.'},
-  {tf:'5M', topDown:'15M', reentry:'1M', notes:'5m re-entry timeframe — used to stack during momentum continuation.'},
-  {tf:'1M', topDown:'5M', reentry:'--', notes:'1m is micro scalping — re-entry is usually immediate or not used depending on liquidity.'}
-];
+    function renderStep(step) {
+      const data = steps[step];
+      if (!data) return;
 
-const grid = document.getElementById('tfGrid');
+      const wrapper = document.createElement('div');
+      wrapper.className = 'fade-enter';
+      wrapper.innerHTML = `
+        <div class="flex items-start justify-between gap-3 mb-3">
+          <div>
+            <h2 class="text-base sm:text-lg font-semibold text-slate-50 mb-1">${data.title}</h2>
+            <p class="text-xs sm:text-sm text-slate-300">${data.subtitle}</p>
+          </div>
+          <span class="badge-soft rounded-full px-2 py-1 text-[10px] font-semibold text-cyan-200">Guided Step</span>
+        </div>
+        <div class="grid md:grid-cols-[minmax(0,2.4fr)_minmax(0,2fr)] gap-4">
+          <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3 sm:p-4">
+            <h3 class="text-xs font-semibold text-slate-100 mb-2">How to apply it</h3>
+            <ul class="list-disc list-inside space-y-1.5 text-xs sm:text-sm text-slate-200">
+              ${data.bullets.map((b) => `<li>${b}</li>`).join('')}
+            </ul>
+          </div>
+          <div class="rounded-xl border border-cyan-400/40 bg-cyan-500/5 p-3 sm:p-4">
+            <h3 class="text-xs font-semibold text-cyan-100 mb-2">Notes & clarifications</h3>
+            <ul class="list-disc list-inside space-y-1.5 text-[11px] sm:text-xs text-cyan-100/90">
+              ${data.notes.map((n) => `<li>${n}</li>`).join('')}
+            </ul>
+          </div>
+        </div>
+      `;
 
-function createCard(d){
-  const el = document.createElement('div'); el.className='card';
-  el.innerHTML = `
-    <h3>${d.tf}</h3>
-    <div class="meta">
-      <div class="pill">Top-down: ${d.topDown}</div>
-      <div class="pill">Re-entry: ${d.reentry}</div>
-    </div>
-    <div class="small">${d.notes}</div>
-    <div class="actions">
-      <button class="toggle">Details</button>
-      <button class="showStrategy">Show strategy</button>
-      <button class="copy" data-tf="${d.tf}">Copy rules</button>
-    </div>
-    <div class="drop">
-      <div class="explain">
-        <strong>Checklist</strong>
-        <ul>
-          <li><strong>Bias:</strong> Confirm on <em>${d.topDown}</em> / ${d.tf}.</li>
-          <li><strong>Entry Frame:</strong> Use ${d.tf} (or lower) to find setup (Bollinger tap / indicator confluence).</li>
-          <li><strong>Re-entry:</strong> Use ${d.reentry} for missed entries or stacking.</li>
-          <li><strong>Stop:</strong> Outer band on entry timeframe / recent structure low/high.</li>
-          <li><strong>TP:</strong> Bias timeframe mean / next key level.</li>
-        </ul>
-        <small style="color:var(--muted)">Tip: R.Entry on ${d.reentry} is aggressive — only use if higher-timeframe bias stays intact.</small>
-      </div>
-    </div>
-  `;
-  // button handlers
-  el.querySelector('.toggle').addEventListener('click',()=>el.classList.toggle('show'));
-  el.querySelector('.showStrategy').addEventListener('click',()=>toggleFullStrategy(d.tf));
-  el.querySelector('.copy').addEventListener('click',()=>{
-    const t = TF: ${d.tf}\nTop-down: ${d.topDown}\nRe-entry: ${d.reentry}\nNotes: ${d.notes};
-    navigator.clipboard.writeText(t).then(()=>alert('Rules copied to clipboard'));
-  });
-  return el;
-}
+      stepContent.innerHTML = '';
+      stepContent.appendChild(wrapper);
 
-timeframeData.forEach(d=>grid.appendChild(createCard(d)));
+      requestAnimationFrame(() => {
+        wrapper.classList.add('fade-enter-active');
+      });
+    }
 
-// Full strategy content
-const full = document.getElementById('fullContent');
-full.innerHTML = generateFullStrategy();
+    stepButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const step = btn.getAttribute('data-step');
+        stepButtons.forEach((b) => b.classList.remove('step-active'));
+        btn.classList.add('step-active');
+        renderStep(step);
+      });
+    });
 
-document.getElementById('collapseFull').addEventListener('click',()=>{
-  document.getElementById('fullStrat').scrollIntoView({behavior:'smooth'});
-});
+    renderStep(1);
 
-function toggleFullStrategy(tf){
-  // scroll to full strategy and highlight the TF
-  document.getElementById('fullStrat').scrollIntoView({behavior:'smooth'});
-  const el = document.querySelectorAll('.card');
-  // temporary highlight
-  el.forEach(c=>c.style.outline='none');
-  const match = Array.from(el).find(c=>c.querySelector('h3').textContent===tf);
-  if(match){match.style.outline='2px solid rgba(56,189,248,0.18)'; setTimeout(()=>match.style.outline='none',1800)}
-}
+    const viewBuy = document.getElementById('view-buy');
+    const viewSell = document.getElementById('view-sell');
+    const exampleBuy = document.getElementById('example-buy');
+    const exampleSell = document.getElementById('example-sell');
 
-function generateFullStrategy(){
-  return `
-<strong>Overview</strong>
-<p>Follow a strict multi-timeframe flow: <strong>Top-down bias → Entry timeframe → Re-entry timeframe</strong>. Use Bollinger taps, Stochastic RSI and MACD for confluence. Use R.Entry (aggressive) when entry timeframe shows an extreme and indicators align; use C.Entry (conservative) after BOS/MSS.</p>
+    function setView(mode) {
+      if (mode === 'buy') {
+        exampleBuy.classList.remove('hidden');
+        exampleSell.classList.add('hidden');
+        viewBuy.classList.add('border-emerald-400/70', 'bg-emerald-500/10', 'text-emerald-200');
+        viewBuy.classList.remove('border-slate-700', 'bg-slate-900/70', 'text-slate-300');
+        viewSell.classList.remove('border-rose-400/70', 'bg-rose-500/10', 'text-rose-200');
+        viewSell.classList.add('border-slate-700', 'bg-slate-900/70', 'text-slate-300');
+      } else {
+        exampleSell.classList.remove('hidden');
+        exampleBuy.classList.add('hidden');
+        viewSell.classList.add('border-rose-400/70', 'bg-rose-500/10', 'text-rose-200');
+        viewSell.classList.remove('border-slate-700', 'bg-slate-900/70', 'text-slate-300');
+        viewBuy.classList.remove('border-emerald-400/70', 'bg-emerald-500/10', 'text-emerald-200');
+        viewBuy.classList.add('border-slate-700', 'bg-slate-900/70', 'text-slate-300');
+      }
+    }
 
-<strong>Universal checklist</strong>
-<ol>
-  <li>Set bias on the top-down timeframe (weekly/daily/4H/1H).</li>
-  <li>Drop to entry timeframe (next lower) and mark outer Bollinger band, structure, and liquidity.
-  </li>
-  <li>Wait for confluence: Bollinger tap + Stoch RSI extreme + MACD momentum shift + price action signal.</li>
-  <li>R.Entry: enter on tap (smaller SL). C.Entry: wait for BOS/pullback and enter after confirmation.
-  </li>
-  <li>If you miss the move, go to the <em>Re-entry timeframe</em> listed on each card (commonly 5m or 1m) and watch for a micro pullback to stack.
-</ol>
+    viewBuy.addEventListener('click', () => setView('buy'));
+    viewSell.addEventListener('click', () => setView('sell'));
 
-<strong>Risk & money management</strong>
-<ul>
-  <li>Risk a fixed percent per trade (e.g., 0.5-1% per position) and size accordingly.</li>
-  <li>Use position scaling for re-entries rather than increasing risk — each add should fit within overall max risk.</li>
-  <li>Prefer multiple smaller positions taken on re-entry to a single large aggressive position.</li>
-</ul>
-
-<strong>R.Entry vs C.Entry quick rules</strong>
-<ul>
-  <li><strong>R.Entry</strong>: Enter when entry timeframe hits outer band and indicators align. SL = outer band. TP = bias timeframe mid/next key.
-  </li>
-  <li><strong>C.Entry</strong>: Wait for BOS (structure shift) and enter on pullback to broken level. SL = structure invalidation point.</li>
-</ul>
-
-<strong>Examples</strong>
-<p>1H bias bullish → 15m entry shows lower Bollinger tap + Stoch oversold + bullish engulfing → enter R.Entry on 15m. If missed, go to 5m and enter on micro pullback.</p>
-`;
-}
-
-// Toggle all
-let allOpen=false;
-document.getElementById('toggleAll').addEventListener('click',()=>{
-  allOpen = !allOpen; document.querySelectorAll('.card').forEach(c=>c.classList.toggle('show',allOpen));
-});
-
-// Download page as single-file HTML
-const downloadBtn = document.getElementById('downloadBtn');
-downloadBtn.addEventListener('click',()=>{
-  const blob = new Blob([document.documentElement.outerHTML],{type:'text/html'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'timeframe-strategy-hub.html'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
-});
-
-</script></body>
+    setView('buy');
+  </script>
+</body>
 </html>
