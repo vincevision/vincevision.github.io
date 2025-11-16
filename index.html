@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>VINCEVISION Institutional Signal Engine — Deriv</title>
 <style>
   :root{
@@ -16,8 +16,8 @@
     background:linear-gradient(180deg,var(--bg),var(--bg2));}
   header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);
     background:linear-gradient(180deg,#0b1220, #0a0f1c);position:sticky;top:0;z-index:3;}
-  .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px}
-  .badge{font-size:11px;background:rgba(124,58,237,.15);color:#d3bfff;padding:3px 8px;border:1px solid rgba(124,58,237,.35);border-radius:999px}
+  .brand{display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px;flex-wrap:wrap}
+  .badge{font-size:11px;background:rgba(124,58,237,.15);color:#d3bfff;padding:3px 8px;border:1px solid rgba(124,58,237,.35);border-radius:999px;white-space:nowrap}
   .status{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
   .dot{width:8px;height:8px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(34,197,94,0.8);transition:.3s}
   .dot.on{background:#22c55e;animation:pulse 2s infinite}
@@ -32,7 +32,7 @@
     background:#0b1324;border:1px solid var(--border);color:var(--text);padding:8px 10px;border-radius:8px;outline:none;min-width:110px
   }
   .btn{background:linear-gradient(180deg,#2f1f7a,#1e1b4b);border:1px solid rgba(124,58,237,.4);color:#eae2ff;padding:9px 12px;border-radius:10px;
-    cursor:pointer;font-weight:700;letter-spacing:.2px;transition:.25s}
+    cursor:pointer;font-weight:700;letter-spacing:.2px;transition:.25s;font-size:11px;white-space:nowrap}
   .btn.secondary{background:#0c1427;border-color:#334155;color:#cbd5e1}
   .btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
   .switch{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
@@ -66,7 +66,12 @@
   .note{font-size:12px;color:#a7b4c7}
   .kv{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px dashed #1e293b}
   .kv:last-child{border-bottom:0}
+  @media (max-width: 900px){
+    .wrap{grid-template-columns:1fr}
+    header{flex-direction:column;align-items:flex-start;gap:10px}
+  }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
 <body>
 <header>
@@ -74,22 +79,14 @@
     <span style="display:inline-flex;width:28px;height:28px;border-radius:8px;align-items:center;justify-content:center;background:linear-gradient(135deg, #7c3aed, #22d3ee);box-shadow:0 6px 20px rgba(124,58,237,.35)">⚡</span>
     <span>Vincevision Institutional Signal Engine | +254742850266</span>
     <span class="badge">Deriv LIVE · BB(20,2) · 3MA · StochRSI(3,3,14,16)</span>
-    
-    <!--<span class="badge"><a href="RANGE2.html" target="_blank">AUTOMATIC MARKET SCANNER TRADING</a></span>
-    <span class="badge"><a href="KEY LEVELS.html" target="_blank">KEY LEVELS</a></span>
-    <span class="badge"><a href="KEY LEVELS BOL.html" target="_blank">KEY LEVELS BOS</a></span>
-    
-    <span class="badge"><a href="final.html" target="_blank">FINAL</a></span>
-    <span class="badge"><a href="final2.html" target="_blank">FINAL version 2 with sl</a></span>
-     <span class="badge"><a href="telegram.html" target="_blank">OFFICIAL MODIFIED</a></span> -->
-    <span class="badge"><a href="main.html" target="_blank">MAIN INDICATOR</a></span>
-     <span class="badge"><a href="tda.html" target="_blank">TOP DOWN ANALYSIS TOOL</a></span>
-     <span class="badge"><a href="tf.html" target="_blank">TDA candle RANGE</a></span>
-    <span class="badge"><a href="tpsl.html" target="_blank">TP/SL TOOL</a></span>
-    <span class="badge"><a href="swing.html" target="_blank">SWING SL</a></span>
-    <span class="badge"><a href="lotsize.html" target="_blank">LOTSIZE CALCULATOR</a></span>
-    <span class="badge"><a href="strategy.html" target="_blank">STRATEGY</a></span>
-  </div>
+
+    <button class="badge btn" onclick="window.open('main.html','_blank')">MAIN INDICATOR</button>
+    <button class="badge btn" onclick="window.open('tda.html','_blank')">TOP DOWN ANALYSIS TOOL</button>
+    <button class="badge btn" onclick="window.open('tf.html','_blank')">TDA candle RANGE</button>
+    <button class="badge btn" onclick="window.open('tpsl.html','_blank')">TP/SL TOOL</button>
+    <button class="badge btn" onclick="window.open('swing.html','_blank')">SWING SL</button>
+    <button class="badge btn" onclick="window.open('lotsize.html','_blank')">LOTSIZE CALCULATOR</button>
+    <button class="badge btn" onclick="window.open('strategy.html','_blank')">STRATEGY</button>
   </div>
   <div class="status">
     <span id="ws-dot" class="dot"></span><span id="ws-status">Disconnected</span>
@@ -850,7 +847,7 @@
 
     // components status
     const tapOK = (plan.bias==='SELL' && plan.comp.tappedUpper) || (plan.bias==='BUY' && plan.comp.tappedLower);
-    tapcEl.innerHTML = plan.rules.useTap ? (tapOK?'<span class="good">✓ Tap confirmed</span>':'<span class="warn">–</span>') : '<span class="muted">Off</span>';
+    tapcEl.innerHTML = plan.rules.useTap ? (tapOK?'\n<span class="good">✓ Tap confirmed</span>':'<span class="warn">–</span>') : '<span class="muted">Off</span>';
     const maOK = (plan.bias==='SELL' && (plan.lastClose < plan.ma3[lastIdx])) || (plan.bias==='BUY' && (plan.lastClose > plan.ma3[lastIdx]));
     ma3cEl.innerHTML = plan.rules.useMA3 ? (maOK?'<span class="good">✓ Body rule</span>':'<span class="warn">–</span>') : '<span class="muted">Off</span>';
 
@@ -1171,7 +1168,7 @@
             const c = {epoch:o.open_time, open:+o.open, high:+o.high, low:+o.low, close:+o.close};
             mergeCandle(htfCandlesMap[sym], c);
             analyzeSym(sym);
-            if(isClosed(o)){ 
+            if(isClosed(o)){
               const idx = htfCandlesMap[sym].length-1;
               const plan = planTradeForSym(sym, idx);
               if(plan && (plan.bias==='BUY' || plan.bias==='SELL') && plan.ltfOk){
