@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Deriv MA Crossover Scanner (SMA 3/5)</title>
+  <style>
+    :root {
+      --bg: #0f1320;
+      --panel: #151a2b;
+      --panel-2: #1b2136;
+      --text: #e7eaf6;
+      --muted: #96a0be;
+      --accent: #4C8BF5;
+      --accent-2: #00d4a6;
+      --danger: #ff5d78;
+      --warning: #ffcc66;
+      --good: #35d07f;
+      --bad: #ff6b6b;
+      --border: #28304a;
+      --shadow: rgba(0,0,0,0.25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      background: linear-gradient(180deg, #0f1320, #0d121f);
+      color: var(--text);
+    }
+    header {
+      padding: 20px;
+      background: linear-gradient(120deg, #141a2d, #0f1526);
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 4px 20px var(--shadow);
+      position: sticky;
+      top: 0;
+      z-index: 3;
+    }
+    header h1 {
+      margin: 0 0 6px;
+      font-size: 20px;
+      letter-spacing: 0.2px;
+    }
+    header .sub {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .container {
+      max-width: 1200px;
+      margin: 18px auto 40px;
+      padding: 0 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: 0 8px 30px var(--shadow);
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+    .controls {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      align-items: end;
+    }
+    .controls .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    input[type="number"], input[type="text"], select {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 10px;
+      outline: none;
+      transition: all .2s ease;
+    }
+    input:focus, select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(76,139,245,0.15);
+    }
+    .btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 0.05s ease, box-shadow .2s ease, background .2s ease;
+      box-shadow: 0 6px 18px rgba(76,139,245,0.35);
+    }
+    button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+    .btn-secondary {
+      background: var(--panel-2);
+      color: var(--text);
+      box-shadow: none;
+      border: 1px solid var(--border);
+    }
+    .btn-danger {
+      background: var(--danger);
+      box-shadow: 0 6px 18px rgba(255,93,120,0.35);
+    }
+    .statusbar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .stat {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .stat .label { font-size: 11px; color: var(--muted); }
+    .stat .value { font-size: 14px; margin-top: 2px; }
+    .badge {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 12px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+    }
+    .badge.dot::before {
+      content: "";
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--warning);
+      display: inline-block;
+    }
+    .badge.online::before { background: var(--good); }
+    .badge.offline::before { background: var(--bad); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    thead {
+      background: #0d1221;
+    }
+    th, td {
+      padding: 12px 12px;
+      border-bottom: 1px solid var(--border);
+      font-size: 14px;
+    }
+    th { color: var(--muted); font-weight: 600; text-align: left; }
+    tbody tr:hover { background: rgba(255,255,255,0.02); }
+    .bull { color: var(--good); font-weight: 700; }
+    .bear { color: var(--bad); font-weight: 700; }
+    .muted { color: var(--muted); }
+    .blink {
+      animation: blink 1.2s ease-out 1;
+    }
+    @keyframes blink {
+      0% { background: rgba(0,212,166,0.15); }
+      100% { background: transparent; }
+    }
+    .note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .footer-note {
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+      padding: 16px;
+    }
+    .chips {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .chip {
+      font-size: 12px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--panel-2);
+      color: var(--text);
+    }
+    .scroll {
+      max-height: 54vh;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .rowcount {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+    .pill {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Deriv MA Crossover Scanner</h1>
+    <div class="sub">Streams live crossovers of SMA(3) & SMA(5) across all open markets via Deriv API</div>
+  </header>
+
+  <div class="container">
+    <div class="panel">
+      <div class="controls">
+        <div class="field">
+          <label for="appId">Deriv App ID</label>
+          <input id="appId" type="text" value="1089" />
+        </div>
+        <div class="field">
+          <label for="granularity">Timeframe</label>
+          <select id="granularity">
+            <option value="60" selected>1 minute</option>
+            <option value="300">5 minutes</option>
+            <option value="900">15 minutes</option>
+            <option value="3600">1 hour</option>
+            <option value="14400">4 hours</option>
+            <option value="86400">1 day</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="maShort">MA Short (SMA)</label>
+          <input id="maShort" type="number" min="2" value="3"/>
+        </div>
+        <div class="field">
+          <label for="maLong">MA Long (SMA)</label>
+          <input id="maLong" type="number" min="3" value="5"/>
+        </div>
+        <div class="btns">
+          <button id="startBtn">Start Scanning</button>
+          <button id="stopBtn" class="btn-danger" type="button">Stop</button>
+          <button id="clearBtn" class="btn-secondary" type="button">Clear Signals</button>
+        </div>
+      </div>
+
+      <div class="statusbar">
+        <div class="stat">
+          <div class="label">Connection</div>
+          <div class="value">
+            <span id="connBadge" class="badge dot offline">Disconnected</span>
+          </div>
+        </div>
+        <div class="stat">
+          <div class="label">Open Symbols (exchange_is_open)</div>
+          <div class="value"><span id="symbolsCount">0</span></div>
+        </div>
+        <div class="stat">
+          <div class="label">Subscriptions</div>
+          <div class="value"><span id="subsCount">0</span> / <span id="subsTarget">0</span></div>
+        </div>
+        <div class="stat">
+          <div class="label">Signals</div>
+          <div class="value"><span id="signalsCount">0</span></div>
+        </div>
+      </div>
+      <div class="chips">
+        <div class="chip">SMA Short: <span id="chipShort">3</span></div>
+        <div class="chip">SMA Long: <span id="chipLong">5</span></div>
+        <div class="chip">Timeframe: <span id="chipTf">1m</span></div>
+      </div>
+      <div class="note">Tip: Subscriptions are batched to respect API limits. Scanning all markets may take a moment to fully initialize.</div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 10px;">Live Crossover Signals</h3>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Market</th>
+              <th>Symbol</th>
+              <th>Type</th>
+              <th>Price</th>
+              <th>TF</th>
+              <th>MA3</th>
+              <th>MA5</th>
+            </tr>
+          </thead>
+          <tbody id="signalsBody"></tbody>
+        </table>
+      </div>
+      <div class="rowcount"><span id="rowsCount">0</span> rows</div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px;">Running Log</h3>
+      <div id="log" class="note" style="white-space:pre-wrap; max-height: 200px; overflow:auto; border:1px solid var(--border); border-radius:12px; padding:10px; background:var(--panel-2);"></div>
+      <div class="note">This tool uses public endpoints (no token). Data and availability depend on Deriv API, network, and market hours.</div>
+    </div>
+
+    <div class="footer-note">© 2025 • Deriv MA Crossover Scanner • For informational purposes only</div>
+  </div>
+
+  <script>
+    // Configurable constants
+    const GRANULARITY_LABELS = {
+      60: '1m', 300: '5m', 900: '15m', 3600: '1h', 14400: '4h', 86400: '1d'
+    };
+    const MAX_CLOSES_STORED = 500;
+    const SUBSCRIPTION_BATCH_INTERVAL_MS = 75; // Throttle WS sends (adjust if needed)
+    const INITIAL_CANDLE_COUNT = 60; // Initial history per symbol to compute MAs safely
+
+    const UI = {
+      appId: document.getElementById('appId'),
+      granularity: document.getElementById('granularity'),
+      maShort: document.getElementById('maShort'),
+      maLong: document.getElementById('maLong'),
+      startBtn: document.getElementById('startBtn'),
+      stopBtn: document.getElementById('stopBtn'),
+      clearBtn: document.getElementById('clearBtn'),
+      connBadge: document.getElementById('connBadge'),
+      symbolsCount: document.getElementById('symbolsCount'),
+      subsCount: document.getElementById('subsCount'),
+      subsTarget: document.getElementById('subsTarget'),
+      signalsCount: document.getElementById('signalsCount'),
+      signalsBody: document.getElementById('signalsBody'),
+      rowsCount: document.getElementById('rowsCount'),
+      log: document.getElementById('log'),
+      chipShort: document.getElementById('chipShort'),
+      chipLong: document.getElementById('chipLong'),
+      chipTf: document.getElementById('chipTf'),
+    };
+
+    const state = {
+      ws: null,
+      connected: false,
+      running: false,
+      symbols: [],
+      symbolMap: {},
+      // symbol -> { id, closes: number[], lastEpoch, lastSignalEpoch, initialized }
+      subscriptions: {},
+      subIdToSymbol: {},
+      queue: [],
+      queueTimer: null,
+      signals: 0,
+      targetSubs: 0,
+      short: 3,
+      long: 5,
+      granularity: 60,
+      appId: '1089',
+    };
+
+    function log(msg) {
+      const time = new Date().toLocaleTimeString();
+      UI.log.textContent += `[${time}] ${msg}\n`;
+      UI.log.scrollTop = UI.log.scrollHeight;
+    }
+
+    function setConnectionStatus(connected) {
+      state.connected = connected;
+      UI.connBadge.textContent = connected ? 'Connected' : 'Disconnected';
+      UI.connBadge.classList.toggle('online', connected);
+      UI.connBadge.classList.toggle('offline', !connected);
+    }
+
+    function mapTfLabel(gran) {
+      return GRANULARITY_LABELS[gran] || (gran + 's');
+    }
+
+    function computeSMA(values, endIndex, period) {
+      if (endIndex - period + 1 < 0) return null;
+      let sum = 0;
+      for (let i = endIndex - period + 1; i <= endIndex; i++) sum += values[i];
+      return sum / period;
+    }
+
+    function detectCrossover(sub, shortP, longP) {
+      const closes = sub.closes;
+      if (closes.length < longP + 1) return null;
+
+      const currIdx = closes.length - 1;
+      const prevIdx = closes.length - 2;
+
+      const smaShortPrev = computeSMA(closes, prevIdx, shortP);
+      const smaLongPrev  = computeSMA(closes, prevIdx, longP);
+      const smaShortCurr = computeSMA(closes, currIdx, shortP);
+      const smaLongCurr  = computeSMA(closes, currIdx, longP);
+
+      if (smaShortPrev === null || smaLongPrev === null || smaShortCurr === null || smaLongCurr === null) return null;
+
+      const prevDiff = smaShortPrev - smaLongPrev;
+      const currDiff = smaShortCurr - smaLongCurr;
+
+      if (prevDiff <= 0 && currDiff > 0) {
+        return { type: 'bull', smaShort: smaShortCurr, smaLong: smaLongCurr };
+      }
+      if (prevDiff >= 0 && currDiff < 0) {
+        return { type: 'bear', smaShort: smaShortCurr, smaLong: smaLongCurr };
+      }
+      return null;
+    }
+
+    function addSignalRow({ epoch, symbol, price, type, smaShort, smaLong }) {
+      const meta = state.symbolMap[symbol] || {};
+      const tr = document.createElement('tr');
+      tr.classList.add('blink');
+
+      const tf = mapTfLabel(state.granularity);
+      const dtStr = new Date(epoch * 1000).toLocaleString();
+
+      tr.innerHTML = `
+        <td>${dtStr}</td>
+        <td class="muted">${meta.market_display_name || ''}</td>
+        <td><span class="pill">${meta.display_name || symbol}</span></td>
+        <td class="${type === 'bull' ? 'bull' : 'bear'}">${type === 'bull' ? '▲ Bullish' : '▼ Bearish'}</td>
+        <td>${Number(price).toFixed(5)}</td>
+        <td class="muted">${tf}</td>
+        <td class="muted">${smaShort.toFixed(5)}</td>
+        <td class="muted">${smaLong.toFixed(5)}</td>
+      `;
+      UI.signalsBody.prepend(tr);
+      state.signals += 1;
+      UI.signalsCount.textContent = state.signals;
+      UI.rowsCount.textContent = UI.signalsBody.rows.length;
+    }
+
+    function enqueue(req) {
+      state.queue.push(req);
+    }
+
+    function startQueuePump() {
+      stopQueuePump();
+      state.queueTimer = setInterval(() => {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+        if (!state.queue.length) return;
+        const req = state.queue.shift();
+        state.ws.send(JSON.stringify(req));
+      }, SUBSCRIPTION_BATCH_INTERVAL_MS);
+    }
+
+    function stopQueuePump() {
+      if (state.queueTimer) clearInterval(state.queueTimer);
+      state.queueTimer = null;
+    }
+
+    function subscribeSymbol(symbol) {
+      enqueue({
+        ticks_history: symbol,
+        style: "candles",
+        granularity: state.granularity,
+        count: INITIAL_CANDLE_COUNT,
+        end: "latest",          // required for subscribe
+        adjust_start_time: 1,
+        subscribe: 1
+      });
+    }
+
+    function unsubscribeAll() {
+      const ids = Object.values(state.subscriptions).map(s => s.id).filter(Boolean);
+      ids.forEach(id => {
+        try {
+          state.ws && state.ws.readyState === WebSocket.OPEN && state.ws.send(JSON.stringify({ unsubscribe: id }));
+        } catch (e) {}
+      });
+    }
+
+    function closeConnection() {
+      try { state.ws && state.ws.close(1000, 'User stop'); } catch (e) {}
+    }
+
+    function resetStateForRun() {
+      state.symbols = [];
+      state.symbolMap = {};
+      state.subscriptions = {};
+      state.subIdToSymbol = {};
+      state.queue = [];
+      state.signals = 0;
+      state.targetSubs = 0;
+      UI.symbolsCount.textContent = '0';
+      UI.subsCount.textContent = '0';
+      UI.subsTarget.textContent = '0';
+      UI.signalsCount.textContent = '0';
+      UI.rowsCount.textContent = '0';
+      UI.signalsBody.innerHTML = '';
+    }
+
+    function onActiveSymbols(data) {
+      const active = (data.active_symbols || []).filter(s => s.exchange_is_open);
+      state.symbols = active.map(s => s.symbol);
+      for (const s of active) {
+        state.symbolMap[s.symbol] = {
+          display_name: s.display_name,
+          market: s.market,
+          market_display_name: s.market_display_name,
+          submarket_display_name: s.submarket_display_name,
+        };
+      }
+      UI.symbolsCount.textContent = state.symbols.length.toString();
+      state.targetSubs = state.symbols.length;
+      UI.subsTarget.textContent = state.targetSubs.toString();
+
+      for (const symbol of state.symbols) {
+        subscribeSymbol(symbol);
+      }
+      log(`Requesting subscriptions for ${state.symbols.length} open symbols @${mapTfLabel(state.granularity)} timeframe...`);
+    }
+
+    function processCandlesMessage(msg) {
+      let symbol = null;
+      if (msg.echo_req) {
+        symbol = msg.echo_req.ticks_history || msg.echo_req.symbol || msg.echo_req.candles || null;
+      }
+      if (!symbol && msg.subscription && msg.subscription.id) {
+        symbol = state.subIdToSymbol[msg.subscription.id];
+      }
+      if (!symbol) return;
+
+      let sub = state.subscriptions[symbol];
+
+      if (!sub) {
+        const subId = msg.subscription && msg.subscription.id;
+        sub = state.subscriptions[symbol] = {
+          id: subId,
+          symbol,
+          closes: [],
+          lastEpoch: null,
+          lastSignalEpoch: null,
+          initialized: false,
+        };
+        if (subId) state.subIdToSymbol[subId] = symbol;
+        UI.subsCount.textContent = Object.keys(state.subscriptions).length.toString();
+      }
+
+      let candles = [];
+      if (Array.isArray(msg.candles)) candles = msg.candles;
+      if (!candles.length && msg.ohlc) candles = [msg.ohlc];
+
+      if (!candles.length) return;
+
+      if (!sub.initialized && candles.length > 1) {
+        candles.sort((a, b) => (a.epoch || a.open_time) - (b.epoch || b.open_time));
+        sub.closes = candles.map(c => Number(c.close)).filter(x => Number.isFinite(x));
+        if (sub.closes.length > MAX_CLOSES_STORED) {
+          sub.closes = sub.closes.slice(-MAX_CLOSES_STORED);
+        }
+        const last = candles[candles.length - 1];
+        sub.lastEpoch = (last.epoch || last.open_time);
+
+        const cross = detectCrossover(sub, state.short, state.long);
+        if (cross) {
+          if (sub.lastSignalEpoch !== sub.lastEpoch) {
+            addSignalRow({
+              epoch: sub.lastEpoch,
+              symbol,
+              price: Number(last.close),
+              type: cross.type,
+              smaShort: cross.smaShort,
+              smaLong: cross.smaLong,
+            });
+            sub.lastSignalEpoch = sub.lastEpoch;
+          }
+        }
+
+        sub.initialized = true;
+        return;
+      }
+
+      for (const c of candles) {
+        const epoch = (c.epoch || c.open_time);
+        const close = Number(c.close);
+        if (!Number.isFinite(epoch) || !Number.isFinite(close)) continue;
+
+        if (sub.lastEpoch === null || epoch > sub.lastEpoch) {
+          sub.closes.push(close);
+          if (sub.closes.length > MAX_CLOSES_STORED) {
+            sub.closes.shift();
+          }
+          sub.lastEpoch = epoch;
+
+          const cross = detectCrossover(sub, state.short, state.long);
+          if (cross && sub.lastSignalEpoch !== epoch) {
+            addSignalRow({
+              epoch,
+              symbol,
+              price: close,
+              type: cross.type,
+              smaShort: cross.smaShort,
+              smaLong: cross.smaLong,
+            });
+            sub.lastSignalEpoch = epoch;
+          }
+        }
+      }
+    }
+
+    function start() {
+      if (state.running) return;
+      const shortP = parseInt(UI.maShort.value, 10);
+      const longP = parseInt(UI.maLong.value, 10);
+      if (!(shortP > 1 && longP > 1 && shortP < longP)) {
+        alert('Please set MA periods such that: short >= 2, long >= 3, and short < long.');
+        return;
+      }
+      state.short = shortP;
+      state.long = longP;
+      state.granularity = parseInt(UI.granularity.value, 10);
+      state.appId = String(UI.appId.value || '1089');
+
+      UI.chipShort.textContent = String(state.short);
+      UI.chipLong.textContent = String(state.long);
+      UI.chipTf.textContent = mapTfLabel(state.granularity);
+
+      resetStateForRun();
+      state.running = true;
+
+      const wsUrl = `wss://ws.derivws.com/websockets/v3?app_id=${encodeURIComponent(state.appId)}`;
+      state.ws = new WebSocket(wsUrl);
+
+      state.ws.addEventListener('open', () => {
+        setConnectionStatus(true);
+        startQueuePump();
+        const reqActive = { active_symbols: 'brief', product_type: 'basic' };
+        state.ws.send(JSON.stringify(reqActive));
+        log('Connected. Requesting active symbols...');
+      });
+
+      state.ws.addEventListener('message', (evt) => {
+        try {
+          const data = JSON.parse(evt.data);
+          if (data.error) {
+            log(`Error: ${data.error.message || JSON.stringify(data.error)}`);
+            return;
+          }
+          if (data.msg_type === 'active_symbols') {
+            onActiveSymbols(data);
+          } else if (data.msg_type === 'candles' || data.candles || data.ohlc) {
+            processCandlesMessage(data);
+          }
+        } catch (e) {
+          // ignore parsing errors
+        }
+      });
+
+      state.ws.addEventListener('close', (evt) => {
+        setConnectionStatus(false);
+        stopQueuePump();
+        if (state.running) {
+          log(`Connection closed (code ${evt.code}).`);
+        } else {
+          log(`Disconnected.`);
+        }
+      });
+
+      state.ws.addEventListener('error', () => {
+        log('WebSocket error occurred.');
+      });
+
+      log('Starting scanner...');
+    }
+
+    function stop() {
+      if (!state.running) return;
+      state.running = false;
+      try { unsubscribeAll(); } catch (e) {}
+      stopQueuePump();
+      closeConnection();
+      log('Stopped scanner and closed connection.');
+    }
+
+    function clearSignals() {
+      UI.signalsBody.innerHTML = '';
+      state.signals = 0;
+      UI.signalsCount.textContent = '0';
+      UI.rowsCount.textContent = '0';
+    }
+
+    UI.startBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      start();
+    });
+    UI.stopBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      stop();
+    });
+    UI.clearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      clearSignals();
+    });
+  </script>
+</body>
+</html>
