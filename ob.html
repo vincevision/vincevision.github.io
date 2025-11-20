@@ -1,0 +1,936 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Overbought/Oversold Scanner (Deriv API)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!--
+    Derived from user-provided Pine Script, subject to MPL-2.0
+    Original indicator: Overbought/Oversold by © ceyhun
+  -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f1220;
+      --panel: #171a2e;
+      --panel-2: #1e2240;
+      --text: #e8e9f3;
+      --muted: #9aa0b3;
+      --accent: #5c7cff;
+      --green: #00c853;
+      --red: #ff1744;
+      --yellow: #ffd600;
+      --border: #2a2e52;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+    header {
+      padding: 16px 20px; background: linear-gradient(90deg, #131735, #12142a);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    .status-dot {
+      width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px;
+      background: #666;
+    }
+    .status { font-size: 12px; color: var(--muted); }
+    .status.connected .status-dot { background: #2ecc71; }
+    .status.connecting .status-dot { background: #f1c40f; }
+    .status.disconnected .status-dot { background: #e74c3c; }
+
+    .controls {
+      padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+      display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; align-items: center;
+    }
+    .controls .field {
+      grid-column: span 2; display: flex; flex-direction: column; gap: 6px;
+    }
+    .controls .field.wide { grid-column: span 6; }
+    .controls label { font-size: 12px; color: var(--muted); }
+    .controls input[type="number"], .controls select, .controls input[type="text"] {
+      padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--panel-2); color: var(--text);
+      outline: none;
+    }
+    .chip-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 6px 10px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px;
+      display: inline-flex; gap: 8px; align-items: center; cursor: pointer; user-select: none;
+      font-size: 12px; color: var(--text);
+    }
+    .chip input { accent-color: var(--accent); }
+    .btn {
+      padding: 10px 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2);
+      color: var(--text); cursor: pointer; font-weight: 600;
+    }
+    .btn.primary { background: var(--accent); border-color: transparent; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .row {
+      display: grid; grid-template-columns: 2fr 1fr; gap: 16px; padding: 16px;
+    }
+    .panel {
+      background: var(--panel); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    }
+    .panel h3 {
+      margin: 0; padding: 12px 14px; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--muted);
+      background: #151838;
+    }
+    table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    thead th {
+      text-align: left; padding: 10px 12px; background: #161a35; color: var(--muted); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 1;
+    }
+    tbody td {
+      padding: 10px 12px; border-bottom: 1px solid var(--border);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    .signal-badge {
+      padding: 4px 8px; border-radius: 999px; font-weight: 700; font-size: 11px; letter-spacing: 0.2px;
+    }
+    .signal-buy { background: rgba(0,200,83,0.15); color: var(--green); border: 1px solid rgba(0,200,83,0.4); }
+    .signal-sell { background: rgba(255,23,68,0.15); color: var(--red); border: 1px solid rgba(255,23,68,0.4); }
+    .signal-neutral { background: rgba(255,214,0,0.15); color: var(--yellow); border: 1px solid rgba(255,214,0,0.4); }
+
+    .actions { display: flex; gap: 8px; align-items: center; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .chart-wrap { padding: 8px 12px 16px; }
+    .flex { display: flex; gap: 8px; align-items: center; }
+    .spacer { flex: 1 1 auto; }
+
+    .footnote { padding: 8px 16px; color: var(--muted); font-size: 12px; }
+
+    @media (max-width: 1000px) {
+      .controls { grid-template-columns: repeat(6, 1fr); }
+      .controls .field { grid-column: span 3; }
+      .controls .field.wide { grid-column: span 6; }
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Overbought/Oversold Scanner</h1>
+    <div id="connStatus" class="status connecting">
+      <span class="status-dot"></span>
+      <span class="status-text">Connecting</span>
+    </div>
+    <div class="spacer"></div>
+    <div class="muted">Deriv WebSocket • app_id=1089</div>
+  </header>
+
+  <section class="controls">
+    <div class="field">
+      <label for="lengthN">Length (n)</label>
+      <input id="lengthN" type="number" value="5" min="2" max="100" />
+    </div>
+    <div class="field">
+      <label for="timeframe">Timeframe</label>
+      <select id="timeframe">
+        <option value="60">1m</option>
+        <option value="300">5m</option>
+        <option value="900">15m</option>
+        <option value="3600">1h</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="historyCount">History candles</label>
+      <input id="historyCount" type="number" value="300" min="50" max="2000" />
+    </div>
+    <div class="field">
+      <label for="maxSubs">Max subscriptions</label>
+      <input id="maxSubs" type="number" value="25" min="1" max="80" />
+    </div>
+    <div class="field wide">
+      <label>Markets</label>
+      <div class="chip-group">
+        <label class="chip"><input type="checkbox" class="marketFilter" value="forex" checked /> Forex</label>
+        <label class="chip"><input type="checkbox" class="marketFilter" value="derived" checked /> Synthetics</label>
+        <label class="chip"><input type="checkbox" class="marketFilter" value="indices" /> Indices</label>
+        <label class="chip"><input type="checkbox" class="marketFilter" value="commodities" /> Commodities</label>
+        <label class="chip"><input type="checkbox" class="marketFilter" value="cryptocurrency" /> Crypto</label>
+      </div>
+    </div>
+    <div class="field">
+      <label for="search">Search</label>
+      <input id="search" type="text" placeholder="e.g., EURUSD or R_100" />
+    </div>
+    <div class="field">
+      <label>Alerts</label>
+      <div class="chip-group">
+        <label class="chip"><input type="checkbox" id="soundAlerts" checked /> Sound on signal</label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>&nbsp;</label>
+      <button id="btnRefresh" class="btn">Refresh Symbols</button>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button id="btnStart" class="btn primary">Start Scan</button>
+    </div>
+    <div class="field">
+      <label>&nbsp;</label>
+      <button id="btnStop" class="btn" disabled>Stop</button>
+    </div>
+  </section>
+
+  <section class="row">
+    <div class="panel">
+      <h3>Scanner</h3>
+      <div style="overflow:auto; max-height: 64vh;">
+        <table id="scanTable">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Name</th>
+              <th>Market</th>
+              <th>Timeframe</th>
+              <th>Up</th>
+              <th>Down</th>
+              <th>Signal</th>
+              <th>Updated</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="scanTbody">
+            <!-- dynamic -->
+          </tbody>
+        </table>
+      </div>
+      <div class="footnote">
+        Tip: Limit subscriptions if you hit rate limits. You can still manually refresh others.
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="flex" style="padding: 8px 12px;">
+        <h3 style="flex: none;">Chart</h3>
+        <div class="spacer"></div>
+        <span id="chartTitle" class="muted">Select a symbol to view</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="chartCanvas" height="260"></canvas>
+      </div>
+      <div class="footnote">
+        Plots: Up (green), Down (red). Histogram color follows Pine logic: green (up>down), red (down>up), yellow (trend change).
+      </div>
+    </div>
+  </section>
+
+  <script>
+    // ===========================
+    // Deriv WebSocket connection
+    // ===========================
+    const APP_ID = 1089; // as requested
+    const WSS_URLS = [
+      `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`,
+      `wss://ws.binaryws.com/websockets/v3?app_id=${APP_ID}`,
+    ];
+
+    let ws = null;
+    let reqCounter = 0;
+    const pending = new Map(); // req_id -> {resolve,reject,timer,req}
+    const subsById = new Map(); // subscription.id -> symbol
+    const symbolStates = new Map(); // symbol -> state object
+    let connecting = false;
+    let connected = false;
+    let currentUrlIndex = 0;
+    let isScanning = false;
+
+    const connStatusEl = document.getElementById('connStatus');
+    function setConnStatus(state, text) {
+      connStatusEl.className = `status ${state}`;
+      connStatusEl.querySelector('.status-text').textContent = text;
+    }
+
+    async function connectWS() {
+      if (connected || connecting) return;
+      connecting = true;
+      setConnStatus('connecting', 'Connecting...');
+      const tryConnect = (url) => new Promise((resolve, reject) => {
+        const sock = new WebSocket(url);
+        let opened = false;
+        const timeout = setTimeout(() => {
+          try { sock.close(); } catch {}
+          reject(new Error('Timeout'));
+        }, 10000);
+        sock.onopen = () => {
+          clearTimeout(timeout);
+          opened = true;
+          resolve(sock);
+        };
+        sock.onerror = (e) => {
+          if (!opened) {
+            clearTimeout(timeout);
+            reject(e);
+          }
+        };
+      });
+
+      for (let i = 0; i < WSS_URLS.length; i++) {
+        const url = WSS_URLS[(currentUrlIndex + i) % WSS_URLS.length];
+        try {
+          ws = await tryConnect(url);
+          currentUrlIndex = (currentUrlIndex + i) % WSS_URLS.length;
+          break;
+        } catch (e) {
+          // try next
+        }
+      }
+      if (!ws) {
+        connecting = false;
+        connected = false;
+        setConnStatus('disconnected', 'Failed to connect');
+        throw new Error('Unable to connect to Deriv WS');
+      }
+
+      ws.onmessage = onWsMessage;
+      ws.onclose = () => {
+        connected = false;
+        connecting = false;
+        setConnStatus('disconnected', 'Disconnected');
+        for (const [id, p] of pending) {
+          clearTimeout(p.timer);
+          p.reject(new Error('Disconnected'));
+        }
+        pending.clear();
+        subsById.clear();
+        if (isScanning) {
+          setTimeout(() => connectWS().then(() => {
+            if (isScanning) resumeScanAfterReconnect();
+          }), 1500);
+        }
+      };
+      connected = true;
+      connecting = false;
+      setConnStatus('connected', 'Connected');
+    }
+
+    function sendReq(req) {
+      return new Promise((resolve, reject) => {
+        if (!ws || ws.readyState !== 1) {
+          reject(new Error('WebSocket not connected'));
+          return;
+        }
+        const id = ++reqCounter;
+        req.req_id = id;
+        const timer = setTimeout(() => {
+          pending.delete(id);
+          reject(new Error('Request timeout'));
+        }, 20000);
+        pending.set(id, { resolve, reject, timer, req });
+        ws.send(JSON.stringify(req));
+      });
+    }
+
+    function onWsMessage(ev) {
+      let msg;
+      try { msg = JSON.parse(ev.data); } catch { return; }
+      if (msg.error) {
+        const p = pending.get(msg.req_id);
+        if (p) {
+          clearTimeout(p.timer);
+          pending.delete(msg.req_id);
+          p.reject(new Error(msg.error.message || 'Error'));
+        }
+        return;
+      }
+      // Resolve matching request
+      if (typeof msg.req_id !== 'undefined') {
+        const p = pending.get(msg.req_id);
+        if (p) {
+          clearTimeout(p.timer);
+          pending.delete(msg.req_id);
+          p.resolve(msg);
+        }
+      }
+
+      // Handle streaming OHLC updates for candle subscriptions
+      if (msg.msg_type === 'ohlc' && msg.ohlc) {
+        const subId = msg.subscription && msg.subscription.id;
+        const symbol = subsById.get(subId);
+        if (!symbol) return;
+        const o = msg.ohlc;
+        const candle = {
+          epoch: +o.open_time,
+          open: +o.open,
+          high: +o.high,
+          low: +o.low,
+          close: +o.close,
+        };
+        onCandleUpdate(symbol, candle);
+      }
+    }
+
+    async function getActiveSymbols() {
+      await connectWS();
+      const res = await sendReq({ active_symbols: 'brief', product_type: 'basic' });
+      return (res.active_symbols || []).map(s => ({
+        symbol: s.symbol,
+        display: s.display_name,
+        market: s.market,
+        submarket: s.submarket,
+        market_display: s.market_display_name,
+        submarket_display: s.submarket_display_name,
+      }));
+    }
+
+    async function getCandles(symbol, granularity, count) {
+      const res = await sendReq({
+        ticks_history: symbol,
+        style: 'candles',
+        granularity,
+        count,
+        end: 'latest',
+        adjust_start_time: 1
+      });
+      return res.candles || [];
+    }
+
+    async function subscribeCandles(symbol, granularity) {
+      const res = await sendReq({
+        ticks_history: symbol,
+        style: 'candles',
+        granularity,
+        count: 1,
+        end: 'latest',
+        subscribe: 1
+      });
+      if (res.subscription && res.subscription.id) {
+        subsById.set(res.subscription.id, symbol);
+      }
+      return res;
+    }
+
+    async function unsubscribeAll() {
+      if (!ws || ws.readyState !== 1) return;
+      await sendReq({ forget_all: 'candles' }).catch(() => {});
+      subsById.clear();
+    }
+
+    // ===========================
+    // Indicator calculations
+    // ===========================
+    // EMA that honors nulls and initializes with SMA after 'length' consecutive non-null values (closely matches Pine)
+    function emaSeriesNa(values, length) {
+      const res = new Array(values.length).fill(null);
+      if (length <= 1) return values.slice();
+      const alpha = 2 / (length + 1);
+      let window = [];
+      let sum = 0;
+      let emaPrev = null;
+
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (v == null || Number.isNaN(v)) {
+          // reset on null to require a fresh run of 'length' values
+          window = [];
+          sum = 0;
+          emaPrev = null;
+          res[i] = null;
+          continue;
+        }
+        window.push(v);
+        sum += v;
+
+        if (window.length < length) {
+          res[i] = null;
+        } else if (window.length === length) {
+          const sma = sum / length;
+          emaPrev = sma;
+          res[i] = emaPrev;
+        } else {
+          // slide window
+          const out = window.shift();
+          sum -= out;
+          emaPrev = alpha * v + (1 - alpha) * emaPrev;
+          res[i] = emaPrev;
+        }
+      }
+      return res;
+    }
+
+    function stdevSeries(values, length) {
+      const res = new Array(values.length).fill(null);
+      let window = [];
+      let sum = 0, sumSq = 0;
+      for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        window.push(v);
+        sum += v;
+        sumSq += v * v;
+        if (window.length > length) {
+          const out = window.shift();
+          sum -= out;
+          sumSq -= out * out;
+        }
+        if (window.length === length) {
+          const mean = sum / length;
+          const variance = Math.max(0, (sumSq / length) - mean * mean);
+          res[i] = Math.sqrt(variance);
+        }
+      }
+      return res;
+    }
+
+    // Implements Pine logic
+    function computeIndicator(ohlc, n) {
+      const len = ohlc.length;
+      const H = ohlc.map(c => +c.high);
+      const L = ohlc.map(c => +c.low);
+      const C = ohlc.map(c => +c.close);
+      const ys1 = H.map((_, i) => (H[i] + L[i] + 2 * C[i]) / 4);
+
+      const rk3 = emaSeriesNa(ys1, n);
+      const rk4 = stdevSeries(ys1, n);
+      const rk5 = ys1.map((v, i) => {
+        if (rk3[i] == null || rk4[i] == null || rk4[i] === 0) return null;
+        return (v - rk3[i]) * 100 / rk4[i];
+      });
+      const rk6 = emaSeriesNa(rk5, n);
+      const up = emaSeriesNa(rk6, n);
+      const down = emaSeriesNa(up, n);
+
+      const Oo = up.map((v,i) => (v == null || down[i]==null) ? null : Math.min(v, down[i]));
+      const Ll = up.map((v,i) => (v == null || down[i]==null) ? null : Math.max(v, down[i]));
+      const Cc = Ll;
+
+      const colors = up.map((v,i) => {
+        if (i === 0 || Oo[i-1]==null || Oo[i]==null || Cc[i-1]==null || Cc[i]==null) return '#999999';
+        if (Oo[i-1] < Oo[i] && Cc[i] < Cc[i-1]) return '#FFFF00'; // yellow
+        if (up[i] > down[i]) return '#008000'; // green
+        return '#FF0000'; // red
+      });
+
+      // Signals
+      let signal = 'Neutral';
+      let signalIndex = -1;
+      for (let i = len - 1; i >= 1; i--) {
+        if (up[i]==null || down[i]==null || up[i-1]==null || down[i-1]==null) continue;
+        const prevCrossUp = up[i-1] <= down[i-1] && up[i] > down[i];
+        const prevCrossDown = up[i-1] >= down[i-1] && up[i] < down[i];
+        if (prevCrossUp) { signal = 'Buy'; signalIndex = i; break; }
+        if (prevCrossDown) { signal = 'Sell'; signalIndex = i; break; }
+      }
+
+      return { up, down, Oo, Ll, colors, signal, signalIndex };
+    }
+
+    // ===========================
+    // Scanner + UI
+    // ===========================
+    const tbody = document.getElementById('scanTbody');
+    const chartCanvas = document.getElementById('chartCanvas');
+    let chart = null;
+    let chartSymbol = null;
+
+    function formatTs(epoch) {
+      if (!epoch) return '-';
+      const d = new Date(epoch * 1000);
+      return d.toLocaleString();
+    }
+
+    function rowId(symbol) { return `row-${symbol}`; }
+
+    function upsertRow(state) {
+      const id = rowId(state.symbol);
+      let tr = document.getElementById(id);
+      const sig = state.lastSignal || 'Neutral';
+      const clazz = sig === 'Buy' ? 'signal-buy' : sig === 'Sell' ? 'signal-sell' : 'signal-neutral';
+      const timeframeLabel = tfLabel(state.granularity);
+      const upVal = state.lastUp != null ? state.lastUp.toFixed(3) : '-';
+      const downVal = state.lastDown != null ? state.lastDown.toFixed(3) : '-';
+      const updated = formatTs(state.lastUpdated);
+
+      const actionBtns = `
+        <div class="actions">
+          <button class="btn" onclick="showChart('${state.symbol}')">View</button>
+          <button class="btn" onclick="manualRefresh('${state.symbol}')">Refresh</button>
+        </div>
+      `;
+
+      if (!tr) {
+        tr = document.createElement('tr');
+        tr.id = id;
+        tr.innerHTML = `
+          <td>${state.symbol}</td>
+          <td>${state.display}</td>
+          <td>${state.market}</td>
+          <td>${timeframeLabel}</td>
+          <td class="td-up">${upVal}</td>
+          <td class="td-down">${downVal}</td>
+          <td class="td-signal"><span class="signal-badge ${clazz}">${sig}</span></td>
+          <td class="td-updated">${updated}</td>
+          <td>${actionBtns}</td>
+        `;
+        tbody.appendChild(tr);
+      } else {
+        tr.children[3].textContent = timeframeLabel;
+        tr.querySelector('.td-up').textContent = upVal;
+        tr.querySelector('.td-down').textContent = downVal;
+        tr.querySelector('.td-signal').innerHTML = `<span class="signal-badge ${clazz}">${sig}</span>`;
+        tr.querySelector('.td-updated').textContent = updated;
+        tr.children[8].innerHTML = actionBtns;
+      }
+    }
+
+    function tfLabel(gran) {
+      const m = { 60: '1m', 300: '5m', 900: '15m', 3600: '1h' };
+      return m[gran] || `${Math.round(gran/60)}m`;
+    }
+
+    // Audio alert
+    function beep(f=880, t=0.08, type='sine') {
+      if (!document.getElementById('soundAlerts').checked) return;
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.value = f;
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        gain.gain.setValueAtTime(0.001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+        osc.start();
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t);
+        osc.stop(ctx.currentTime + t + 0.02);
+      } catch (e) {}
+    }
+
+    function checkSignalChange(state, indicator, candles) {
+      const idx = candles.length - 1;
+      if (idx < 1) return;
+      const upPrev = indicator.up[idx - 1];
+      const dnPrev = indicator.down[idx - 1];
+      const upNow = indicator.up[idx];
+      const dnNow = indicator.down[idx];
+      if (upPrev == null || dnPrev == null || upNow == null || dnNow == null) return;
+      const isBuy = upPrev <= dnPrev && upNow > dnNow;
+      const isSell = upPrev >= dnPrev && upNow < dnNow;
+
+      if (isBuy && state.lastSignal !== 'Buy') {
+        state.lastSignal = 'Buy';
+        state.lastSignalTime = candles[idx].epoch;
+        beep(1100, 0.09, 'triangle');
+      } else if (isSell && state.lastSignal !== 'Sell') {
+        state.lastSignal = 'Sell';
+        state.lastSignalTime = candles[idx].epoch;
+        beep(440, 0.09, 'square');
+      } else if (!isBuy && !isSell && !state.lastSignal) {
+        state.lastSignal = 'Neutral';
+      }
+    }
+
+    function updateStateFromCandles(symbol, display, market, granularity, candles) {
+      let state = symbolStates.get(symbol);
+      if (!state) {
+        state = {
+          symbol, display, market, granularity,
+          candles: [],
+          lastUp: null, lastDown: null,
+          lastSignal: null, lastSignalTime: null,
+          lastUpdated: null
+        };
+        symbolStates.set(symbol, state);
+      }
+      state.candles = candles.slice(); // clone
+      const n = Math.max(2, +document.getElementById('lengthN').value || 5);
+      const indicator = computeIndicator(state.candles, n);
+
+      const lastIdx = state.candles.length - 1;
+      state.lastUp = indicator.up[lastIdx];
+      state.lastDown = indicator.down[lastIdx];
+      state.lastUpdated = state.candles[lastIdx]?.epoch || null;
+
+      checkSignalChange(state, indicator, state.candles);
+      upsertRow(state);
+
+      if (chartSymbol === symbol) {
+        renderChart(symbol, state, indicator);
+      }
+    }
+
+    async function onCandleUpdate(symbol, candle) {
+      const state = symbolStates.get(symbol);
+      if (!state) return;
+      const arr = state.candles || [];
+      const last = arr[arr.length - 1];
+      if (last && candle.epoch === last.epoch) {
+        // Update current in-progress candle
+        last.open = candle.open;
+        last.high = candle.high;
+        last.low = candle.low;
+        last.close = candle.close;
+      } else {
+        // New candle
+        arr.push(candle);
+        if (arr.length > 5000) arr.shift();
+      }
+      updateStateFromCandles(symbol, state.display, state.market, state.granularity, arr);
+    }
+
+    // ===========================
+    // Chart rendering (Chart.js)
+    // ===========================
+    function renderChart(symbol, state, indicator) {
+      const labels = state.candles.map(c => new Date(c.epoch * 1000).toLocaleTimeString());
+      const up = indicator.up;
+      const down = indicator.down;
+      const Oo = indicator.Oo;
+      const Ll = indicator.Ll;
+      const colors = indicator.colors;
+
+      const hist = Oo.map((v,i) => v==null || Ll[i]==null ? null : (Ll[i] - v));
+      const histColors = colors;
+
+      if (chart) {
+        chart.data.labels = labels;
+        chart.data.datasets[0].data = up;
+        chart.data.datasets[1].data = down;
+        chart.data.datasets[2].data = hist;
+        chart.data.datasets[2].backgroundColor = histColors;
+        chart.update('none');
+      } else {
+        chart = new Chart(chartCanvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [
+              {
+                type: 'line',
+                label: 'Up',
+                data: up,
+                borderColor: '#00c853',
+                pointRadius: 0,
+                borderWidth: 1.8,
+              },
+              {
+                type: 'line',
+                label: 'Down',
+                data: down,
+                borderColor: '#ff1744',
+                pointRadius: 0,
+                borderWidth: 1.8,
+              },
+              {
+                type: 'bar',
+                label: 'Histogram (Ll - Oo)',
+                data: hist,
+                backgroundColor: histColors,
+                borderWidth: 0,
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { labels: { color: '#cfd3ff' } },
+              tooltip: { mode: 'index', intersect: false }
+            },
+            scales: {
+              x: { ticks: { color: '#9aa0b3' }, grid: { display: false } },
+              y: { ticks: { color: '#9aa0b3' }, grid: { color: 'rgba(255,255,255,0.06)' } }
+            }
+          }
+        });
+      }
+      document.getElementById('chartTitle').textContent = `${symbol} • ${state.display} • ${tfLabel(state.granularity)}`;
+    }
+
+    window.showChart = function(symbol) {
+      const state = symbolStates.get(symbol);
+      if (!state) return;
+      chartSymbol = symbol;
+      const n = Math.max(2, +document.getElementById('lengthN').value || 5);
+      const indicator = computeIndicator(state.candles, n);
+      renderChart(symbol, state, indicator);
+    };
+
+    window.manualRefresh = async function(symbol) {
+      const state = symbolStates.get(symbol);
+      if (!state) return;
+      try {
+        const candles = await getCandles(symbol, state.granularity, +document.getElementById('historyCount').value || 300);
+        updateStateFromCandles(symbol, state.display, state.market, state.granularity, candles);
+      } catch (e) {
+        console.warn('Manual refresh failed', e);
+      }
+    };
+
+    // ===========================
+    // Controls + scanning logic
+    // ===========================
+    let allSymbols = [];
+    let filteredSymbols = [];
+
+    function currentFilters() {
+      const markets = [...document.querySelectorAll('.marketFilter:checked')].map(el => el.value);
+      const search = (document.getElementById('search').value || '').trim().toLowerCase();
+      return { markets, search };
+    }
+
+    // Treat 'derived' and 'synthetic_index' as equivalent for Synthetics filtering
+    function marketMatchesFilter(symbolMarket, selected) {
+      if (selected.includes(symbolMarket)) return true;
+      if (symbolMarket === 'derived' && selected.includes('synthetic_index')) return true;
+      if (symbolMarket === 'synthetic_index' && selected.includes('derived')) return true;
+      return false;
+    }
+
+    function applyFilters() {
+      const { markets, search } = currentFilters();
+      filteredSymbols = allSymbols.filter(s => {
+        const marketOk = markets.length ? marketMatchesFilter(s.market, markets) : true;
+        const text = (s.symbol + ' ' + s.display + ' ' + s.market + ' ' + s.submarket).toLowerCase();
+        const searchOk = search ? text.includes(search) : true;
+        return marketOk && searchOk;
+      });
+    }
+
+    async function refreshSymbols() {
+      const btn = document.getElementById('btnRefresh');
+      btn.disabled = true;
+      try {
+        await connectWS();
+        allSymbols = await getActiveSymbols();
+        applyFilters();
+        // seed table with filtered symbols rows (no candles yet)
+        tbody.innerHTML = '';
+        const granularity = +document.getElementById('timeframe').value;
+        filteredSymbols.forEach(s => {
+          const state = {
+            symbol: s.symbol, display: s.display, market: s.market, granularity,
+            candles: [], lastUp: null, lastDown: null, lastSignal: null, lastUpdated: null
+          };
+          symbolStates.set(s.symbol, state);
+          upsertRow(state);
+        });
+      } catch (e) {
+        console.error('refreshSymbols error', e);
+        setConnStatus('disconnected', 'Error');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function startScan() {
+      if (isScanning) return;
+      isScanning = true;
+      document.getElementById('btnStart').disabled = true;
+      document.getElementById('btnStop').disabled = false;
+
+      await connectWS();
+      if (!allSymbols.length) {
+        allSymbols = await getActiveSymbols();
+      }
+      applyFilters();
+
+      tbody.innerHTML = '';
+      const granularity = +document.getElementById('timeframe').value;
+      const historyCount = +document.getElementById('historyCount').value || 300;
+      const maxSubs = +document.getElementById('maxSubs').value || 25;
+
+      // Load candles sequentially to avoid spikes
+      for (const s of filteredSymbols) {
+        if (!isScanning) break;
+        const state = {
+          symbol: s.symbol, display: s.display, market: s.market, granularity,
+          candles: [], lastUp: null, lastDown: null, lastSignal: null, lastUpdated: null
+        };
+        symbolStates.set(s.symbol, state);
+        upsertRow(state);
+        try {
+          const candles = await getCandles(s.symbol, granularity, historyCount);
+          updateStateFromCandles(s.symbol, s.display, s.market, granularity, candles);
+        } catch (e) {
+          console.warn('Failed candles for', s.symbol, e);
+        }
+      }
+
+      // Subscribe to a subset for real-time updates
+      let subscribed = 0;
+      for (const s of filteredSymbols) {
+        if (!isScanning) break;
+        if (subscribed >= maxSubs) break;
+        try {
+          await subscribeCandles(s.symbol, granularity);
+          subscribed++;
+        } catch (e) {
+          // ignore subscription errors (rate limits, etc.)
+        }
+      }
+    }
+
+    async function stopScan() {
+      isScanning = false;
+      document.getElementById('btnStart').disabled = false;
+      document.getElementById('btnStop').disabled = true;
+      await unsubscribeAll();
+    }
+
+    async function resumeScanAfterReconnect() {
+      const granularity = +document.getElementById('timeframe').value;
+      const maxSubs = +document.getElementById('maxSubs').value || 25;
+      let subscribed = 0;
+      for (const [symbol, state] of symbolStates.entries()) {
+        if (!isScanning) break;
+        try {
+          await subscribeCandles(symbol, state.granularity || granularity);
+          subscribed++;
+          if (subscribed >= maxSubs) break;
+        } catch {}
+      }
+    }
+
+    // Events
+    document.getElementById('btnRefresh').addEventListener('click', refreshSymbols);
+    document.getElementById('btnStart').addEventListener('click', startScan);
+    document.getElementById('btnStop').addEventListener('click', stopScan);
+    document.getElementById('lengthN').addEventListener('change', () => {
+      // recompute all with new n
+      for (const [symbol, state] of symbolStates.entries()) {
+        if (!state.candles.length) continue;
+        const n = Math.max(2, +document.getElementById('lengthN').value || 5);
+        const indicator = computeIndicator(state.candles, n);
+        const lastIdx = state.candles.length - 1;
+        state.lastUp = indicator.up[lastIdx];
+        state.lastDown = indicator.down[lastIdx];
+        upsertRow(state);
+        if (chartSymbol === symbol) renderChart(symbol, state, indicator);
+      }
+    });
+    document.getElementById('timeframe').addEventListener('change', async () => {
+      await stopScan();
+      await refreshSymbols();
+    });
+    document.getElementById('historyCount').addEventListener('change', () => {});
+    document.getElementById('maxSubs').addEventListener('change', () => {});
+    document.getElementById('search').addEventListener('input', async () => {
+      applyFilters();
+      await refreshSymbols();
+    });
+    document.querySelectorAll('.marketFilter').forEach(el => {
+      el.addEventListener('change', refreshSymbols);
+    });
+
+    // Initial boot
+    (async function boot() {
+      try {
+        await refreshSymbols();
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  </script>
+</body>
+</html>
