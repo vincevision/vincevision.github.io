@@ -227,8 +227,37 @@
         <canvas id="chartCanvas" height="260"></canvas>
       </div>
       <div class="footnote">
-        Plots: Up (green), Down (red), MA 3 (cyan), MA 5 (orange). Histogram color follows Pine logic: green (up>down), red (down>up), yellow (trend change).
+        Plots: Up (green), Down (red), MA 3 (cyan), MA 5 (orange). Histogram color follows Pine logic: green (up&gt;down), red (down&gt;up), yellow (trend change).
       </div>
+    </div>
+  </section>
+
+  <!-- Separate signals table -->
+  <section class="panel" style="margin: 0 16px 16px;">
+    <h3>Signals Log</h3>
+    <div style="overflow:auto; max-height: 40vh;">
+      <table id="signalsTable">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Symbol</th>
+            <th>Name</th>
+            <th>Market</th>
+            <th>Timeframe</th>
+            <th>Type</th>
+            <th>Direction</th>
+            <th>Price</th>
+            <th>Source</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="signalsTbody">
+          <!-- dynamic signals -->
+        </tbody>
+      </table>
+    </div>
+    <div class="footnote">
+      This log shows detected signals (Overbought/Oversold crosses and MA 3/5 crosses) separately from the main scanner. Most recent at the top.
     </div>
   </section>
 
@@ -532,7 +561,7 @@
         return '#FF0000'; // red
       });
 
-      // Original up/down signal (not used directly in UI, but kept)
+      // Original up/down signal (last cross direction)
       let signal = 'Neutral';
       let signalIndex = -1;
       for (let i = len - 1; i >= 1; i--) {
@@ -565,6 +594,7 @@
     // Scanner + UI
     // ===========================
     const tbody = document.getElementById('scanTbody');
+    const signalsTbody = document.getElementById('signalsTbody');
     const chartCanvas = document.getElementById('chartCanvas');
     let chart = null;
     let chartSymbol = null;
@@ -663,6 +693,43 @@
       } catch (e) {}
     }
 
+    // Add a row to the separate signals table
+    function addSignalRow(type, direction, state, candle) {
+      if (!signalsTbody) return;
+      const tr = document.createElement('tr');
+      const timeStr = formatTs(candle?.epoch || state.lastUpdated);
+      const tf = tfLabel(state.granularity);
+      const clazz =
+        direction === 'Buy' || direction === 'Bullish'
+          ? 'signal-buy'
+          : direction === 'Sell' || direction === 'Bearish'
+            ? 'signal-sell'
+            : 'signal-neutral';
+      const price = candle && candle.close != null ? (+candle.close).toFixed(5) : '-';
+      const source = type === 'OB/OS' ? 'Up/Down' : 'MA 3/5';
+      const viewBtn = `<button class="btn" onclick="showChart('${state.symbol}')">View</button>`;
+
+      tr.innerHTML = `
+        <td>${timeStr}</td>
+        <td>${state.symbol}</td>
+        <td>${state.display}</td>
+        <td>${state.market}</td>
+        <td>${tf}</td>
+        <td>${type}</td>
+        <td><span class="signal-badge ${clazz}">${direction}</span></td>
+        <td>${price}</td>
+        <td>${source}</td>
+        <td>${viewBtn}</td>
+      `;
+      // newest first
+      signalsTbody.insertBefore(tr, signalsTbody.firstChild);
+
+      const maxRows = 200;
+      while (signalsTbody.rows.length > maxRows) {
+        signalsTbody.deleteRow(signalsTbody.rows.length - 1);
+      }
+    }
+
     function checkSignalChange(state, indicator, candles) {
       const idx = candles.length - 1;
       if (idx < 1) return;
@@ -678,12 +745,39 @@
         state.lastSignal = 'Buy';
         state.lastSignalTime = candles[idx].epoch;
         beep(1100, 0.09, 'triangle');
+        addSignalRow('OB/OS', 'Buy', state, candles[idx]);
       } else if (isSell && state.lastSignal !== 'Sell') {
         state.lastSignal = 'Sell';
         state.lastSignalTime = candles[idx].epoch;
         beep(440, 0.09, 'square');
+        addSignalRow('OB/OS', 'Sell', state, candles[idx]);
       } else if (!isBuy && !isSell && !state.lastSignal) {
         state.lastSignal = 'Neutral';
+      }
+    }
+
+    function checkMaSignalChange(state, indicator, candles) {
+      const idx = candles.length - 1;
+      if (idx < 1) return;
+      const ma3Prev = indicator.ma3[idx - 1];
+      const ma5Prev = indicator.ma5[idx - 1];
+      const ma3Now = indicator.ma3[idx];
+      const ma5Now = indicator.ma5[idx];
+      if (ma3Prev == null || ma5Prev == null || ma3Now == null || ma5Now == null) return;
+
+      const bull = ma3Prev <= ma5Prev && ma3Now > ma5Now;
+      const bear = ma3Prev >= ma5Prev && ma3Now < ma5Now;
+
+      if (bull && state.lastMaSignal !== 'Bullish') {
+        state.lastMaSignal = 'Bullish';
+        state.lastMaSignalTime = candles[idx].epoch;
+        addSignalRow('MA 3/5', 'Bullish', state, candles[idx]);
+      } else if (bear && state.lastMaSignal !== 'Bearish') {
+        state.lastMaSignal = 'Bearish';
+        state.lastMaSignalTime = candles[idx].epoch;
+        addSignalRow('MA 3/5', 'Bearish', state, candles[idx]);
+      } else if (!bull && !bear && !state.lastMaSignal) {
+        state.lastMaSignal = 'Neutral';
       }
     }
 
@@ -695,7 +789,7 @@
           candles: [],
           lastUp: null, lastDown: null,
           lastSignal: null, lastSignalTime: null,
-          lastMa3: null, lastMa5: null, lastMaSignal: null,
+          lastMa3: null, lastMa5: null, lastMaSignal: null, lastMaSignalTime: null,
           lastUpdated: null
         };
         symbolStates.set(symbol, state);
@@ -711,9 +805,14 @@
 
       state.lastMa3 = indicator.ma3[lastIdx];
       state.lastMa5 = indicator.ma5[lastIdx];
+
+      // detect new signals before overwriting lastMaSignal with overall last cross
+      checkSignalChange(state, indicator, state.candles);
+      checkMaSignalChange(state, indicator, state.candles);
+
+      // overall last-cross info for display in scanner table
       state.lastMaSignal = indicator.maSignal;
 
-      checkSignalChange(state, indicator, state.candles);
       upsertRow(state);
 
       if (chartSymbol === symbol) {
@@ -896,7 +995,7 @@
             symbol: s.symbol, display: s.display, market: s.market, granularity,
             candles: [], lastUp: null, lastDown: null,
             lastSignal: null, lastSignalTime: null,
-            lastMa3: null, lastMa5: null, lastMaSignal: null,
+            lastMa3: null, lastMa5: null, lastMaSignal: null, lastMaSignalTime: null,
             lastUpdated: null
           };
           symbolStates.set(s.symbol, state);
@@ -934,7 +1033,7 @@
           symbol: s.symbol, display: s.display, market: s.market, granularity,
           candles: [], lastUp: null, lastDown: null,
           lastSignal: null, lastSignalTime: null,
-          lastMa3: null, lastMa5: null, lastMaSignal: null,
+          lastMa3: null, lastMa5: null, lastMaSignal: null, lastMaSignalTime: null,
           lastUpdated: null
         };
         symbolStates.set(s.symbol, state);
@@ -987,7 +1086,7 @@
     document.getElementById('btnStart').addEventListener('click', startScan);
     document.getElementById('btnStop').addEventListener('click', stopScan);
     document.getElementById('lengthN').addEventListener('change', () => {
-      // recompute all with new n
+      // recompute all with new n, but do NOT log signals again
       for (const [symbol, state] of symbolStates.entries()) {
         if (!state.candles.length) continue;
         const n = Math.max(2, +document.getElementById('lengthN').value || 5);
