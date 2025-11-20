@@ -134,9 +134,15 @@
       <label for="timeframe">Timeframe</label>
       <select id="timeframe">
         <option value="60">1m</option>
+        <option value="120">2m</option>
+        <option value="180">3m</option>
         <option value="300">5m</option>
+        <option value="600">10m</option>
         <option value="900">15m</option>
         <option value="3600">1h</option>
+        <option value="7200">2h</option>
+        <option value="14400">4h</option>
+        <option value="86400">1d</option>
       </select>
     </div>
     <div class="field">
@@ -583,8 +589,19 @@
     }
 
     function tfLabel(gran) {
-      const m = { 60: '1m', 300: '5m', 900: '15m', 3600: '1h' };
-      return m[gran] || `${Math.round(gran/60)}m`;
+      const m = {
+        60: '1m',
+        120: '2m',
+        180: '3m',
+        300: '5m',
+        600: '10m',
+        900: '15m',
+        3600: '1h',
+        7200: '2h',
+        14400: '4h',
+        86400: '1d',
+      };
+      return m[gran] || `${Math.round(gran / 60)}m`;
     }
 
     // Audio alert
