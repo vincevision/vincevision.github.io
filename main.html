@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-  <title>All Markets Scanner — StochRSI + 3MA + Bollinger + MACD (Deriv API)</title>
+  <title>All Markets Scanner — StochRSI + 3MA + Bollinger + MACD + Telegram (Deriv API)</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <style>
     :root {
       --bg:#0b0e11; --panel:#12161c; --panel2:#171b22; --text:#e6e8ea; --muted:#9aa4af;
@@ -47,8 +48,8 @@
 <div class="app">
   <header>
     <div>
-      <div class="title">📈 All Markets Scanner — StochRSI + 3MA + Bollinger + MACD(VINCEVISION/+254742850266)</div>
-      <div class="subtitle">Deriv WebSocket API • Auto Scanner (all markets) • TP = Mid Band • SL suggestion • MACD grey/slowdown filter</div>
+      <div class="title">📈 All Markets Scanner — StochRSI + 3MA + Bollinger + MACD + Telegram (VINCEVISION/+254742850266)</div>
+      <div class="subtitle">Deriv WebSocket API • Auto Scanner (all markets) • TP = Mid Band • SL suggestion • MACD grey/slowdown filter • Telegram alerts</div>
     </div>
     <div class="row">
       <span class="badge">App ID: <strong id="appIdBadge">1089</strong></span>
@@ -147,6 +148,29 @@
       <div class="field">
         <label>Signal freshness (bars)</label>
         <input id="freshBars" type="number" min="1" max="10" value="3"/>
+      </div>
+
+      <div class="field">
+        <label>Telegram Alerts</label>
+        <div class="row">
+          <label><input id="tgEnable" type="checkbox" checked/> Enable Telegram alerts</label>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <input id="tgToken" type="text" placeholder="Bot token" value="8335488005:AAG8j-mLVpINGhGGKH4UpACPECjKMZNWIB0" style="flex:1;min-width:160px"/>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <input id="tgChatId" type="text" placeholder="Chat ID" value="6812351007" style="flex:1;min-width:160px"/>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <input id="tgGifLong" type="text" placeholder="Long signal GIF URL (optional)" style="flex:1;min-width:160px"/>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <input id="tgGifShort" type="text" placeholder="Short signal GIF URL (optional)" style="flex:1;min-width:160px"/>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button id="tgTest" class="primary">Send Test</button>
+        </div>
+        <div class="hint">Token, chat ID, and GIF URLs live in your browser only. For production, route alerts via a backend/proxy so the token is not exposed.</div>
       </div>
     </div>
     <div class="row" style="margin-top:10px">
@@ -288,6 +312,159 @@ function forget(subId){ if(!subId) return Promise.resolve(); return sendReq({for
 async function clearSubs(){ const ids=Object.keys(subs); for(const id of ids){ try{ await forget(id); }catch{} } subs={}; }
 function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
 setInterval(()=>{ if(isOpen){ try{ ws.send(JSON.stringify({ping:1})); }catch{} } }, 30000);
+
+// ============================
+// Telegram alerts
+// ============================
+const TELEGRAM_STORAGE_KEY = 'all_markets_scanner_telegram';
+
+function getTelegramConfig(){
+  const tokenEl = el('tgToken');
+  const chatEl = el('tgChatId');
+  const enableEl = el('tgEnable');
+  const gifLongEl = el('tgGifLong');
+  const gifShortEl = el('tgGifShort');
+  return {
+    token: tokenEl ? tokenEl.value.trim() : '',
+    chatId: chatEl ? chatEl.value.trim() : '',
+    enabled: enableEl ? enableEl.checked : false,
+    gifLong: gifLongEl ? gifLongEl.value.trim() : '',
+    gifShort: gifShortEl ? gifShortEl.value.trim() : '',
+  };
+}
+
+function applyTelegramConfig(cfg){
+  try{
+    if(cfg.token && el('tgToken')) el('tgToken').value = cfg.token;
+    if(cfg.chatId && el('tgChatId')) el('tgChatId').value = cfg.chatId;
+    if(typeof cfg.enabled === 'boolean' && el('tgEnable')) el('tgEnable').checked = cfg.enabled;
+    if(typeof cfg.gifLong === 'string' && el('tgGifLong')) el('tgGifLong').value = cfg.gifLong;
+    if(typeof cfg.gifShort === 'string' && el('tgGifShort')) el('tgGifShort').value = cfg.gifShort;
+  }catch{}
+}
+
+function loadTelegramConfig(){
+  try{
+    const raw = localStorage.getItem(TELEGRAM_STORAGE_KEY);
+    if(!raw) return;
+    const cfg = JSON.parse(raw);
+    applyTelegramConfig(cfg);
+    log('Telegram config loaded from storage');
+  }catch(e){
+    log('Telegram config load error', e?.message || e);
+  }
+}
+
+function saveTelegramConfig(){
+  try{
+    const cfg = getTelegramConfig();
+    localStorage.setItem(TELEGRAM_STORAGE_KEY, JSON.stringify(cfg));
+    log('Telegram config saved');
+  }catch(e){
+    log('Telegram config save error', e?.message || e);
+  }
+}
+
+function sendTelegramMessage(text){
+  try{
+    const cfg = getTelegramConfig();
+    if(!cfg.enabled) return;
+    if(!cfg.token || !cfg.chatId){
+      log('Telegram skipped (missing token or chat id)');
+      return;
+    }
+    const base = `https://api.telegram.org/bot${cfg.token}/sendMessage`;
+    const params = new URLSearchParams({
+      chat_id: cfg.chatId,
+      text: text
+    });
+    const url = `${base}?${params.toString()}`;
+    fetch(url, { method: 'GET', mode: 'no-cors' }).catch(()=>{});
+  }catch(e){
+    log('Telegram error', e?.message || e);
+  }
+}
+
+function sendTelegramAnimation(animationUrl, caption){
+  try{
+    const cfg = getTelegramConfig();
+    if(!cfg.enabled) return;
+    if(!cfg.token || !cfg.chatId || !animationUrl){
+      return;
+    }
+    const base = `https://api.telegram.org/bot${cfg.token}/sendAnimation`;
+    const params = new URLSearchParams({
+      chat_id: cfg.chatId,
+      animation: animationUrl,
+      caption: caption || ''
+    });
+    const url = `${base}?${params.toString()}`;
+    fetch(url, { method: 'GET', mode: 'no-cors' }).catch(()=>{});
+  }catch(e){
+    log('Telegram GIF error', e?.message || e);
+  }
+}
+
+const TELEGRAM_KEY_TTL_MS = 12*60*60*1000; // 12 hours
+const telegramSent = new Map();
+
+function pruneTelegramKeys(){
+  const now = Date.now();
+  for(const [key,ts] of telegramSent){
+    if(now - ts > TELEGRAM_KEY_TTL_MS) telegramSent.delete(key);
+  }
+}
+
+function telegramKey(symbol, tf, sig){
+  return `${symbol}|${tf}|${sig.time}|${sig.type}`;
+}
+
+function notifyTelegram(source, symbol, tf, sig){
+  try{
+    pruneTelegramKeys();
+    const key = telegramKey(symbol, tf, sig);
+    if(telegramSent.has(key)) return;
+    telegramSent.set(key, Date.now());
+
+    const meta = symbolsAll.find(x=>x.symbol===symbol);
+    const name = meta ? `${meta.display_name} (${symbol})` : symbol;
+    const tfLabel = tfToLabel(tf);
+    const dir = sig.type.toUpperCase();
+    const rrText = sig.rr!=null ? `${sig.rr.toFixed(2)}R` : '—';
+    const tapTxt = sig.bodyTap ? 'Body tap' : 'Wick tap';
+    const macTxt = sig.macd?.tag ? `📉 MACD: ${sig.macd.tag}` : '📉 MACD: —';
+    const timeStr = epochToStr(sig.time);
+
+    const sourceEmoji = source === 'LIVE' ? '📺' : '📡';
+    const dirEmoji = sig.type === 'long' ? '🟢' : '🔴';
+
+    const headerLine = `${sourceEmoji} [${source}] ${dirEmoji} ${dir} on ${name} ${tfLabel}`;
+
+    const text =
+`${headerLine}
+💰 Entry: ${fmt(sig.entry)}
+🎯 TP (BB mid): ${fmt(sig.tp)}
+🛡 SL: ${fmt(sig.sl)}
+📊 RR: ${rrText}
+📌 Tap: ${tapTxt}
+${macTxt}
+🕒 Candle: ${timeStr}`;
+
+    // Send GIF if URL configured
+    const cfg = getTelegramConfig();
+    let gifUrl = '';
+    if(sig.type === 'long') gifUrl = cfg.gifLong || '';
+    else gifUrl = cfg.gifShort || '';
+    if(gifUrl){
+      sendTelegramAnimation(gifUrl, headerLine);
+    }
+
+    log('Telegram alert', source, symbol, dir, 'bar', sig.time);
+    sendTelegramMessage(text);
+  }catch(e){
+    log('Telegram notify error', e?.message || e);
+  }
+}
 
 // ============================
 // Symbols / Universe (ALL markets)
@@ -559,6 +736,9 @@ function renderLiveSignal(){
   const tapTxt = sig.bodyTap ? 'Body tap' : 'Wick tap';
   const macTxt = sig.macd?.tag ? ` | MACD: ${sig.macd.tag}` : '';
   el('liveNote').textContent = `${tapTxt} | Candle: ${epochToStr(sig.time)}${macTxt}`;
+
+  const tf = Number(el('tf').value) || 0;
+  notifyTelegram('LIVE', sym, tf, sig);
 }
 
 // ============================
@@ -668,6 +848,7 @@ async function scanSymbolOnce(s, tf, hist, params){
         macdTag: sig.macd?.tag || '',
         updated: Date.now()
       };
+      notifyTelegram('SCAN', s.symbol, tf, sig);
       return true;
     }
     return false;
@@ -727,6 +908,17 @@ el('incClosed').addEventListener('change', ()=>{ updateUniverseHint(); });
 // Init
 // ============================
 ensureWS();
+loadTelegramConfig();
+['tgToken','tgChatId','tgEnable','tgGifLong','tgGifShort'].forEach(id=>{
+  const node = el(id);
+  if(node) node.addEventListener('change', saveTelegramConfig);
+});
+const tgTestBtn = el('tgTest');
+if(tgTestBtn){
+  tgTestBtn.addEventListener('click', ()=>{
+    sendTelegramMessage('Test message from All Markets Scanner (Deriv) with Telegram alerts and GIF support.');
+  });
+}
 </script>
 </body>
 </html>
