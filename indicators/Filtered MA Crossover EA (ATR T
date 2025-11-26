@@ -1,0 +1,122 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+
+//@version=4
+strategy("Filtered MA Crossover EA (ATR TP/SL)",
+     overlay=true,
+     initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=10,
+     pyramiding=0,
+     calc_on_every_tick=true)
+
+//========================
+// INPUTS
+//========================
+fastLen       = input(9,   "Fast MA Length")
+slowLen       = input(21,  "Slow MA Length")
+trendLen      = input(200, "Trend Filter MA Length")
+
+useEMA        = input(true, "Use EMA (else SMA)")
+allowShorts   = input(true, "Allow Short Trades")
+
+atrLen        = input(14,  "ATR Length")
+tpAtrMult     = input(1.0, "TP ATR Multiplier")   // smaller TP -> higher win rate bias
+slAtrMult     = input(2.0, "SL ATR Multiplier")   // wider SL -> higher win rate bias
+minAtrFilter  = input(0.0, "Min ATR filter (0 = off)")
+
+//========================
+// MA FUNCTION
+//========================
+ma(src, length) =>
+    useEMA ? ema(src, length) : sma(src, length)
+
+//========================
+// CALCULATIONS
+//========================
+fastMA  = ma(close, fastLen)
+slowMA  = ma(close, slowLen)
+trendMA = ma(close, trendLen)
+
+atrVal  = atr(atrLen)
+
+// Trend filter: only trade with direction of trendMA slope and price vs trendMA
+trendBull = close > trendMA and trendMA > trendMA[1]
+trendBear = close < trendMA and trendMA < trendMA[1]
+
+// MA cross signals
+maBullCross = crossover(fastMA, slowMA)
+maBearCross = crossunder(fastMA, slowMA)
+
+// Volatility filter
+volOk = atrVal >= minAtrFilter
+
+// Final entry conditions
+longSignal  = maBullCross and trendBull and volOk
+shortSignal = maBearCross and trendBear and volOk and allowShorts
+
+//========================
+// POSITION STATE
+//========================
+inLong  = strategy.position_size > 0
+inShort = strategy.position_size < 0
+
+// Store TP/SL levels (static per trade)
+var float longSL  = na
+var float longTP  = na
+var float shortSL = na
+var float shortTP = na
+
+//========================
+// LONG ENTRY
+//========================
+if longSignal
+    // Close short if open, then go long
+    if inShort
+        strategy.close("Short")
+    // Set TP/SL based on current close and ATR
+    longSL := close - atrVal * slAtrMult
+    longTP := close + atrVal * tpAtrMult
+    strategy.entry("Long", strategy.long)
+
+//========================
+// SHORT ENTRY
+//========================
+if shortSignal
+    // Close long if open, then go short
+    if inLong
+        strategy.close("Long")
+    shortSL := close + atrVal * slAtrMult
+    shortTP := close - atrVal * tpAtrMult
+    strategy.entry("Short", strategy.short)
+
+//========================
+// EXITS (TP/SL)
+//========================
+if inLong
+    strategy.exit("Long Exit", from_entry="Long", stop=longSL, limit=longTP)
+
+if inShort
+    strategy.exit("Short Exit", from_entry="Short", stop=shortSL, limit=shortTP)
+
+//========================
+// PLOTTING
+//========================
+plot(fastMA,  title="Fast MA",  color=color.blue)
+plot(slowMA,  title="Slow MA",  color=color.orange)
+plot(trendMA, title="Trend MA", color=color.gray)
+
+// Plot TP/SL lines while in position
+plot(inLong  ? longSL  : na, title="Long SL",  color=color.red,   style=plot.style_linebr)
+plot(inLong  ? longTP  : na, title="Long TP",  color=color.green, style=plot.style_linebr)
+plot(inShort ? shortSL : na, title="Short SL", color=color.red,   style=plot.style_linebr)
+plot(inShort ? shortTP : na, title="Short TP", color=color.green, style=plot.style_linebr)
+
+// Entry markers
+plotshape(longSignal,  title="Long Signal",  location=location.belowbar,
+          style=shape.triangleup,   color=color.lime, size=size.tiny, text="L")
+plotshape(shortSignal, title="Short Signal", location=location.abovebar,
+          style=shape.triangledown, color=color.red,  size=size.tiny, text="S")
+
+// Alerts
+alertcondition(longSignal,  title="Long Entry",  message="MA Bullish Crossover Long")
+alertcondition(shortSignal, title="Short Entry", message="MA Bearish Crossover Short")
