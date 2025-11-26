@@ -1,0 +1,139 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+
+//@version=4
+strategy("MA Crossover + Donchian Filter (TP = Midband)",
+     overlay=true,
+     initial_capital=10000,
+     default_qty_type=strategy.percent_of_equity,
+     default_qty_value=10,
+     pyramiding=0,
+     calc_on_every_tick=true)
+
+//========================
+// INPUTS
+//========================
+
+// Moving averages
+fastLen   = input(9,   "Fast MA Length")
+slowLen   = input(21,  "Slow MA Length")
+useEMA    = input(true, "Use EMA (else SMA)")
+
+// Donchian channel
+donchLen       = input(20, "Donchian Length")
+donchLookback  = input(3,  "Bars after OB/OS allowed for signal")
+
+// Risk management
+atrLen    = input(14,  "ATR Length")
+slAtrMult = input(2.0, "SL ATR Multiplier")
+
+// Trade direction
+allowLongs  = input(true, "Allow Long Trades (Oversold)")
+allowShorts = input(true, "Allow Short Trades (Overbought)")
+
+//========================
+// MA FUNCTION
+//========================
+ma(src, length) =>
+    useEMA ? ema(src, length) : sma(src, length)
+
+//========================
+// CALCULATIONS
+//========================
+fastMA = ma(close, fastLen)
+slowMA = ma(close, slowLen)
+
+// Donchian channels
+donchUpper = highest(high, donchLen)
+donchLower = lowest(low,  donchLen)
+donchMid   = (donchUpper + donchLower) / 2.0
+
+// Overbought / oversold conditions
+isOverbought = high >= donchUpper
+isOversold   = low  <= donchLower
+
+obBars = barssince(isOverbought)
+osBars = barssince(isOversold)
+
+overboughtRecent = not na(obBars) and obBars <= donchLookback
+oversoldRecent   = not na(osBars) and osBars <= donchLookback
+
+// MA crossovers
+maBullCross = crossover(fastMA, slowMA)   // bullish cross
+maBearCross = crossunder(fastMA, slowMA)  // bearish cross
+
+// ATR for SL
+atrVal = atr(atrLen)
+
+// Final signals with Donchian filter
+longSignal  = allowLongs  and maBullCross and oversoldRecent
+shortSignal = allowShorts and maBearCross and overboughtRecent
+
+//========================
+// POSITION STATE & TP/SL STORAGE
+//========================
+inLong  = strategy.position_size > 0
+inShort = strategy.position_size < 0
+
+var float longSL  = na
+var float longTP  = na
+var float shortSL = na
+var float shortTP = na
+
+//========================
+// LONG ENTRY
+//========================
+if longSignal and not na(atrVal) and not na(donchMid)
+    // If already short, close it
+    if inShort
+        strategy.close("Short")
+    // Define SL (ATR) and TP (Donchian midband at signal bar)
+    longSL := close - atrVal * slAtrMult
+    longTP := donchMid
+    strategy.entry("Long", strategy.long)
+
+//========================
+// SHORT ENTRY
+//========================
+if shortSignal and not na(atrVal) and not na(donchMid)
+    // If already long, close it
+    if inLong
+        strategy.close("Long")
+    // Define SL (ATR) and TP (Donchian midband at signal bar)
+    shortSL := close + atrVal * slAtrMult
+    shortTP := donchMid
+    strategy.entry("Short", strategy.short)
+
+//========================
+// EXITS (TP/SL)
+//========================
+if inLong
+    strategy.exit("Long Exit", from_entry="Long", stop=longSL, limit=longTP)
+
+if inShort
+    strategy.exit("Short Exit", from_entry="Short", stop=shortSL, limit=shortTP)
+
+//========================
+// PLOTTING
+//========================
+plot(fastMA,  title="Fast MA",  color=color.blue)
+plot(slowMA,  title="Slow MA",  color=color.orange)
+
+plot(donchUpper, title="Donchian Upper", color=color.red)
+plot(donchMid,   title="Donchian Mid",   color=color.gray)
+plot(donchLower, title="Donchian Lower", color=color.green)
+
+// Plot TP/SL lines while in position
+plot(inLong  ? longSL  : na, title="Long SL",  color=color.red,   style=plot.style_linebr)
+plot(inLong  ? longTP  : na, title="Long TP",  color=color.green, style=plot.style_linebr)
+plot(inShort ? shortSL : na, title="Short SL", color=color.red,   style=plot.style_linebr)
+plot(inShort ? shortTP : na, title="Short TP", color=color.green, style=plot.style_linebr)
+
+// Entry markers
+plotshape(longSignal,  title="Long Signal",  location=location.belowbar,
+          style=shape.triangleup,   color=color.lime, size=size.tiny, text="L")
+plotshape(shortSignal, title="Short Signal", location=location.abovebar,
+          style=shape.triangledown, color=color.red,  size=size.tiny, text="S")
+
+// Alerts
+alertcondition(longSignal,  title="Long Entry",  message="Long: MA bull cross after Donchian oversold (TP = midband)")
+alertcondition(shortSignal, title="Short Entry", message="Short: MA bear cross after Donchian overbought (TP = midband)")
