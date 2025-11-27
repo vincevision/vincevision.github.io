@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Deriv MA + Donchian Signal Scanner</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg: #0b1020;
+      --bg-panel: #141a33;
+      --accent: #3f8cff;
+      --accent-soft: rgba(63, 140, 255, 0.15);
+      --text: #f5f7ff;
+      --text-muted: #a4acc4;
+      --danger: #ff4d4f;
+      --success: #52c41a;
+      --border: #252b44;
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: var(--font);
+      background: radial-gradient(circle at top, #19254a 0, #050812 55%, #020308 100%);
+      color: var(--text);
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    header h1 {
+      font-size: 20px;
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+
+    header small {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .status {
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #050712;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #999;
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+    }
+
+    .status-dot.disconnected {
+      background: #999;
+    }
+
+    .status-text {
+      color: var(--text-muted);
+    }
+
+    .panel {
+      background: linear-gradient(135deg, rgba(20, 26, 51, 0.98), rgba(13, 19, 40, 0.98));
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 14px;
+      margin-bottom: 16px;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      color: #e5e9ff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-title span {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .controls-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 10px 14px;
+      align-items: flex-end;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .field label {
+      color: var(--text-muted);
+    }
+
+    .field input[type="number"],
+    .field input[type="text"],
+    .field select {
+      background: #050814;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 6px 8px;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+    }
+
+    .field input[type="number"]:focus,
+    .field input[type="text"]:focus,
+    .field select:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(63, 140, 255, 0.4);
+    }
+
+    .field input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 16px;
+      height: 16px;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .btn {
+      border-radius: 999px;
+      border: 1px solid transparent;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      background: linear-gradient(90deg, #2b6cff, #7b55ff);
+      color: #fff;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.2s ease;
+      box-shadow: 0 6px 16px rgba(63, 140, 255, 0.35);
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 22px rgba(63, 140, 255, 0.45);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+      box-shadow: 0 4px 12px rgba(63, 140, 255, 0.35);
+    }
+
+    .btn-secondary {
+      background: #101528;
+      border-color: var(--border);
+      box-shadow: none;
+    }
+
+    .btn-secondary:hover {
+      background: #171d33;
+      box-shadow: none;
+    }
+
+    .flex-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* Signal panel */
+    .signal-summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.4fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 800px) {
+      .signal-summary {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .signal-main {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: radial-gradient(circle at top left, rgba(63, 140, 255, 0.18), transparent 55%),
+                  radial-gradient(circle at bottom right, rgba(123, 85, 255, 0.18), transparent 55%);
+      border: 1px solid rgba(63, 140, 255, 0.35);
+    }
+
+    .signal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .signal-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
+
+    .signal-type {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .signal-type.long {
+      color: var(--success);
+    }
+
+    .signal-type.short {
+      color: var(--danger);
+    }
+
+    .signal-type.none {
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .signal-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .signal-meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 6px;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    .signal-meta-item {
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: rgba(5, 10, 30, 0.8);
+      border: 1px solid rgba(42, 51, 90, 0.9);
+    }
+
+    .signal-meta-label {
+      color: var(--text-muted);
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+
+    .signal-meta-value {
+      font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 12px;
+    }
+
+    .position-pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(63, 140, 255, 0.35);
+      background: rgba(5, 11, 35, 0.9);
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .position-pill span {
+      font-weight: 600;
+    }
+
+    .position-long {
+      color: var(--success);
+    }
+
+    .position-short {
+      color: var(--danger);
+    }
+
+    .position-flat {
+      color: var(--text-muted);
+    }
+
+    .signal-detail {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: rgba(5, 9, 25, 0.96);
+      border: 1px solid var(--border);
+      font-size: 12px;
+    }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      gap: 8px;
+    }
+
+    .detail-row span.label {
+      color: var(--text-muted);
+    }
+
+    .detail-row span.value {
+      font-family: "JetBrains Mono", monospace;
+    }
+
+    .note {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    thead {
+      background: #090c1a;
+    }
+
+    th, td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #181d33;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      font-weight: 500;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    tbody tr:nth-child(even) {
+      background: rgba(6, 10, 26, 0.95);
+    }
+
+    tbody tr:nth-child(odd) {
+      background: rgba(4, 7, 18, 0.95);
+    }
+
+    .signal-tag {
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .signal-tag.long {
+      background: rgba(82, 196, 26, 0.15);
+      color: var(--success);
+      border: 1px solid rgba(82, 196, 26, 0.5);
+    }
+
+    .signal-tag.short {
+      background: rgba(255, 77, 79, 0.15);
+      color: var(--danger);
+      border: 1px solid rgba(255, 77, 79, 0.5);
+    }
+
+    .muted {
+      color: var(--text-muted);
+    }
+
+    .error-text {
+      font-size: 11px;
+      color: var(--danger);
+      margin-top: 4px;
+    }
+
+    .small {
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Deriv MA + Donchian Signal Scanner</h1>
+        <small>SMA crossover + Donchian filter + ATR (TP = Donchian mid). Uses Deriv WebSocket API (app_id = 1089).</small>
+      </div>
+      <div class="status">
+        <span class="status-dot disconnected" id="status-dot"></span>
+        <span class="status-text" id="status-text">Disconnected</span>
+      </div>
+    </header>
+
+    <!-- Controls -->
+    <div class="panel">
+      <div class="panel-title">
+        Connection & Strategy Settings
+        <span id="last-updated">Last update: —</span>
+      </div>
+      <div class="controls-grid">
+        <div class="field">
+          <label for="symbol-input">Deriv Symbol (live view)</label>
+          <input id="symbol-input" type="text" value="R_100" placeholder="e.g. R_100, VOL10, frxEURUSD" />
+        </div>
+
+        <div class="field">
+          <label for="timeframe-select">Timeframe</label>
+          <select id="timeframe-select">
+            <option value="60">1 minute</option>
+            <option value="300">5 minutes</option>
+            <option value="900">15 minutes</option>
+            <option value="1800">30 minutes</option>
+            <option value="3600" selected>1 hour</option>
+            <option value="14400">4 hours</option>
+            <option value="86400">1 day</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="fast-len">Fast SMA length</label>
+          <input id="fast-len" type="number" min="1" value="9" />
+        </div>
+
+        <div class="field">
+          <label for="slow-len">Slow SMA length</label>
+          <input id="slow-len" type="number" min="1" value="21" />
+        </div>
+
+        <div class="field">
+          <label for="donchian-len">Donchian length</label>
+          <input id="donchian-len" type="number" min="1" value="20" />
+        </div>
+
+        <div class="field">
+          <label for="donchian-lookback">Donchian OB/OS lookback (bars)</label>
+          <input id="donchian-lookback" type="number" min="0" value="3" />
+        </div>
+
+        <div class="field">
+          <label for="atr-len">ATR length</label>
+          <input id="atr-len" type="number" min="1" value="14" />
+        </div>
+
+        <div class="field">
+          <label for="sl-mult">SL ATR multiplier</label>
+          <input id="sl-mult" type="number" min="0" step="0.1" value="2.0" />
+        </div>
+
+        <div class="field">
+          <label>Trade direction</label>
+          <div class="checkbox-row">
+            <input id="allow-longs" type="checkbox" checked />
+            <label for="allow-longs">Allow Longs (Oversold)</label>
+          </div>
+          <div class="checkbox-row">
+            <input id="allow-shorts" type="checkbox" checked />
+            <label for="allow-shorts">Allow Shorts (Overbought)</label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>&nbsp;</label>
+          <div class="flex-row">
+            <button class="btn" id="start-btn">Connect / Restart</button>
+            <button class="btn btn-secondary" id="recalc-btn" type="button">Recalculate (no reconnect)</button>
+          </div>
+          <div id="error-text" class="error-text"></div>
+        </div>
+      </div>
+
+      <div class="note small">
+        Live view uses selected symbol & timeframe with streaming candles. Auto scan (below) uses the same settings across all active symbols.
+      </div>
+    </div>
+
+    <!-- Signal summary -->
+    <div class="panel">
+      <div class="panel-title">
+        Latest Strategy Signal (Live Symbol View)
+        <span>Evaluation is based on the latest available candle.</span>
+      </div>
+
+      <div class="signal-summary">
+        <div class="signal-main">
+          <div class="signal-header">
+            <div>
+              <div class="signal-label">Current Signal</div>
+              <div id="signal-type" class="signal-type none">No signal</div>
+              <div id="signal-sub" class="signal-sub">Waiting for data...</div>
+            </div>
+            <div>
+              <div class="signal-label">Strategy Position</div>
+              <div id="position-pill" class="position-pill">
+                <span class="position-flat" id="position-text">Flat</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="signal-meta">
+            <div class="signal-meta-item">
+              <div class="signal-meta-label">Last close</div>
+              <div class="signal-meta-value" id="price-text">—</div>
+            </div>
+            <div class="signal-meta-item">
+              <div class="signal-meta-label">Donchian mid</div>
+              <div class="signal-meta-value" id="donch-text">—</div>
+            </div>
+            <div class="signal-meta-item">
+              <div class="signal-meta-label">ATR</div>
+              <div class="signal-meta-value" id="atr-text">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="signal-detail">
+          <div class="detail-row">
+            <span class="label">Suggested SL (Long)</span>
+            <span class="value" id="sl-long-text">—</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Suggested TP (Long)</span>
+            <span class="value" id="tp-long-text">—</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Suggested SL (Short)</span>
+            <span class="value" id="sl-short-text">—</span>
+          </div>
+          <div class="detail-row">
+            <span class="label">Suggested TP (Short)</span>
+            <span class="value" id="tp-short-text">—</span>
+          </div>
+          <div class="note">
+            SL = close &plusmn; ATR × multiplier, TP = Donchian mid at the signal bar.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Auto Scan panel -->
+    <div class="panel">
+      <div class="panel-title">
+        Auto Scan – All Active Markets
+        <span>Scans all active Deriv symbols on the chosen timeframe for signals.</span>
+      </div>
+      <div class="flex-row" style="margin-bottom: 8px; gap:12px;">
+        <div class="checkbox-row">
+          <input id="scan-enable" type="checkbox" />
+          <label for="scan-enable">Enable auto scan</label>
+        </div>
+        <div class="field" style="max-width:140px;">
+          <label for="scan-interval">Scan interval (seconds)</label>
+          <input id="scan-interval" type="number" min="10" value="120" />
+        </div>
+        <button class="btn btn-secondary" id="scan-now-btn" type="button">Scan now once</button>
+        <span id="scan-status" class="small muted">Idle.</span>
+      </div>
+
+      <div style="max-height: 260px; overflow: auto; border-radius: 10px; border: 1px solid var(--border);">
+        <table>
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Market</th>
+              <th>Timeframe</th>
+              <th>Signal</th>
+              <th>Close</th>
+              <th>Donch mid</th>
+              <th>ATR</th>
+              <th>Last update</th>
+            </tr>
+          </thead>
+          <tbody id="scan-body">
+            <!-- Scan rows injected here -->
+          </tbody>
+        </table>
+      </div>
+      <div class="note small">
+        Auto scan uses one WebSocket connection to request recent candle history for every active symbol. Very frequent scans may hit rate limits; 60–300 seconds is recommended.
+      </div>
+    </div>
+
+    <!-- Signal log (live symbol) -->
+    <div class="panel">
+      <div class="panel-title">
+        Recent Signals (Live Symbol View)
+      </div>
+      <div style="max-height: 260px; overflow: auto; border-radius: 10px; border: 1px solid var(--border);">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Timeframe</th>
+              <th>Signal</th>
+              <th>Close</th>
+              <th>Donch mid</th>
+              <th>ATR</th>
+              <th>SL</th>
+              <th>TP</th>
+            </tr>
+          </thead>
+          <tbody id="signals-body">
+            <!-- Rows injected here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================
+    // Deriv connection config
+    // =========================
+    const DERIV_APP_ID = 1089;
+    const DERIV_WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${DERIV_APP_ID}`;
+    // Alternative endpoint if needed:
+    // const DERIV_WS_URL = `wss://ws.binaryws.com/websockets/v3?app_id=${DERIV_APP_ID}`;
+
+    let wsMain = null;   // main connection for live symbol view
+    let wsScan = null;   // scan connection for all markets
+
+    let candles = [];      // live symbol candles
+    let currentPosition = 0; // 1 = long, -1 = short, 0 = flat
+    let lastSignalEpoch = null;
+
+    // Auto-scan state
+    let scanSymbols = [];        // list of {symbol, display, market, submarket}
+    let scanSymbolInfo = new Map(); // symbol -> info
+    let scanRows = new Map();    // symbol -> <tr>
+    let scanHasSymbols = false;
+    let autoScanOn = false;
+    let autoScanTimer = null;
+    let scanInProgress = false;
+    let scanProcessedCount = 0;
+    let scanTotal = 0;
+    let pendingManualScan = false;
+
+    // =========================
+    // DOM helpers
+    // =========================
+    const $ = (id) => document.getElementById(id);
+
+    const statusDotEl = $("status-dot");
+    const statusTextEl = $("status-text");
+    const lastUpdatedEl = $("last-updated");
+    const errorTextEl = $("error-text");
+
+    const symbolInput = $("symbol-input");
+    const timeframeSelect = $("timeframe-select");
+    const fastLenInput = $("fast-len");
+    const slowLenInput = $("slow-len");
+    const donchLenInput = $("donchian-len");
+    const donchLookbackInput = $("donchian-lookback");
+    const atrLenInput = $("atr-len");
+    const slMultInput = $("sl-mult");
+    const allowLongsInput = $("allow-longs");
+    const allowShortsInput = $("allow-shorts");
+
+    const signalTypeEl = $("signal-type");
+    const signalSubEl = $("signal-sub");
+    const priceTextEl = $("price-text");
+    const donchTextEl = $("donch-text");
+    const atrTextEl = $("atr-text");
+
+    const slLongTextEl = $("sl-long-text");
+    const tpLongTextEl = $("tp-long-text");
+    const slShortTextEl = $("sl-short-text");
+    const tpShortTextEl = $("tp-short-text");
+
+    const positionPillEl = $("position-pill");
+    const positionTextEl = $("position-text");
+    const signalsBodyEl = $("signals-body");
+
+    // Auto-scan DOM
+    const scanEnableInput = $("scan-enable");
+    const scanIntervalInput = $("scan-interval");
+    const scanStatusEl = $("scan-status");
+    const scanBodyEl = $("scan-body");
+
+    // =========================
+    // Utility
+    // =========================
+    function formatNumber(value, digits = 5) {
+      if (value == null || isNaN(value)) return "—";
+      return Number(value).toFixed(digits);
+    }
+
+    function formatTime(epoch) {
+      if (!epoch) return "—";
+      return new Date(epoch * 1000).toLocaleString();
+    }
+
+    function timeframeLabelFromGranularity(g) {
+      const map = {
+        60: "1m",
+        300: "5m",
+        900: "15m",
+        1800: "30m",
+        3600: "1H",
+        14400: "4H",
+        86400: "1D"
+      };
+      return map[g] || `${g}s`;
+    }
+
+    function setStatus(connected, message) {
+      if (connected) {
+        statusDotEl.classList.remove("disconnected");
+        statusDotEl.classList.add("connected");
+        statusTextEl.textContent = message || "Connected";
+      } else {
+        statusDotEl.classList.add("disconnected");
+        statusDotEl.classList.remove("connected");
+        statusTextEl.textContent = message || "Disconnected";
+      }
+    }
+
+    function showError(msg) {
+      errorTextEl.textContent = msg || "";
+    }
+
+    function clearError() {
+      errorTextEl.textContent = "";
+    }
+
+    // =========================
+    // Strategy calculations
+    // =========================
+
+    function sma(values, i, len) {
+      if (i < len - 1) return null;
+      let sum = 0;
+      for (let j = i - len + 1; j <= i; j++) {
+        sum += values[j];
+      }
+      return sum / len;
+    }
+
+    // Wilder ATR (similar to TradingView atr())
+    function computeATR(highs, lows, closes, length) {
+      const n = highs.length;
+      const tr = new Array(n).fill(null);
+      const atr = new Array(n).fill(null);
+
+      for (let i = 1; i < n; i++) {
+        const hi = highs[i];
+        const lo = lows[i];
+        const prevClose = closes[i - 1];
+        const trVal = Math.max(
+          hi - lo,
+          Math.abs(hi - prevClose),
+          Math.abs(lo - prevClose)
+        );
+        tr[i] = trVal;
+      }
+
+      // Seed ATR with SMA of first 'length' TR values
+      let sum = 0;
+      let count = 0;
+      for (let i = 1; i < n && count < length; i++) {
+        if (tr[i] != null) {
+          sum += tr[i];
+          count++;
+          if (count === length) {
+            atr[i] = sum / length;
+          }
+        }
+      }
+
+      // Wilder smoothing
+      for (let i = 1; i < n; i++) {
+        if (atr[i] != null) continue; // already seeded
+        if (atr[i - 1] != null && tr[i] != null) {
+          atr[i] =
+            (atr[i - 1] * (length - 1) + tr[i]) / length;
+        }
+      }
+      return atr;
+    }
+
+    function evaluateStrategy(candlesArr, settings) {
+      const n = candlesArr.length;
+      if (n < 3) {
+        return { ok: false, reason: "Not enough candles yet." };
+      }
+
+      const {
+        fastLen,
+        slowLen,
+        donchLen,
+        donchLookback,
+        atrLen,
+        slMult,
+        allowLongs,
+        allowShorts
+      } = settings;
+
+      const highs = candlesArr.map(c => c.high);
+      const lows = candlesArr.map(c => c.low);
+      const closes = candlesArr.map(c => c.close);
+
+      const minBarsNeeded =
+        Math.max(fastLen, slowLen, donchLen + donchLookback, atrLen + 2) + 2;
+
+      if (n < minBarsNeeded) {
+        return {
+          ok: false,
+          reason: `Need at least ${minBarsNeeded} candles for current settings (have ${n}).`
+        };
+      }
+
+      const fastMA = new Array(n).fill(null);
+      const slowMA = new Array(n).fill(null);
+      const donchUpper = new Array(n).fill(null);
+      const donchLower = new Array(n).fill(null);
+      const isOverbought = new Array(n).fill(false);
+      const isOversold = new Array(n).fill(false);
+      const obBars = new Array(n).fill(null);
+      const osBars = new Array(n).fill(null);
+      const overboughtRecent = new Array(n).fill(false);
+      const oversoldRecent = new Array(n).fill(false);
+      const maBullCross = new Array(n).fill(false);
+      const maBearCross = new Array(n).fill(false);
+
+      // SMA
+      for (let i = 0; i < n; i++) {
+        fastMA[i] = sma(closes, i, fastLen);
+        slowMA[i] = sma(closes, i, slowLen);
+      }
+
+      // Donchian
+      for (let i = 0; i < n; i++) {
+        if (i >= donchLen - 1) {
+          let hi = -Infinity;
+          let lo = Infinity;
+          for (let j = i - donchLen + 1; j <= i; j++) {
+            if (highs[j] > hi) hi = highs[j];
+            if (lows[j] < lo) lo = lows[j];
+          }
+          donchUpper[i] = hi;
+          donchLower[i] = lo;
+        }
+      }
+
+      // OB/OS flags
+      for (let i = 0; i < n; i++) {
+        if (donchUpper[i] != null) {
+          isOverbought[i] = highs[i] >= donchUpper[i];
+        }
+        if (donchLower[i] != null) {
+          isOversold[i] = lows[i] <= donchLower[i];
+        }
+      }
+
+      // barssince for OB/OS
+      let lastOBIndex = null;
+      let lastOSIndex = null;
+      for (let i = 0; i < n; i++) {
+        if (isOverbought[i]) lastOBIndex = i;
+        if (isOversold[i]) lastOSIndex = i;
+
+        if (lastOBIndex != null) {
+          obBars[i] = i - lastOBIndex;
+          overboughtRecent[i] = obBars[i] <= donchLookback;
+        }
+        if (lastOSIndex != null) {
+          osBars[i] = i - lastOSIndex;
+          oversoldRecent[i] = osBars[i] <= donchLookback;
+        }
+      }
+
+      // ATR (Wilder)
+      const atrArr = computeATR(highs, lows, closes, atrLen);
+
+      // MA crossovers
+      for (let i = 1; i < n; i++) {
+        if (
+          fastMA[i - 1] != null &&
+          slowMA[i - 1] != null &&
+          fastMA[i] != null &&
+          slowMA[i] != null
+        ) {
+          maBullCross[i] =
+            fastMA[i - 1] < slowMA[i - 1] && fastMA[i] >= slowMA[i];
+          maBearCross[i] =
+            fastMA[i - 1] > slowMA[i - 1] && fastMA[i] <= slowMA[i];
+        }
+      }
+
+      // Use most recent candle
+      const idx = n - 1;
+
+      if (
+        fastMA[idx] == null ||
+        slowMA[idx] == null ||
+        donchUpper[idx] == null ||
+        donchLower[idx] == null ||
+        atrArr[idx] == null
+      ) {
+        return { ok: false, reason: "Indicators not ready on the latest bar." };
+      }
+
+      const longSignal =
+        allowLongs && maBullCross[idx] && oversoldRecent[idx];
+      const shortSignal =
+        allowShorts && maBearCross[idx] && overboughtRecent[idx];
+
+      const price = closes[idx];
+      const donchMid = (donchUpper[idx] + donchLower[idx]) / 2;
+      const atrVal = atrArr[idx];
+
+      const slLong = price - atrVal * slMult;
+      const tpLong = donchMid;
+      const slShort = price + atrVal * slMult;
+      const tpShort = donchMid;
+
+      return {
+        ok: true,
+        idx,
+        epoch: candlesArr[idx].epoch,
+        price,
+        donchMid,
+        atr: atrVal,
+        longSignal,
+        shortSignal,
+        slLong,
+        tpLong,
+        slShort,
+        tpShort
+      };
+    }
+
+    // =========================
+    // UI update (live symbol)
+    // =========================
+    function updateUIFromEvaluation(result, granularitySeconds) {
+      if (!result.ok) {
+        signalTypeEl.textContent = "No signal";
+        signalTypeEl.className = "signal-type none";
+        signalSubEl.textContent = result.reason || "No signal.";
+        priceTextEl.textContent = "—";
+        donchTextEl.textContent = "—";
+        atrTextEl.textContent = "—";
+        slLongTextEl.textContent = "—";
+        tpLongTextEl.textContent = "—";
+        slShortTextEl.textContent = "—";
+        tpShortTextEl.textContent = "—";
+        return;
+      }
+
+      const {
+        epoch,
+        price,
+        donchMid,
+        atr,
+        longSignal,
+        shortSignal,
+        slLong,
+        tpLong,
+        slShort,
+        tpShort
+      } = result;
+
+      const tfLabel = timeframeLabelFromGranularity(granularitySeconds);
+
+      let typeText = "No signal";
+      let typeClass = "signal-type none";
+      let subText = `Timeframe ${tfLabel} — ${formatTime(epoch)}`;
+
+      if (longSignal && !shortSignal) {
+        typeText = "LONG";
+        typeClass = "signal-type long";
+        subText += " — SMA bull cross + recent Donchian oversold";
+      } else if (shortSignal && !longSignal) {
+        typeText = "SHORT";
+        typeClass = "signal-type short";
+        subText += " — SMA bear cross + recent Donchian overbought";
+      } else {
+        subText += " — no entry condition on this bar";
+      }
+
+      signalTypeEl.textContent = typeText;
+      signalTypeEl.className = typeClass;
+      signalSubEl.textContent = subText;
+
+      priceTextEl.textContent = formatNumber(price, 5);
+      donchTextEl.textContent = formatNumber(donchMid, 5);
+      atrTextEl.textContent = formatNumber(atr, 5);
+
+      slLongTextEl.textContent = formatNumber(slLong, 5);
+      tpLongTextEl.textContent = formatNumber(tpLong, 5);
+      slShortTextEl.textContent = formatNumber(slShort, 5);
+      tpShortTextEl.textContent = formatNumber(tpShort, 5);
+
+      // "Virtual" position tracking for live symbol
+      if (longSignal && !shortSignal) {
+        if (currentPosition !== 1) {
+          currentPosition = 1;
+          addSignalRow("LONG", epoch, tfLabel, price, donchMid, atr, slLong, tpLong);
+        }
+      } else if (shortSignal && !longSignal) {
+        if (currentPosition !== -1) {
+          currentPosition = -1;
+          addSignalRow("SHORT", epoch, tfLabel, price, donchMid, atr, slShort, tpShort);
+        }
+      }
+
+      positionPillEl.className = "position-pill";
+      if (currentPosition === 1) {
+        positionTextEl.textContent = "Long";
+        positionTextEl.className = "position-long";
+      } else if (currentPosition === -1) {
+        positionTextEl.textContent = "Short";
+        positionTextEl.className = "position-short";
+      } else {
+        positionTextEl.textContent = "Flat";
+        positionTextEl.className = "position-flat";
+      }
+    }
+
+    function addSignalRow(
+      type,
+      epoch,
+      tfLabel,
+      price,
+      donchMid,
+      atr,
+      sl,
+      tp
+    ) {
+      if (lastSignalEpoch === epoch) return;
+      lastSignalEpoch = epoch;
+
+      const tr = document.createElement("tr");
+
+      const tdTime = document.createElement("td");
+      const tdTF = document.createElement("td");
+      const tdType = document.createElement("td");
+      const tdClose = document.createElement("td");
+      const tdDonch = document.createElement("td");
+      const tdAtr = document.createElement("td");
+      const tdSL = document.createElement("td");
+      const tdTP = document.createElement("td");
+
+      tdTime.textContent = formatTime(epoch);
+      tdTF.textContent = tfLabel;
+
+      const tag = document.createElement("span");
+      tag.className = "signal-tag " + (type === "LONG" ? "long" : "short");
+      tag.textContent = type;
+      tdType.appendChild(tag);
+
+      tdClose.textContent = formatNumber(price, 5);
+      tdDonch.textContent = formatNumber(donchMid, 5);
+      tdAtr.textContent = formatNumber(atr, 5);
+      tdSL.textContent = formatNumber(sl, 5);
+      tdTP.textContent = formatNumber(tp, 5);
+
+      tr.appendChild(tdTime);
+      tr.appendChild(tdTF);
+      tr.appendChild(tdType);
+      tr.appendChild(tdClose);
+      tr.appendChild(tdDonch);
+      tr.appendChild(tdAtr);
+      tr.appendChild(tdSL);
+      tr.appendChild(tdTP);
+
+      signalsBodyEl.prepend(tr);
+
+      while (signalsBodyEl.children.length > 20) {
+        signalsBodyEl.removeChild(signalsBodyEl.lastChild);
+      }
+    }
+
+    // =========================
+    // Live symbol WebSocket
+    // =========================
+    function connectAndSubscribe() {
+      const symbol = symbolInput.value.trim();
+      const granularity = parseInt(timeframeSelect.value, 10);
+
+      if (!symbol) {
+        showError("Please enter a valid Deriv symbol.");
+        return;
+      }
+
+      clearError();
+      lastSignalEpoch = null;
+      candles = [];
+      currentPosition = 0;
+      updateUIFromEvaluation(
+        { ok: false, reason: "Waiting for data..." },
+        granularity
+      );
+      signalsBodyEl.innerHTML = "";
+
+      if (wsMain && wsMain.readyState === WebSocket.OPEN) {
+        wsMain.close();
+      }
+
+      wsMain = new WebSocket(DERIV_WS_URL);
+
+      wsMain.onopen = () => {
+        setStatus(true, "Connected");
+        lastUpdatedEl.textContent = "Last update: connecting...";
+        const request = {
+          ticks_history: symbol,
+          style: "candles",
+          end: "latest",
+          granularity: granularity,
+          count: 500,
+          subscribe: 1
+        };
+        wsMain.send(JSON.stringify(request));
+      };
+
+      wsMain.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.error) {
+          showError("API error: " + (data.error.message || "Unknown"));
+          return;
+        }
+
+        if (data.msg_type === "candles" && Array.isArray(data.candles)) {
+          const list = data.candles.map(c => ({
+            epoch: c.epoch,
+            open: parseFloat(c.open),
+            high: parseFloat(c.high),
+            low: parseFloat(c.low),
+            close: parseFloat(c.close)
+          }));
+
+          if (list.length > 1 || candles.length === 0) {
+            candles = list.sort((a, b) => a.epoch - b.epoch);
+          } else if (list.length === 1) {
+            const newC = list[0];
+            if (!candles.length || newC.epoch > candles[candles.length - 1].epoch) {
+              candles.push(newC);
+              if (candles.length > 600) {
+                candles.shift();
+              }
+            } else if (newC.epoch === candles[candles.length - 1].epoch) {
+              candles[candles.length - 1] = newC;
+            }
+          }
+
+          lastUpdatedEl.textContent =
+            "Last update: " + new Date().toLocaleTimeString();
+
+          const settings = getSettingsFromInputs();
+          const evalResult = evaluateStrategy(candles, settings);
+          updateUIFromEvaluation(evalResult, granularity);
+        }
+      };
+
+      wsMain.onerror = (err) => {
+        console.error("WebSocket error", err);
+        setStatus(false, "Error");
+        showError("WebSocket error. Check console / network.");
+      };
+
+      wsMain.onclose = () => {
+        setStatus(false, "Disconnected");
+      };
+    }
+
+    // =========================
+    // Settings
+    // =========================
+    function getSettingsFromInputs() {
+      return {
+        fastLen: Math.max(1, parseInt(fastLenInput.value, 10) || 9),
+        slowLen: Math.max(1, parseInt(slowLenInput.value, 10) || 21),
+        donchLen: Math.max(1, parseInt(donchLenInput.value, 10) || 20),
+        donchLookback: Math.max(0, parseInt(donchLookbackInput.value, 10) || 3),
+        atrLen: Math.max(1, parseInt(atrLenInput.value, 10) || 14),
+        slMult: Math.max(0, parseFloat(slMultInput.value) || 2.0),
+        allowLongs: allowLongsInput.checked,
+        allowShorts: allowShortsInput.checked
+      };
+    }
+
+    function recalcWithoutReconnect() {
+      if (!candles.length) {
+        showError("No candles yet. Connect first.");
+        return;
+      }
+      clearError();
+      const granularity = parseInt(timeframeSelect.value, 10);
+      const settings = getSettingsFromInputs();
+      const evalResult = evaluateStrategy(candles, settings);
+      updateUIFromEvaluation(evalResult, granularity);
+    }
+
+    // =========================
+    // Auto Scan – All Markets
+    // =========================
+    function initScanConnection() {
+      if (wsScan && wsScan.readyState === WebSocket.OPEN) {
+        if (!scanHasSymbols) {
+          requestActiveSymbolsForScan();
+        }
+        return;
+      }
+
+      if (wsScan && wsScan.readyState !== WebSocket.CLOSED) {
+        try { wsScan.close(); } catch (e) {}
+      }
+
+      scanHasSymbols = false;
+      wsScan = new WebSocket(DERIV_WS_URL);
+
+      wsScan.onopen = () => {
+        requestActiveSymbolsForScan();
+        scanStatusEl.textContent = "Connected. Loading active symbols...";
+      };
+
+      wsScan.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.error) {
+          console.warn("Scan API error:", data.error.message);
+          if (data.echo_req && data.echo_req.ticks_history) {
+            const symbol = data.echo_req.ticks_history;
+            const info = scanSymbolInfo.get(symbol) || {};
+            const tfLabel = timeframeLabelFromGranularity(parseInt(timeframeSelect.value, 10));
+            updateScanRow({
+              symbol,
+              displayName: info.display || symbol,
+              market: info.market || "",
+              timeframeLabel: tfLabel,
+              result: null,
+              error: data.error.message
+            });
+          }
+          if (scanInProgress) {
+            scanProcessedCount++;
+            updateScanProgressLabel();
+          }
+          return;
+        }
+
+        if (data.msg_type === "active_symbols" && Array.isArray(data.active_symbols)) {
+          handleScanActiveSymbols(data);
+        } else if (data.msg_type === "candles" && Array.isArray(data.candles)) {
+          handleScanCandles(data);
+        }
+      };
+
+      wsScan.onerror = (err) => {
+        console.error("Scan WebSocket error:", err);
+        if (autoScanOn) {
+          scanStatusEl.textContent = "Scan connection error. Will retry on next scan.";
+        } else {
+          scanStatusEl.textContent = "Scan connection error.";
+        }
+      };
+
+      wsScan.onclose = () => {
+        scanInProgress = false;
+        scanHasSymbols = false;
+        if (autoScanOn) {
+          scanStatusEl.textContent = "Scan connection closed. Will reconnect on next scan.";
+        } else {
+          scanStatusEl.textContent = "Scan connection closed.";
+        }
+      };
+    }
+
+    function requestActiveSymbolsForScan() {
+      if (!wsScan || wsScan.readyState !== WebSocket.OPEN) return;
+      const req = { active_symbols: "brief", product_type: "basic" };
+      wsScan.send(JSON.stringify(req));
+    }
+
+    function handleScanActiveSymbols(data) {
+      scanSymbols = data.active_symbols.map(sym => ({
+        symbol: sym.symbol,
+        display: sym.display_name,
+        market: sym.market_display_name || sym.market,
+        submarket: sym.submarket_display_name || sym.submarket
+      }));
+
+      scanSymbols.sort((a, b) => {
+        if (a.market === b.market) {
+          if (a.submarket === b.submarket) {
+            return a.display.localeCompare(b.display);
+          }
+          return (a.submarket || "").localeCompare(b.submarket || "");
+        }
+        return (a.market || "").localeCompare(b.market || "");
+      });
+
+      scanSymbolInfo.clear();
+      scanSymbols.forEach(s => {
+        scanSymbolInfo.set(s.symbol, s);
+      });
+
+      scanHasSymbols = true;
+      scanStatusEl.textContent = `Loaded ${scanSymbols.length} active symbols.`;
+
+      if (pendingManualScan || autoScanOn) {
+        pendingManualScan = false;
+        runScanCycle();
+      }
+    }
+
+    function runScanCycle() {
+      if (!wsScan || wsScan.readyState !== WebSocket.OPEN) {
+        initScanConnection();
+        pendingManualScan = true;
+        return;
+      }
+      if (!scanHasSymbols || scanSymbols.length === 0) {
+        requestActiveSymbolsForScan();
+        pendingManualScan = true;
+        return;
+      }
+      if (scanInProgress) return;
+
+      const granularity = parseInt(timeframeSelect.value, 10);
+      scanInProgress = true;
+      scanProcessedCount = 0;
+      scanTotal = scanSymbols.length;
+
+      scanStatusEl.textContent = `Scanning ${scanTotal} symbols... (0/${scanTotal})`;
+
+      const reqTemplate = {
+        style: "candles",
+        end: "latest",
+        granularity: granularity,
+        count: 300
+      };
+
+      scanSymbols.forEach(s => {
+        const req = {
+          ...reqTemplate,
+          ticks_history: s.symbol
+        };
+        wsScan.send(JSON.stringify(req));
+      });
+    }
+
+    function handleScanCandles(data) {
+      const symbol = data.echo_req && data.echo_req.ticks_history;
+      if (!symbol) return;
+
+      const list = data.candles.map(c => ({
+        epoch: c.epoch,
+        open: parseFloat(c.open),
+        high: parseFloat(c.high),
+        low: parseFloat(c.low),
+        close: parseFloat(c.close)
+      }));
+
+      const settings = getSettingsFromInputs();
+      const result = evaluateStrategy(list, settings);
+      const granularity = parseInt(timeframeSelect.value, 10);
+      const tfLabel = timeframeLabelFromGranularity(granularity);
+      const info = scanSymbolInfo.get(symbol) || {};
+
+      updateScanRow({
+        symbol,
+        displayName: info.display || symbol,
+        market: info.market || "",
+        timeframeLabel: tfLabel,
+        result,
+        error: null
+      });
+
+      if (scanInProgress) {
+        scanProcessedCount++;
+        updateScanProgressLabel();
+      }
+    }
+
+    function updateScanRow({ symbol, displayName, market, timeframeLabel, result, error }) {
+      let tr = scanRows.get(symbol);
+      if (!tr) {
+        tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="scan-symbol"></td>
+          <td class="scan-market"></td>
+          <td class="scan-tf"></td>
+          <td class="scan-signal"></td>
+          <td class="scan-close"></td>
+          <td class="scan-donch"></td>
+          <td class="scan-atr"></td>
+          <td class="scan-time"></td>
+        `;
+        scanBodyEl.appendChild(tr);
+        scanRows.set(symbol, tr);
+      }
+
+      const tds = tr.children;
+      tds[0].innerHTML = `<strong>${displayName}</strong><div class="small muted">${symbol}</div>`;
+      tds[1].textContent = market || "";
+      tds[2].textContent = timeframeLabel || "";
+
+      if (error) {
+        tds[3].innerHTML = `<span class="small muted">Error</span>`;
+        tds[4].textContent = "—";
+        tds[5].textContent = "—";
+        tds[6].textContent = "—";
+        tds[7].textContent = error;
+        return;
+      }
+
+      if (!result || !result.ok) {
+        tds[3].innerHTML = `<span class="small muted">No signal</span>`;
+        tds[4].textContent = "—";
+        tds[5].textContent = "—";
+        tds[6].textContent = "—";
+        tds[7].textContent = result ? (result.reason || "—") : "—";
+        return;
+      }
+
+      const { epoch, price, donchMid, atr, longSignal, shortSignal } = result;
+
+      let tagClass = "signal-tag";
+      let tagText = "None";
+
+      if (longSignal && !shortSignal) {
+        tagClass += " long";
+        tagText = "LONG";
+      } else if (shortSignal && !longSignal) {
+        tagClass += " short";
+        tagText = "SHORT";
+      } else {
+        tagText = "None";
+      }
+
+      tds[3].innerHTML = `<span class="${tagClass}">${tagText}</span>`;
+      tds[4].textContent = formatNumber(price, 5);
+      tds[5].textContent = formatNumber(donchMid, 5);
+      tds[6].textContent = formatNumber(atr, 5);
+      tds[7].textContent = formatTime(epoch);
+    }
+
+    function updateScanProgressLabel() {
+      if (!scanInProgress) return;
+      scanStatusEl.textContent = `Scanning ${scanTotal} symbols... (${scanProcessedCount}/${scanTotal})`;
+      if (scanProcessedCount >= scanTotal) {
+        scanInProgress = false;
+        const now = new Date();
+        scanStatusEl.textContent = `Last scan completed at ${now.toLocaleTimeString()} — ${scanTotal} symbols.`;
+      }
+    }
+
+    function startAutoScanLoop() {
+      const intervalSec = Math.max(10, parseInt(scanIntervalInput.value, 10) || 120);
+      if (autoScanTimer) clearInterval(autoScanTimer);
+      autoScanTimer = setInterval(() => {
+        if (autoScanOn && !scanInProgress && scanHasSymbols) {
+          runScanCycle();
+        }
+      }, intervalSec * 1000);
+    }
+
+    function stopAutoScanLoop() {
+      if (autoScanTimer) {
+        clearInterval(autoScanTimer);
+        autoScanTimer = null;
+      }
+    }
+
+    function scanOnce() {
+      initScanConnection();
+      if (scanHasSymbols && wsScan && wsScan.readyState === WebSocket.OPEN) {
+        runScanCycle();
+      } else {
+        pendingManualScan = true;
+        scanStatusEl.textContent = "Loading symbols for manual scan...";
+      }
+    }
+
+    // =========================
+    // Event listeners
+    // =========================
+    document.addEventListener("DOMContentLoaded", () => {
+      $("start-btn").addEventListener("click", connectAndSubscribe);
+      $("recalc-btn").addEventListener("click", recalcWithoutReconnect);
+
+      // Recalculate live symbol when parameters change
+      [
+        fastLenInput,
+        slowLenInput,
+        donchLenInput,
+        donchLookbackInput,
+        atrLenInput,
+        slMultInput,
+        allowLongsInput,
+        allowShortsInput
+      ].forEach(el => {
+        el.addEventListener("change", () => {
+          if (candles.length) {
+            recalcWithoutReconnect();
+          }
+        });
+      });
+
+      // Auto scan controls
+      scanEnableInput.addEventListener("change", () => {
+        if (scanEnableInput.checked) {
+          autoScanOn = true;
+          scanStatusEl.textContent = "Auto scan enabled. Initializing...";
+          initScanConnection();
+          startAutoScanLoop();
+        } else {
+          autoScanOn = false;
+          stopAutoScanLoop();
+          scanStatusEl.textContent = "Auto scan disabled.";
+          if (wsScan && wsScan.readyState === WebSocket.OPEN) {
+            wsScan.close();
+          }
+          wsScan = null;
+          scanHasSymbols = false;
+          scanInProgress = false;
+        }
+      });
+
+      scanIntervalInput.addEventListener("change", () => {
+        if (autoScanOn) {
+          startAutoScanLoop();
+        }
+      });
+
+      $("scan-now-btn").addEventListener("click", scanOnce);
+
+      setStatus(false, "Disconnected");
+    });
+  </script>
+</body>
+</html>
