@@ -2,521 +2,754 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <title>HTF Range Donchian Mean-Reversion Strategy Checklist</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HTF/LTF Confluence Strategy</title>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <style>
     :root {
-      color-scheme: dark;
+      --bg: #0b0f19;
+      --bg-alt: #131827;
+      --card-bg: #181e30;
+      --accent: #3aa9ff;
+      --accent-soft: rgba(58,169,255,0.2);
+      --accent-strong: #00e18c;
+      --text: #f5f7ff;
+      --muted: #9aa2c0;
+      --danger: #ff5a7a;
+      --border: #252b3d;
+      --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
     body {
-      @apply bg-slate-950 text-slate-100;
+      font-family: var(--font-main);
+      background: radial-gradient(circle at top, #1b2340 0, #050710 55%, #020308 100%);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 16px;
     }
-    .glass {
-      background: radial-gradient(circle at top left, rgba(56,189,248,0.12), transparent 55%),
-                  radial-gradient(circle at bottom right, rgba(129,140,248,0.18), transparent 55%),
-                  rgba(15,23,42,0.92);
-      backdrop-filter: blur(18px);
-      border: 1px solid rgba(148,163,184,0.35);
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto 40px auto;
     }
+
+    header {
+      max-width: 1100px;
+      margin: 0 auto 24px auto;
+      padding: 16px 20px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(58,169,255,0.15), rgba(0,225,140,0.05));
+      border: 1px solid rgba(58,169,255,0.5);
+      box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+    }
+
+    header h1 {
+      font-size: 1.6rem;
+      margin-bottom: 6px;
+    }
+
+    header p {
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    h2 {
+      font-size: 1.2rem;
+      margin-bottom: 8px;
+    }
+
+    h3 {
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+
+    section {
+      margin-bottom: 18px;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      box-shadow: 0 10px 22px rgba(0,0,0,0.35);
+    }
+
+    .card + .card {
+      margin-top: 10px;
+    }
+
+    .tagline {
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
     .pill {
-      background: linear-gradient(135deg, rgba(34,197,94,0.16), rgba(59,130,246,0.1));
-      border: 1px solid rgba(74,222,128,0.5);
+      display: inline-flex;
+      align-items: center;
+      font-size: 0.78rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.08);
+      margin-right: 6px;
+      color: var(--muted);
     }
-    .step-active {
-      background: linear-gradient(135deg, rgba(45,212,191,0.16), rgba(59,130,246,0.18));
-      border-color: rgb(56,189,248) !important;
+
+    .pill strong {
+      color: var(--accent);
+      margin-left: 3px;
     }
-    .badge-soft {
-      background: rgba(15,23,42,0.92);
-      border: 1px solid rgba(148,163,184,0.45);
+
+    ul.simple-list {
+      margin-left: 16px;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
     }
-    .fade-enter {
-      opacity: 0;
-      transform: translateY(8px);
+
+    ul.simple-list li {
+      margin-bottom: 3px;
     }
-    .fade-enter-active {
-      opacity: 1;
-      transform: translateY(0);
-      transition: opacity 250ms ease-out, transform 250ms ease-out;
+
+    /* Checklist layout */
+
+    .checklist-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 6px;
+    }
+
+    .checklist-title {
+      font-size: 1.02rem;
+      font-weight: 600;
+    }
+
+    .progress-pill {
+      font-size: 0.78rem;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      background: rgba(0,0,0,0.2);
+      min-width: 80px;
+      text-align: center;
+    }
+
+    .progress-pill.complete {
+      border-color: var(--accent-strong);
+      color: var(--accent-strong);
+      background: rgba(0,225,140,0.08);
+    }
+
+    .reset-btn {
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      color: var(--muted);
+      font-size: 0.78rem;
+      padding: 3px 8px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .reset-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(58,169,255,0.08);
+    }
+
+    .checklist {
+      margin-top: 4px;
+    }
+
+    .checklist ul {
+      list-style: none;
+    }
+
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      margin-bottom: 6px;
+      padding: 4px 6px;
+      border-radius: 6px;
+      transition: background 0.1s ease, border-color 0.1s ease;
+      border: 1px solid transparent;
+    }
+
+    .checklist li.checked {
+      background: rgba(0,225,140,0.04);
+      border-color: rgba(0,225,140,0.35);
+    }
+
+    .checklist label {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      cursor: pointer;
+      width: 100%;
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .checklist small {
+      color: var(--muted);
+      font-size: 0.8rem;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .step-checkbox {
+      margin-top: 3px;
+      accent-color: var(--accent);
+    }
+
+    .mode-toggle {
+      display: inline-flex;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 10px;
+      background: rgba(0,0,0,0.2);
+    }
+
+    .mode-btn {
+      font-size: 0.85rem;
+      padding: 4px 12px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .mode-btn.active {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .mode-btn span.dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--muted);
+    }
+    .mode-btn.active span.dot {
+      background: var(--accent);
+    }
+
+    .trade-checklist {
+      margin-top: 6px;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .note {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .highlight {
+      color: var(--accent-strong);
+      font-weight: 600;
+    }
+
+    .danger-text {
+      color: var(--danger);
+      font-size: 0.82rem;
+      margin-top: 3px;
+    }
+
+    @media (max-width: 720px) {
+      header {
+        padding: 12px 14px;
+      }
+      .checklist-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .reset-btn {
+        margin-top: 2px;
+      }
     }
   </style>
 </head>
-<body class="min-h-screen font-sans antialiased">
-  <div class="min-h-screen bg-slate-950 relative overflow-hidden">
-    <!-- background accents -->
-    <div class="pointer-events-none absolute inset-0 opacity-60">
-      <div class="absolute -top-40 -right-32 h-80 w-80 bg-cyan-500/20 blur-3xl rounded-full"></div>
-      <div class="absolute -bottom-40 -left-32 h-96 w-96 bg-indigo-500/25 blur-3xl rounded-full"></div>
-      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.4),_transparent_60%),radial-gradient(circle_at_bottom,_rgba(15,23,42,0.7),_transparent_55%)]"></div>
+<body>
+<header>
+  <h1>HTF Range Donchian Mean‑Reversion – Consistency Checklist</h1>
+  <p>
+    This page helps you execute your strategy the same way every time:
+    mark the higher‑timeframe (HTF) high/low, only trade when the lower‑TF midband is inside that range,
+    and confirm entries with MACD, Donchian outer band tap, MA crossover, and Stoch RSI.
+  </p>
+  <div class="tagline">
+    Suggested example: <span class="pill">HTF: <strong>4H</strong></span>
+    <span class="pill">LTF: <strong>15m</strong></span>
+    <span class="pill">Donchian: <strong>20</strong></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Strategy explanation -->
+  <section class="card">
+    <h2>Strategy Overview</h2>
+    <p class="tagline">
+      Mean‑reversion back to the midband, inside the previous higher‑timeframe candle’s range, using Donchian channels, Stoch RSI, 3/5 MA cross, and MACD confirmation.
+    </p>
+
+    <h3>Concept</h3>
+    <ul class="simple-list">
+      <li>Use the <strong>previous HTF candle</strong> (e.g. 4H) as a range: its high and low create a “box”.</li>
+      <li>On the lower timeframe (e.g. 15m), trade only when the <strong>Donchian midband</strong> lies inside that HTF box.</li>
+      <li>Fade extremes back toward the midband:
+        <ul class="simple-list">
+          <li>Longs from lower part of the HTF range after tapping the <strong>lower Donchian band</strong>.</li>
+          <li>Shorts from upper part of the HTF range after tapping the <strong>upper Donchian band</strong>.</li>
+        </ul>
+      </li>
+      <li>Confirm entries with:
+        <ul class="simple-list">
+          <li><strong>MACD crossover</strong> in the trade direction (LTF).</li>
+          <li><strong>3 / 5 MA crossover</strong> for timing.</li>
+          <li><strong>Stoch RSI overbought/oversold</strong>, then crossing back.</li>
+        </ul>
+      </li>
+      <li>Stop around HTF high/low, target the midband; only take trades with acceptable R:R.</li>
+    </ul>
+
+    <h3>Indicators & Settings</h3>
+    <ul class="simple-list">
+      <li><strong>Donchian Channel</strong> on LTF
+        <ul class="simple-list">
+          <li>Length: 20 (adjust if needed).</li>
+          <li>Use upper, lower, and midband = (upper + lower) / 2.</li>
+        </ul>
+      </li>
+      <li><strong>Moving Averages</strong> on LTF
+        <ul class="simple-list">
+          <li>3‑period EMA (fast).</li>
+          <li>5‑period EMA (slow).</li>
+        </ul>
+      </li>
+      <li><strong>Stoch RSI</strong> on LTF
+        <ul class="simple-list">
+          <li>RSI length: 14; Stoch length: 14; %K: 3; %D: 3.</li>
+          <li>Overbought: 80; Oversold: 20.</li>
+        </ul>
+      </li>
+      <li><strong>MACD</strong>
+        <ul class="simple-list">
+          <li>Standard (slower): <strong>12, 26, 9</strong></li>
+          <li>Early confirmation (recommended): <strong>8, 21, 5</strong></li>
+          <li>Rule: for entry, MACD line must have <strong>crossed the signal line</strong> in your trade direction on the LTF.
+          </li>
+        </ul>
+      </li>
+    </ul>
+
+    <h3>Basic Flow</h3>
+    <ul class="simple-list">
+      <li>On HTF: wait for candle close → mark previous high & low.</li>
+      <li>On LTF: only trade if Donchian midband is inside that HTF range.</li>
+      <li>Then:
+        <ul class="simple-list">
+          <li><strong>Longs</strong>: lower third of HTF range + tap lower Donchian + Stoch RSI oversold then up + 3/5 MA bull cross + MACD bull cross.</li>
+          <li><strong>Shorts</strong>: upper third of HTF range + tap upper Donchian + Stoch RSI overbought then down + 3/5 MA bear cross + MACD bear cross.</li>
+        </ul>
+      </li>
+      <li>Stop: near HTF high/low (or LTF swing) with fixed % risk.</li>
+      <li>Target: Donchian midband (optionally partials + runner).</li>
+    </ul>
+  </section>
+
+  <!-- Checklists -->
+  <section class="card">
+    <div class="checklist-header">
+      <div class="checklist-title">Execution Checklists</div>
+      <div class="mode-toggle">
+        <button class="mode-btn active" data-mode="long">
+          <span class="dot"></span> Long Setup
+        </button>
+        <button class="mode-btn" data-mode="short">
+          <span class="dot"></span> Short Setup
+        </button>
+      </div>
+    </div>
+    <p class="note">Use this every time you consider a trade. Don’t skip boxes just because a setup “looks good”.</p>
+
+    <!-- HTF checklist -->
+    <div id="htf-checklist" class="checklist" data-group="htf">
+      <div class="checklist-header">
+        <div class="checklist-title">Step 1 – Higher Timeframe (HTF) Preparation</div>
+        <div class="progress-pill" id="progress-htf">0 / 0</div>
+        <button class="reset-btn" data-group="htf">Reset</button>
+      </div>
+      <ul>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="htf" />
+            <span>
+              Mark the <strong>previous HTF candle high</strong> and <strong>low</strong> on your LTF chart
+              <small>Use your chosen HTF (e.g. 4H). Draw two horizontal lines or a box for the previous candle’s high and low.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="htf" />
+            <span>
+              Decide your HTF bias (optional but recommended)
+              <small>Check MACD on HTF (8,21,5 or 12,26,9). If MACD is clearly bullish, prefer longs; if clearly bearish, prefer shorts.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="htf" />
+            <span>
+              Confirm you will only trade <span class="highlight">with</span> the HTF bias, not against it
+              <small>Example: HTF MACD bullish → you’ll only consider long setups on LTF, and ignore shorts unless bias flips.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="htf" />
+            <span>
+              Check for major scheduled news
+              <small>If high‑impact news is imminent for your instrument, either reduce size or skip mean‑reversion trades.</small>
+            </span>
+          </label>
+        </li>
+      </ul>
     </div>
 
-    <main class="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10 lg:py-12">
-      <!-- Header -->
-      <header class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between mb-10 lg:mb-12">
-        <div class="max-w-2xl">
-          <div class="inline-flex items-center gap-2 rounded-full pill px-3 py-1 text-xs font-medium text-emerald-200 mb-4 shadow-lg shadow-emerald-500/10">
-            <span class="text-lg">✅</span>
-            <span>Corrected HTF / LTF Confluence Strategy</span>
-          </div>
-          <h1 class="text-3xl sm:text-4xl lg:text-5xl font-semibold tracking-tight text-slate-50 mb-3">
-            From Confusion to Clarity:
-            <span class="block text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-emerald-300 to-indigo-400">HTF Midband + LTF Execution Playbook</span>
-          </h1>
-          <p class="text-sm sm:text-base text-slate-300 max-w-xl">
-            A simple, rule-based framework to align higher timeframe Bollinger structure with lower timeframe momentum
-            using Stoch RSI, MACD, and clean Break of Structure (BOS).
-          </p>
-        </div>
-        <div class="glass rounded-2xl px-4 py-4 sm:px-6 sm:py-5 flex flex-col gap-3 max-w-sm w-full shadow-xl">
-          <div class="flex items-center justify-between gap-3">
-            <h2 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Quick Overview</h2>
-            <span class="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold text-emerald-300 border border-emerald-400/40">
-              Rule-Based System
-            </span>
-          </div>
-          <ul class="space-y-1.5 text-xs text-slate-200">
-            <li class="flex items-start gap-2">
-              <span class="mt-[2px] h-1.5 w-1.5 rounded-full bg-cyan-400"></span>
-              <span><strong>STEP 1:</strong> Mark previous HTF candle high / low.</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="mt-[2px] h-1.5 w-1.5 rounded-full bg-indigo-400"></span>
-              <span><strong>STEP 2:</strong> Read HTF Bollinger midband slope for trend bias.</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="mt-[2px] h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-              <span><strong>STEP 3:</strong> Execute on LTF with Stoch RSI, MACD, BOS & band rules.</span>
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="mt-[2px] h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-              <span><strong>STEP 4:</strong> ADD 2 MOVING AVERAGES (3,5) AND ENTER WHEN THERE IS A CROSSOVER</span>
-            </li>
-          </ul>
-        </div>
-      </header>
-
-      <!-- Step Navigator -->
-      <section class="glass rounded-2xl p-4 sm:p-5 lg:p-6 mb-8 shadow-xl">
-        <div class="flex flex-col gap-4 lg:flex-row lg:gap-6">
-          <!-- Steps list -->
-          <div class="w-full lg:w-64 flex-shrink-0">
-            <h3 class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 mb-3 flex items-center justify-between">
-              Playbook Steps
-              <span class="text-[10px] text-slate-500">Click to explore</span>
-            </h3>
-            <div class="flex flex-col gap-2 text-sm">
-              <button data-step="1" class="step-btn step-active flex items-center justify-between gap-3 rounded-xl border border-slate-600/70 bg-slate-900/60 px-3 py-2.5 text-left hover:border-cyan-400/70 hover:bg-slate-900 transition">
-                <div>
-                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-cyan-300/80">Step 1</div>
-                  <div class="font-medium text-slate-50">Mark HTF High / Low</div>
-                  <p class="text-[11px] text-slate-400 mt-0.5">Frame the playing field.</p>
-                </div>
-                <span class="text-xs font-semibold text-cyan-300">HTF</span>
-              </button>
-              <button data-step="2" class="step-btn flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2.5 text-left hover:border-indigo-400/70 hover:bg-slate-900 transition">
-                <div>
-                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-300/80">Step 2</div>
-                  <div class="font-medium text-slate-50">Read HTF Midband Direction</div>
-                  <p class="text-[11px] text-slate-400 mt-0.5">Define your trend bias.</p>
-                </div>
-                <span class="text-xs font-semibold text-indigo-300">Trend</span>
-              </button>
-              <button data-step="3" class="step-btn flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-slate-950/40 px-3 py-2.5 text-left hover:border-emerald-400/70 hover:bg-slate-900 transition">
-                <div>
-                  <div class="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-300/80">Step 3</div>
-                  <div class="font-medium text-slate-50">Execute on LTF</div>
-                  <p class="text-[11px] text-slate-400 mt-0.5">Indicators, BOS, entry, TP & SL.</p>
-                </div>
-                <span class="text-xs font-semibold text-emerald-300">LTF</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Step content -->
-          <div class="flex-1">
-            <div id="step-content" class="space-y-5 text-sm text-slate-200">
-              <!-- content injected by JS -->
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Confusion solved section -->
-      <section class="grid lg:grid-cols-[minmax(0,3fr)_minmax(0,2.2fr)] gap-6 mb-10">
-        <div class="glass rounded-2xl p-4 sm:p-5 lg:p-6 shadow-xl">
-          <div class="flex items-center justify-between gap-3 mb-4">
-            <h2 class="text-sm font-semibold tracking-tight text-slate-100">"Outer Band vs Midband" — Confusion Solved</h2>
-            <span class="badge-soft rounded-full px-2 py-1 text-[10px] font-semibold text-amber-300 flex items-center gap-1">
-              <span>🧠</span>
-              <span>Context Matters</span>
-            </span>
-          </div>
-          <div class="grid sm:grid-cols-2 gap-4 text-xs sm:text-sm">
-            <div class="rounded-xl border border-emerald-400/40 bg-emerald-500/5 p-3">
-              <h3 class="text-emerald-300 font-semibold text-xs mb-1.5">First Move of the Trend</h3>
-              <p class="text-slate-200 mb-2">You caught the trend early and HTF bias is fresh.</p>
-              <ul class="list-disc list-inside space-y-1 text-slate-300">
-                <li>Price only needs to retrace to the <span class="font-semibold text-emerald-200">LTF midband</span>.</li>
-                <li>Stoch RSI + MACD confirm momentum shift.</li>
-                <li>BOS in trend direction = green light to enter.</li>
-              </ul>
-              <p class="text-[11px] text-emerald-200/90 mt-2">✔ Use <span class="font-semibold">midband retracement</span> for the first clean opportunity.</p>
-            </div>
-            <div class="rounded-xl border border-cyan-400/40 bg-cyan-500/5 p-3">
-              <h3 class="text-cyan-300 font-semibold text-xs mb-1.5">Second-Chance Entries</h3>
-              <p class="text-slate-200 mb-2">You missed the initial move and price already extended.</p>
-              <ul class="list-disc list-inside space-y-1 text-slate-300">
-                <li>Now you need a deeper pullback to the <span class="font-semibold text-cyan-200">LTF outer band</span>.</li>
-                <li>Wait patiently for premium discount (buys) or premium premium (sells).</li>
-                <li>Same rules: Stoch RSI, MACD, then BOS before entry.</li>
-              </ul>
-              <p class="text-[11px] text-cyan-200/90 mt-2">✔ Use <span class="font-semibold">outer band retracement</span> when chasing extensions.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="glass rounded-2xl p-4 sm:p-5 lg:p-6 shadow-xl flex flex-col gap-4">
-          <div class="flex items-center justify-between gap-3">
-            <h2 class="text-sm font-semibold text-slate-100">Risk Framework</h2>
-            <span class="badge-soft rounded-full px-2 py-1 text-[10px] font-semibold text-sky-300 flex items-center gap-1">
-              <span>🎯</span>
-              <span>TP & SL Logic</span>
-            </span>
-          </div>
-          <div class="space-y-3 text-xs sm:text-sm text-slate-200">
-            <div class="rounded-lg border border-emerald-400/50 bg-emerald-500/5 px-3 py-2.5 flex items-start gap-2">
-              <div class="mt-0.5 h-2 w-2 rounded-full bg-emerald-400"></div>
-              <div>
-                <div class="font-semibold text-emerald-200 text-xs uppercase tracking-[0.16em] mb-1">Take Profit</div>
-                <p class="leading-relaxed">
-                  <span class="font-semibold">TP = HTF midband.</span> You are trading in the direction of the
-                  higher timeframe trend, so your natural target is where price mean-reverts on that HTF.
-                </p>
-              </div>
-            </div>
-            <div class="rounded-lg border border-rose-400/60 bg-rose-500/5 px-3 py-2.5 flex items-start gap-2">
-              <div class="mt-0.5 h-2 w-2 rounded-full bg-rose-400"></div>
-              <div>
-                <div class="font-semibold text-rose-200 text-xs uppercase tracking-[0.16em] mb-1">Stop Loss</div>
-                <p class="leading-relaxed">
-                  <span class="font-semibold">SL = LTF outer band, behind the pullback.</span>
-                  If price closes beyond that band, your pullback idea is invalidated and you want to be out.
-                </p>
-              </div>
-            </div>
-            <div class="rounded-lg border border-slate-600 bg-slate-900/60 px-3 py-2.5 text-[11px] text-slate-300">
-              <p class="mb-1">
-                <span class="font-semibold text-slate-100">Position sizing tip:</span> Size your trade so that a stop
-                beyond the LTF outer band is within your risk tolerance (e.g. 0.5–1% per trade).
-              </p>
-              <p>
-                The framework is fixed. Only <span class="font-semibold text-slate-100">risk per trade</span> and
-                <span class="font-semibold text-slate-100">timeframe choice</span> are flexible.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Visual example section -->
-      <section class="glass rounded-2xl p-4 sm:p-5 lg:p-6 mb-10 shadow-xl">
-        <div class="flex items-center justify-between gap-3 mb-4">
-          <h2 class="text-sm font-semibold text-slate-100">Buy Scenario Walkthrough</h2>
-          <div class="flex gap-2 items-center">
-            <button id="view-buy" class="view-toggle text-[11px] rounded-full px-2.5 py-1 font-medium border border-emerald-400/70 bg-emerald-500/10 text-emerald-200">Buy Example</button>
-            <button id="view-sell" class="view-toggle text-[11px] rounded-full px-2.5 py-1 font-medium border border-slate-700 bg-slate-900/70 text-slate-300">Sell Mirror</button>
-          </div>
-        </div>
-        <div id="example-buy" class="space-y-4 text-xs sm:text-sm text-slate-200">
-          <div class="grid md:grid-cols-[minmax(0,2.3fr)_minmax(0,2fr)] gap-4">
-            <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xs font-semibold text-slate-100">Higher Timeframe (e.g. 4H)</h3>
-                <span class="text-[10px] text-cyan-300 font-semibold uppercase tracking-[0.16em]">Context</span>
-              </div>
-              <ul class="list-disc list-inside space-y-1.5">
-                <li>Mark previous 4H candle <span class="font-semibold text-cyan-200">high and low</span>.</li>
-                <li>Bollinger <span class="font-semibold text-emerald-200">midband is sloping up → bullish bias</span>.</li>
-                <li>Price is pulling back toward the midband inside last candle's range.</li>
-              </ul>
-            </div>
-            <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xs font-semibold text-slate-100">Lower Timeframe (e.g. 5m)</h3>
-                <span class="text-[10px] text-emerald-300 font-semibold uppercase tracking-[0.16em]">Execution</span>
-              </div>
-              <ol class="list-decimal list-inside space-y-1.5">
-                <li>Wait for price to retrace into the <span class="font-semibold text-cyan-200">5m midband</span> (first move) or <span class="font-semibold text-cyan-200">outer band</span> (second chance).</li>
-                <li>On that pullback, Stoch RSI is <span class="font-semibold text-emerald-200">oversold</span> and crosses up.</li>
-                <li>MACD histogram rises toward 0 or signal line crosses up, supporting the move.</li>
-                <li>Price forms a <span class="font-semibold text-emerald-200">higher low</span> and then <span class="font-semibold">breaks previous minor high (BOS)</span>.</li>
-                <li>Enter after BOS, with SL beyond LTF outer band and TP at the HTF midband.</li>
-              </ol>
-            </div>
-          </div>
-          <div class="rounded-xl border border-slate-700 bg-slate-950/80 p-3 sm:p-4">
-            <h3 class="text-xs font-semibold text-slate-100 mb-2">Flow Summary</h3>
-            <div class="flex flex-wrap items-center gap-2 text-[11px] sm:text-xs">
-              <span class="badge-soft px-2 py-1 rounded-full">HTF: Mark previous candle H / L</span>
-              <span class="text-slate-500">→</span>
-              <span class="badge-soft px-2 py-1 rounded-full">HTF: Read midband slope (trend)</span>
-              <span class="text-slate-500">→</span>
-              <span class="badge-soft px-2 py-1 rounded-full">LTF: Wait for band retrace (mid / outer)</span>
-              <span class="text-slate-500">→</span>
-              <span class="badge-soft px-2 py-1 rounded-full">LTF: Stoch RSI + MACD agree</span>
-              <span class="text-slate-500">→</span>
-              <span class="badge-soft px-2 py-1 rounded-full">LTF: BOS in trend direction</span>
-              <span class="text-slate-500">→</span>
-              <span class="badge-soft px-2 py-1 rounded-full">Enter → TP = HTF midband, SL = LTF outer band</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sell mirror text (hidden by default) -->
-        <div id="example-sell" class="hidden space-y-4 text-xs sm:text-sm text-slate-200">
-          <div class="grid md:grid-cols-[minmax(0,2.3fr)_minmax(0,2fr)] gap-4">
-            <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xs font-semibold text-slate-100">Higher Timeframe (e.g. 4H)</h3>
-                <span class="text-[10px] text-rose-300 font-semibold uppercase tracking-[0.16em]">Bearish Context</span>
-              </div>
-              <ul class="list-disc list-inside space-y-1.5">
-                <li>Mark previous 4H candle <span class="font-semibold text-cyan-200">high and low</span>.</li>
-                <li>Bollinger <span class="font-semibold text-rose-200">midband is sloping down → bearish bias</span>.</li>
-                <li>Price is pulling back up toward the midband inside the last candle's range.</li>
-              </ul>
-            </div>
-            <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3">
-              <div class="flex items-center justify-between mb-2">
-                <h3 class="text-xs font-semibold text-slate-100">Lower Timeframe (e.g. 5m)</h3>
-                <span class="text-[10px] text-rose-300 font-semibold uppercase tracking-[0.16em]">Execution</span>
-              </div>
-              <ol class="list-decimal list-inside space-y-1.5">
-                <li>Wait for price to retrace into the <span class="font-semibold text-cyan-200">5m midband</span> (first move) or <span class="font-semibold text-cyan-200">outer band</span> (second chance).</li>
-                <li>On that pullback, Stoch RSI is <span class="font-semibold text-rose-200">overbought</span> and crosses down.</li>
-                <li>MACD histogram falls toward 0 or signal line crosses down, supporting the drop.</li>
-                <li>Price forms a <span class="font-semibold text-rose-200">lower high</span> and then <span class="font-semibold">breaks previous minor low (BOS)</span>.</li>
-                <li>Enter after BOS, with SL beyond LTF outer band and TP at the HTF midband.
-                </li>
-              </ol>
-            </div>
-          </div>
-          <div class="rounded-xl border border-slate-700 bg-slate-950/80 p-3 sm:p-4">
-            <h3 class="text-xs font-semibold text-slate-100 mb-2">Same Rules, Inverted Direction</h3>
-            <p class="leading-relaxed">
-              The logic of the system does not change between buys and sells. Only the direction of the midband,
-              the type of Stoch RSI extreme (oversold vs overbought), and the BOS (breaking highs vs lows) are mirrored.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Checklist -->
-      <section class="glass rounded-2xl p-4 sm:p-5 lg:p-6 mb-8 shadow-xl">
-        <div class="flex items-center justify-between gap-3 mb-4">
-          <h2 class="text-sm font-semibold text-slate-100">Execution Checklist</h2>
-          <span class="badge-soft rounded-full px-2 py-1 text-[10px] font-semibold text-cyan-200 flex items-center gap-1">
-            <span>✅</span>
-            <span>Tick before you click</span>
-          </span>
-        </div>
-        <p class="text-xs sm:text-sm text-slate-300 mb-3">Use this before every trade to stay consistent:</p>
-        <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs sm:text-sm">
-          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-emerald-400/60 transition">
-            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+    <!-- LTF environment checklist -->
+    <div id="env-checklist" class="checklist" data-group="env">
+      <div class="checklist-header">
+        <div class="checklist-title">Step 2 – Lower Timeframe Environment Check</div>
+        <div class="progress-pill" id="progress-env">0 / 0</div>
+        <button class="reset-btn" data-group="env">Reset</button>
+      </div>
+      <ul>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="env" />
             <span>
-              <span class="block font-medium text-slate-100 mb-0.5">HTF levels marked</span>
-              <span class="text-slate-400">Previous candle high & low are on your chart.</span>
+              Donchian midband lies <strong>inside</strong> the HTF high–low range
+              <small>If the LTF Donchian midband is outside the previous HTF candle’s high/low, <strong>do not trade</strong> this strategy for this HTF cycle.</small>
             </span>
           </label>
-          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-cyan-400/60 transition">
-            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="env" />
             <span>
-              <span class="block font-medium text-slate-100 mb-0.5">Trend bias clear</span>
-              <span class="text-slate-400">HTF midband clearly sloping up or down.</span>
+              Price is trading <strong>inside or near</strong> the HTF range (not a clear breakout far beyond)
+              <small>If price has exploded far beyond the HTF high/low and is not pulling back, treat it as a breakout/trend, not a mean‑reversion environment.</small>
             </span>
           </label>
-          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-emerald-400/60 transition">
-            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="env" />
             <span>
-              <span class="block font-medium text-slate-100 mb-0.5">Band context understood</span>
-              <span class="text-slate-400">You know if it's a first move (midband) or second chance (outer band).</span>
+              Volatility is reasonable (not extremely dead, not insane)
+              <small>Avoid very tiny candles (no volatility) and extreme spikes. You want normal oscillations around the midband.</small>
             </span>
           </label>
-          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-indigo-400/60 transition">
-            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
-            <span>
-              <span class="block font-medium text-slate-100 mb-0.5">Stoch RSI aligned</span>
-              <span class="text-slate-400">Oversold / overbought with a clear crossover in your direction.</span>
-            </span>
-          </label>
-          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-sky-400/60 transition">
-            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
-            <span>
-              <span class="block font-medium text-slate-100 mb-0.5">MACD supporting</span>
-              <span class="text-slate-400">Histogram or signal line confirms momentum shift.</span>
-            </span>
-          </label>
-          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-rose-400/60 transition">
-            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
-            <span>
-              <span class="block font-medium text-slate-100 mb-0.5">BOS completed</span>
-              <span class="text-slate-400">Structure broke in the HTF trend direction before you enter.</span>
-            </span>
-          </label>
-          <label class="flex items-start gap-2 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 cursor-pointer hover:border-emerald-400/60 transition">
-            <input type="checkbox" class="mt-0.5 h-3 w-3 rounded border-slate-600 bg-slate-900" />
-            <span>
-              <span class="block font-medium text-slate-100 mb-0.5">TP & SL defined</span>
-              <span class="text-slate-400">TP = HTF midband, SL beyond LTF outer band, sized correctly.</span>
-            </span>
-          </label>
-        </div>
-      </section>
+        </li>
+      </ul>
+    </div>
 
-      <!-- Footer -->
-      <footer class="pb-4 pt-2 text-[11px] text-slate-500 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-t border-slate-800/80">
-        <p>
-          This page is an educational visualization of your corrected strategy: HTF levels + midband trend, executed on
-          LTF with Stoch RSI, MACD, BOS, and band-based risk.
-        </p>
-        <p class="sm:text-right">Trade responsibly. No indicator replaces risk management.</p>
-      </footer>
-    </main>
-  </div>
+    <!-- LONG checklist -->
+    <div id="long-checklist" class="checklist trade-checklist" data-group="long">
+      <div class="checklist-header">
+        <div class="checklist-title">Step 3 – Long Setup Checklist (LTF)</div>
+        <div class="progress-pill" id="progress-long">0 / 0</div>
+        <button class="reset-btn" data-group="long">Reset</button>
+      </div>
+      <ul>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="long" />
+            <span>
+              Price is in the <strong>lower part</strong> of the HTF range and near the <strong>lower Donchian band</strong>
+              <small>Ideally in the bottom ~⅓ of the HTF box and tapping or slightly piercing the LTF lower Donchian band.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="long" />
+            <span>
+              Stoch RSI is <strong>oversold</strong> and has crossed back up
+              <small>%K and %D below ~20, then %K crosses above %D and turns up. This shows downside exhaustion.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="long" />
+            <span>
+              3‑EMA has crossed <strong>above</strong> 5‑EMA on the LTF
+              <small>Short‑term MA crossover in your direction for timing the entry.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="long" />
+            <span>
+              MACD bullish crossover on LTF
+              <small>MACD line has crossed above the signal line. For earlier confirmation, use MACD <strong>8, 21, 5</strong>; otherwise standard 12, 26, 9.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="long" />
+            <span>
+              Target midband is above current price and inside HTF range
+              <small>Visually check that the Donchian midband sits between the HTF high and low, and gives enough room for profit.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="long" />
+            <span>
+              R:R is acceptable (ideally ≥ 1.5 : 1)
+              <small>Distance from entry to stop (near HTF low / LTF swing low) vs. distance from entry to midband. If R:R is poor, skip the trade.</small>
+            </span>
+          </label>
+        </li>
+      </ul>
+    </div>
 
-  <script>
-    const steps = {
-      1: {
-        title: 'STEP 1 — Mark Previous HTF Candle High + Low',
-        subtitle: 'Choose your higher timeframe (4H, Daily, or Weekly) and frame the playing field.',
-        bullets: [
-          'Pick a single higher timeframe for context: 4H, Daily, or Weekly.',
-          "Mark the previous candle's high and low on your chart.",
-          'Treat that range as the zone price is currently working inside.',
-          'Do not skip this: every trade should be taken with HTF levels visible.',
-        ],
-        notes: [
-          'This step is correct exactly as you had it — you were already doing this right.',
-          'Think of these levels as the court boundaries you must respect when trading the LTF.',
-        ],
-      },
-      2: {
-        title: 'STEP 2 — Identify HTF Mid-Band Direction (Bollinger Middle Band)',
-        subtitle:
-          'Use the midband slope on your HTF to decide if you should only be looking for buys or sells.',
-        bullets: [
-          'Look at the Bollinger midband on your chosen HTF (the moving average in the middle).',
-          'If the midband is clearly sloping up → you have a bullish bias (look for buys only).',
-          'If the midband is clearly sloping down → you have a bearish bias (look for sells only).',
-          'If the midband is flat and choppy → stay patient or reduce size; trend is unclear.',
-        ],
-        notes: [
-          'This step gives you your trend and directional bias. No guessing, no counter-trend sniping.',
-          'The HTF midband is where you will target later (TP), so you are trading toward the HTF mean.',
-        ],
-      },
-      3: {
-        title: 'STEP 3 — LTF Execution: Indicators, Bands, BOS, Entry, TP & SL',
-        subtitle:
-          'All execution happens on your lower timeframe (15m / 5m / 1m) while respecting HTF bias.',
-        bullets: [
-          'Stoch RSI: must be oversold (for buys) or overbought (for sells) with a clear crossover in trend direction.',
-          'MACD: must support that direction — histogram moving toward 0, or signal line crossing in trend direction.',
-          'Price: must retrace into the LTF midband (first move) or outer band (second-chance entry).',
-          'Structure: you need a Break of Structure (BOS) in trend direction before entering.',
-          'Entry: after BOS, not before. Avoid predicting the break; trade the confirmation.',
-          'Take Profit (TP): at the HTF midband (your trend target).',
-          'Stop Loss (SL): beyond the LTF outer band, behind the pullback that created your entry.',
-        ],
-        notes: [
-          'BOS example for a buy: higher low + break of previous minor high.',
-          'BOS example for a sell: lower high + break of previous minor low.',
-          'MACD does not need to be fully green/red yet. It is a lagging indicator; you just need supportive direction.',
-        ],
-      },
+    <!-- SHORT checklist -->
+    <div id="short-checklist" class="checklist trade-checklist hidden" data-group="short">
+      <div class="checklist-header">
+        <div class="checklist-title">Step 3 – Short Setup Checklist (LTF)</div>
+        <div class="progress-pill" id="progress-short">0 / 0</div>
+        <button class="reset-btn" data-group="short">Reset</button>
+      </div>
+      <ul>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="short" />
+            <span>
+              Price is in the <strong>upper part</strong> of the HTF range and near the <strong>upper Donchian band</strong>
+              <small>Ideally in the top ~⅓ of the HTF box and tapping or slightly piercing the LTF upper Donchian band.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="short" />
+            <span>
+              Stoch RSI is <strong>overbought</strong> and has crossed back down
+              <small>%K and %D above ~80, then %K crosses below %D and turns down. This shows upside exhaustion.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="short" />
+            <span>
+              3‑EMA has crossed <strong>below</strong> 5‑EMA on the LTF
+              <small>Short‑term MA crossover in your direction for timing the entry.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="short" />
+            <span>
+              MACD bearish crossover on LTF
+              <small>MACD line has crossed below the signal line. For earlier confirmation, use MACD <strong>8, 21, 5</strong>; otherwise 12, 26, 9.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="short" />
+            <span>
+              Target midband is below current price and inside HTF range
+              <small>Visually check that the Donchian midband sits between the HTF high and low, and offers enough profit distance.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="short" />
+            <span>
+              R:R is acceptable (ideally ≥ 1.5 : 1)
+              <small>Distance from entry to stop (near HTF high / LTF swing high) vs. distance from entry to midband. If R:R is poor, skip the trade.</small>
+            </span>
+          </label>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Risk / discipline checklist -->
+    <div id="risk-checklist" class="checklist" data-group="risk">
+      <div class="checklist-header">
+        <div class="checklist-title">Step 4 – Risk & Discipline</div>
+        <div class="progress-pill" id="progress-risk">0 / 0</div>
+        <button class="reset-btn" data-group="risk">Reset</button>
+      </div>
+      <ul>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="risk" />
+            <span>
+              Risk per trade is within your plan (e.g. 0.5–1% of equity)
+              <small>Position size = (account risk) ÷ (entry price − stop price). Do not guess size.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="risk" />
+            <span>
+              Stop loss is placed just beyond a logical invalidation level
+              <small>For longs: below HTF low or clear swing low. For shorts: above HTF high or clear swing high.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="risk" />
+            <span>
+              Take‑profit plan is defined before entry
+              <small>At least: midband target defined. Optionally: partial exit at midband, runner with trailed stop.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="risk" />
+            <span>
+              This trade does not violate your daily loss / trade limit
+              <small>If you hit your daily loss cap or exceeded number of trades in your plan, you skip this trade.</small>
+            </span>
+          </label>
+        </li>
+        <li>
+          <label>
+            <input type="checkbox" class="step-checkbox" data-group="risk" />
+            <span>
+              Emotion check: no revenge trading, no FOMO
+              <small>If you just had a big loss or big win, confirm you’re not trading emotionally. If in doubt, skip.</small>
+            </span>
+          </label>
+        </li>
+      </ul>
+      <p class="danger-text">Rule: if any critical box above is unchecked, you either reduce size or skip the trade.</p>
+    </div>
+
+  </section>
+</main>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const checkboxes = document.querySelectorAll('.step-checkbox');
+    const progressPills = {
+      htf: document.getElementById('progress-htf'),
+      env: document.getElementById('progress-env'),
+      long: document.getElementById('progress-long'),
+      short: document.getElementById('progress-short'),
+      risk: document.getElementById('progress-risk')
     };
 
-    const stepContent = document.getElementById('step-content');
-    const stepButtons = document.querySelectorAll('.step-btn');
-
-    function renderStep(step) {
-      const data = steps[step];
-      if (!data) return;
-
-      const wrapper = document.createElement('div');
-      wrapper.className = 'fade-enter';
-      wrapper.innerHTML = `
-        <div class="flex items-start justify-between gap-3 mb-3">
-          <div>
-            <h2 class="text-base sm:text-lg font-semibold text-slate-50 mb-1">${data.title}</h2>
-            <p class="text-xs sm:text-sm text-slate-300">${data.subtitle}</p>
-          </div>
-          <span class="badge-soft rounded-full px-2 py-1 text-[10px] font-semibold text-cyan-200">Guided Step</span>
-        </div>
-        <div class="grid md:grid-cols-[minmax(0,2.4fr)_minmax(0,2fr)] gap-4">
-          <div class="rounded-xl border border-slate-700 bg-slate-950/60 p-3 sm:p-4">
-            <h3 class="text-xs font-semibold text-slate-100 mb-2">How to apply it</h3>
-            <ul class="list-disc list-inside space-y-1.5 text-xs sm:text-sm text-slate-200">
-              ${data.bullets.map((b) => `<li>${b}</li>`).join('')}
-            </ul>
-          </div>
-          <div class="rounded-xl border border-cyan-400/40 bg-cyan-500/5 p-3 sm:p-4">
-            <h3 class="text-xs font-semibold text-cyan-100 mb-2">Notes & clarifications</h3>
-            <ul class="list-disc list-inside space-y-1.5 text-[11px] sm:text-xs text-cyan-100/90">
-              ${data.notes.map((n) => `<li>${n}</li>`).join('')}
-            </ul>
-          </div>
-        </div>
-      `;
-
-      stepContent.innerHTML = '';
-      stepContent.appendChild(wrapper);
-
-      requestAnimationFrame(() => {
-        wrapper.classList.add('fade-enter-active');
+    function updateGroupProgress(group) {
+      const groupCheckboxes = document.querySelectorAll('.step-checkbox[data-group="' + group + '"]');
+      const total = groupCheckboxes.length;
+      let checked = 0;
+      groupCheckboxes.forEach(cb => {
+        const li = cb.closest('li');
+        if (cb.checked) {
+          checked++;
+          if (li) li.classList.add('checked');
+        } else {
+          if (li) li.classList.remove('checked');
+        }
       });
-    }
-
-    stepButtons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const step = btn.getAttribute('data-step');
-        stepButtons.forEach((b) => b.classList.remove('step-active'));
-        btn.classList.add('step-active');
-        renderStep(step);
-      });
-    });
-
-    renderStep(1);
-
-    const viewBuy = document.getElementById('view-buy');
-    const viewSell = document.getElementById('view-sell');
-    const exampleBuy = document.getElementById('example-buy');
-    const exampleSell = document.getElementById('example-sell');
-
-    function setView(mode) {
-      if (mode === 'buy') {
-        exampleBuy.classList.remove('hidden');
-        exampleSell.classList.add('hidden');
-        viewBuy.classList.add('border-emerald-400/70', 'bg-emerald-500/10', 'text-emerald-200');
-        viewBuy.classList.remove('border-slate-700', 'bg-slate-900/70', 'text-slate-300');
-        viewSell.classList.remove('border-rose-400/70', 'bg-rose-500/10', 'text-rose-200');
-        viewSell.classList.add('border-slate-700', 'bg-slate-900/70', 'text-slate-300');
-      } else {
-        exampleSell.classList.remove('hidden');
-        exampleBuy.classList.add('hidden');
-        viewSell.classList.add('border-rose-400/70', 'bg-rose-500/10', 'text-rose-200');
-        viewSell.classList.remove('border-slate-700', 'bg-slate-900/70', 'text-slate-300');
-        viewBuy.classList.remove('border-emerald-400/70', 'bg-emerald-500/10', 'text-emerald-200');
-        viewBuy.classList.add('border-slate-700', 'bg-slate-900/70', 'text-slate-300');
+      const pill = progressPills[group];
+      if (pill) {
+        pill.textContent = checked + ' / ' + total;
+        if (total > 0 && checked === total) {
+          pill.classList.add('complete');
+        } else {
+          pill.classList.remove('complete');
+        }
       }
     }
 
-    viewBuy.addEventListener('click', () => setView('buy'));
-    viewSell.addEventListener('click', () => setView('sell'));
+    function updateAllProgress() {
+      ['htf', 'env', 'long', 'short', 'risk'].forEach(updateGroupProgress);
+    }
 
-    setView('buy');
-  </script>
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', function () {
+        const group = cb.getAttribute('data-group');
+        if (group) updateGroupProgress(group);
+      });
+    });
+
+    const resetButtons = document.querySelectorAll('.reset-btn');
+    resetButtons.forEach(btn => {
+      btn.addEventListener('click', function () {
+        const group = btn.getAttribute('data-group');
+        if (!group) return;
+        const groupCheckboxes = document.querySelectorAll('.step-checkbox[data-group="' + group + '"]');
+        groupCheckboxes.forEach(cb => {
+          cb.checked = false;
+        });
+        updateGroupProgress(group);
+      });
+    });
+
+    // Mode toggle (long / short)
+    const modeButtons = document.querySelectorAll('.mode-btn');
+    const longChecklist = document.getElementById('long-checklist');
+    const shortChecklist = document.getElementById('short-checklist');
+
+    modeButtons.forEach(btn => {
+      btn.addEventListener('click', function () {
+        const mode = btn.getAttribute('data-mode');
+        modeButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+
+        if (mode === 'long') {
+          longChecklist.classList.remove('hidden');
+          shortChecklist.classList.add('hidden');
+        } else {
+          shortChecklist.classList.remove('hidden');
+          longChecklist.classList.add('hidden');
+        }
+      });
+    });
+
+    updateAllProgress();
+  });
+</script>
 </body>
 </html>
