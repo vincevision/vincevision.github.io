@@ -1,159 +1,260 @@
-USE OVERBOUGHT OVERSOLD INDICATOR by insilico
-USE HULL SUITE
-THEN USE PREVIOUS CANDLE HIGH AND LOW THEN USE STOCHASTIC AND 3MA
-TP MIDDLE BAND
 
+- Use the **previous higher‑timeframe candle** as a frame.
+- On a **lower timeframe**, trade **mean‑reversion back to the Donchian midband**, but only if that midband is **inside** the previous HTF candle’s range.
+- Entries are confirmed with **Stoch RSI OB/OS** and **3/5 MA cross**.
 
-Step-by-step trading guide — your Bollinger + Stoch RSI + HTF bias strategy
-Nice — I turned your description into a clear, repeatable checklist and exact rules someone can follow on their charts. I made reasonable assumptions where your description was slightly ambiguous (I note those). Read the Quick checklist first, then follow the numbered steps for chart setup, entry rules (long & short), stops/targets, trade management, and a reusable trade-plan template.
+I’ll write it as if you trade:
 
-Assumption / note: you mentioned “HALSUT in Silico” and a separate “overbought/oversold indicator.” I don’t have the exact behavior of those custom tools. I treat the overbought/oversold indicator as a secondary oscillator (like RSI or another OB/OS signal) and HALSUT in Silico as an extra trend/volatility filter. If HALSUT behaves differently, swap in its correct role — the guide still shows where to use a trend filter and where to use an extra oscillator confirmation.
+- HTF = **4H**
+- LTF = **15m**
 
+You can switch (e.g. 1H / 5m) later if you want.
 
-Quick checklist (what must be on the chart)
+---
 
-Bollinger Bands (20 period, 2σ) — we use the middle band (20 EMA or SMA) as TP.
-Stochastic RSI (standard settings or your preferred settings) — watch for crossovers in overbought/oversold zones.
-An overbought/oversold indicator (e.g., RSI or custom) for additional confirmation.
-HALSUT in Silico (used as trend/volatility filter).
-Mark the previous higher-timeframe candle high & low (the HTF candle you use to define bias).
-Use a lower timeframe for entries (e.g., if HTF = 1H, use 5–15m or 15m for entries).
-A visible grid/price labels for exact stop and target placement.
+## 1. Chart setup
 
+On your **LTF chart (15m)**, load:
 
-1) Chart setup (step-by-step)
+1. **Donchian Channel**
+   - Length = 20 (you can tweak later).
+   - Upper band, lower band, and **midband = (upper + lower) / 2**.
 
-On your higher timeframe (HTF) — e.g., Daily or 4H or 1H depending on your style — identify & mark the previous completed candle (the one immediately before the current candle). Draw horizontal lines at that candle’s high and low. This defines the HTF range / bias zone.
-Add Bollinger Bands (20, 2) to the chart. Make sure the middle band is visible and labelled.
-Add Stochastic RSI below the chart. Set the overbought/oversold levels you prefer (common: 80/20).
-Add your overbought/oversold indicator (e.g., RSI 14 with 70/30, or a custom OB/OS indicator).
-Add HALSUT in Silico and make visible its direction/reading — ideally a simple bull/bear output or a volatility metric.
-Switch to your lower timeframe (LTF) for entries — for example: HTF = 1H → LTF = 15m. Keep the HTF lines visible on the LTF chart.
+2. **3 & 5 Moving Averages**
+   - 3‑period EMA (fast)
+   - 5‑period EMA (slow)
 
+3. **Stochastic RSI**
+   - RSI length = 14
+   - Stoch length = 14
+   - %K = 3
+   - %D = 3
+   - Overbought = 80
+   - Oversold = 20
 
-2) Define bias from the HTF (how to choose long vs short)
+(You can add MACD later as a higher‑TF filter if you want, but I’ll keep this core system MACD‑free to stay simple and mechanical.)
 
-If price on HTF is above the previous HTF candle high (or the HTF candle closed bullish and price sits above its mid) → bias = bullish.
-If price on HTF is below the previous HTF candle low (or the HTF candle closed bearish and price sits below its mid) → bias = bearish.
-If price is inside that HTF candle range and HALSUT is neutral → bias = neutral / avoid or trade only higher-probability signals with reduced risk.
+---
 
-(Use HALSUT as a tie-breaker: if HALSUT says trending bull, prefer buys; if trending bear, prefer sells.)
+## 2. Higher timeframe (4H) step – build the “box”
 
-3) Entry rules — Long (Buy)
-Use these sequentially — all must be satisfied unless noted.
+Do this every time a **4H candle closes**.
 
-HTF bias = Bullish. (Price is above the marked HTF candle high OR HTF structure favors buys.)
-On the LTF, price approaches or touches the lower Bollinger band or is within the HTF range and shows an LTF pullback.
-Stochastic RSI is in the oversold zone (below your oversold threshold, e.g., <20) and you see a crossover upward (the fast line crossing the slow line from below).
-Overbought/oversold indicator (e.g., RSI) confirms oversold or is turning up (optional but adds confidence).
-HALSUT either indicates a bullish environment or is not strongly bearish (no direct conflict).
-Price action confirmation on the LTF: a bullish candle close (engulfing, strong wick rejection of lows, or clear bullish momentum candle).
-Enter long at the close of the confirming candle (or place a buy limit slightly above recent local low if you prefer).
+On a **4H chart** of the same symbol:
 
-Stop loss (Long): place below the recent LTF swing low or below the lower Bollinger band (whichever makes more sense for price structure).
-Take profit (TP): partial or full exit at Bollinger middle band. Consider scaling out: e.g., close 70% at middle band, trail remaining with break-even + small trail.
+1. Wait for the 4H candle to **close**.
+2. Mark that candle’s:
+   - **High** = `HTF_prev_high`
+   - **Low**  = `HTF_prev_low`
+3. Now go back to your **15m** chart and:
+   - Draw a horizontal line (or a box) at `HTF_prev_high`.
+   - Draw a horizontal line at `HTF_prev_low`.
 
-4) Entry rules — Short (Sell)
-Mirror of the long rules.
+That zone between `HTF_prev_low` and `HTF_prev_high` is your **HTF range** for the next 4H period.
 
-HTF bias = Bearish. (Price is below marked HTF candle low or HTF structure favors sells.)
-On the LTF, price approaches or touches the upper Bollinger band or is in a pullback to the HTF range.
-Stochastic RSI is in the overbought zone (above your threshold, e.g., >80) and you see a crossover downward (fast line crossing slow line from above).
-Overbought/oversold indicator confirms overbought or is turning down.
-HALSUT indicates bearish or neutral (not strongly bullish).
-Price action confirmation: a bearish candle close (engulfing, wick rejection at highs, or strong bearish momentum candle).
-Enter short at the close of the confirming candle (or place a sell limit slightly below recent local high).
+---
 
-Stop loss (Short): place above the recent LTF swing high or above the upper Bollinger band.
-Take profit (TP): Bollinger middle band (scale out similarly).
+## 3. Check the “midband inside range” condition
 
-5) Trade sizing & risk management (must-read)
+Still on the **15m chart**:
 
-Risk per trade: recommended 0.5%–2% of account equity. Use lower end when testing or in uncertain markets.
-Position size formula:
-Position size (units) = (Account equity * Risk %) / (Entry price - Stop loss price)
+1. Look at your **Donchian midband** (from the 20‑period Donchian).
+2. Ask:
+   - Is the midband price **between** the HTF high and low?
 
-(Adjust for pip/tick value on your instrument.)
-Max concurrent trades: set a limit (e.g., 1–3) to avoid overexposure.
-Daily risk cap: stop taking new trades after you’ve lost a preset amount (e.g., 3% of equity) for the day.
-Keep a trading journal: record entry, stop, target, reasoning, HALSUT reading, and outcome.
+   In words:
+   - `HTF_prev_low ≤ Donchian_mid ≤ HTF_prev_high`
 
+3. If **yes** → you are allowed to trade mean‑reversion for this 4H cycle.  
+   If **no** → skip trades for this 4H cycle with this strategy (market is too imbalanced for “back to mid” logic).
 
-6) Trade management rules (once in trade)
+Keep this very strict: **no midband in range = no trade**.
 
-On a winning move: move stop to break-even once the trade reaches half the distance to the middle band or a preset profit (your choice).
-Scaling: take 50–75% of position at the middle band. Let the rest run with a trailing stop (trail below/above swing highs/lows or use ATR-based trail).
-If price reverses early: accept small loss and exit at stop — don’t widen stop unjustifiably.
-If HALSUT flips strongly against you mid-trade, consider tightening stop or exiting remaining size early — treat HALSUT as a dynamic trend signal.
+---
 
+## 4. Long setup (buy back to midband)
 
-7) Handling conflicting signals / edge cases
+You only look for longs when:
 
-HTF bias and LTF signals disagree: skip the trade or only take a very small position. Higher timeframe bias is a priority.
-Strong news / economic events: avoid trading around major releases unless your system explicitly accounts for news.
-Rangebound HTF (price inside HTF candle): either reduce size or only take the highest conviction setups (exact candlestick rejection + Stoch/OB/OS confluence).
-Stochastic RSI shows crossover but price is far from Bollinger band: wait — prefer setups where price is near lower/upper band for better risk/reward.
+- The midband is inside the HTF range (step 3 condition = true).
 
+Then follow these rules on the **15m**:
 
-8) Example trade (concise)
+### 4.1. Location filter (where price is in the HTF box)
 
-HTF = 1H; mark previous 1H candle high = 1.2000, low = 1.1950. Price is currently above 1.2000 → bull bias.
-Switch to 15m. Price pulls to lower Bollinger band at 1.2010.
-Stoch RSI <20 and fast line crosses above slow line. RSI(14) showing rise from 35. HALSUT = bullish. LTF forms a bullish engulfing candle.
-Entry: buy at 1.2015 on candle close. Stop: 1.1995 (below LTF swing low). TP: middle band at 1.2060. Risk distance = 20 pips; account risk 1% → size computed accordingly. Close 70% at 1.2060, trail stop on remainder.
+You want to buy near the **bottom** of the HTF range.
 
+Define:
+- HTF range size = `range = HTF_prev_high - HTF_prev_low`.
 
-9) Daily routine / pre-trade checklist
-Before each trading session:
+You want price in roughly the **lowest 1/3 of that range**, so:
 
-Check HTF bias and mark previous HTF candle high & low.
-Confirm HALSUT overall direction.
-Look only for LTF setups that align with HTF bias.
-Confirm Stoch RSI direction & OB/OS reading.
-Calculate position size & set stops/TP on the platform before entering.
-Log the planned trade in your journal.
+- Price zone for longs ≈ `HTF_prev_low` up to `HTF_prev_low + (range / 3)`.
 
+Visually: price is hanging around the bottom of the box.
 
-10) Trade plan template (copy & paste)
-Instrument:
-Date / Time:
-HTF used (e.g., 1H):
-HTF previous candle high/low: High = ___ Low = ___
-HTF bias (Bull/Bear/Neutral): ___
-LTF used (e.g., 15m):
-Entry setup description:
-Stoch RSI reading & crossover: ___
-OB/OS indicator reading: ___
-HALSUT reading: ___
-Entry price: ___
-Stop loss: ___
-Take profit (middle band): ___
-Position size (units / lots): ___
-Risk % of account: ___
-Reason to take trade (brief):
-Planned scaling / management:
-Result & notes:
+Bonus confluence:
 
+- 15m price is touching or breaking the **lower Donchian band** (20‑period).
 
-11) Performance tracking & iteration
+### 4.2. Momentum / exhaustion: Stoch RSI
 
-Backtest the rules on at least 100–200 trades or 3–6 months of data depending on your timeframe.
-Track win rate, average win/loss, expectancy, max drawdown.
-If performance is poor, check: entry timing, stop placement, HTF bias correctness, HALSUT conflicts, or whether you’re risking too much.
-Optimize only one variable at a time (e.g., Stoch settings, or stop distance).
+At or near that bottom zone:
 
+1. **Stoch RSI oversold**:
+   - %K < 20 and %D < 20 (or your oversold level).
+2. Then **Stoch RSI turns up**:
+   - %K crosses **above** %D and starts to curl up out of oversold.
 
-Final tips & cautions
+This says: “the downside push is losing steam.”
 
-The middle Bollinger band is a conservative target — it often hits quickly but limits profit potential. Consider additional higher targets only when price shows strong momentum continuation.
-Keep risk small while you test. Use a demo for at least 50–100 live-sim trades before committing real capital.
-If HALSUT in Silico has specific rules (e.g., unique signals), incorporate them into the filter step above — treat it as equal to HALSUT = trend confirmation.
+### 4.3. Trigger: 3 / 5 MA bull cross
 
+You now wait for price to actually start reverting:
 
-If you want, I can:
+- 3‑EMA crosses **above** 5‑EMA on the 15m chart.
 
-Turn this into a printable checklist / one-page PDF or a spreadsheet trade journal.
-Create an example backtest template in Excel or a sample log with example filled trades.
+This is your timing trigger.
 
-Which would you like next?
+### 4.4. Entry rule (long)
 
+Once all three are true:
+
+1. Midband is inside HTF range (step 3).
+2. Price is in the **lower third** of the HTF range (and ideally near LTF Donchian low).
+3. Stoch RSI was oversold and has crossed back up.
+4. 3 EMA has crossed above 5 EMA.
+
+→ **Enter long** on the close of the 15m candle that confirms the MA cross.
+
+### 4.5. Stop loss (long)
+
+A simple, robust rule:
+
+- Place SL **just below the HTF low**:
+  - e.g. a few ticks/pips below `HTF_prev_low`.
+- Or, if that’s very far:
+  - Below the most recent obvious swing low on 15m
+  - But don’t place it *above* the HTF low – idea is: if HTF low breaks cleanly, the whole mean‑reversion idea is invalid.
+
+Risk:
+- Use fixed % per trade (e.g. 0.5–1% of account).
+- Calculate position size from SL distance.
+
+### 4.6. Take profit (long)
+
+Main target:
+
+- **Donchian midband** on the 15m chart.
+
+You can:
+
+- Close the full position at the midband, or
+- Close 50–70% at midband, move stop to breakeven, and:
+  - Let the rest ride to the top of the HTF range or a fixed R multiple (e.g. 2R).
+
+---
+
+## 5. Short setup (sell back to midband)
+
+Exactly mirrored.
+
+Only look for shorts when:
+
+- Midband is inside the HTF range.
+
+On the **15m**:
+
+### 5.1. Location filter – top of the HTF box
+
+Now you want price in the **upper 1/3** of the HTF range:
+
+- Price zone for shorts ≈ `HTF_prev_high - (range / 3)` up to `HTF_prev_high`.
+
+Bonus confluence:
+
+- Price touching or poking above the **upper Donchian band** (20‑period).
+
+### 5.2. Stoch RSI overbought and turning down
+
+At or near that upper zone:
+
+1. **Stoch RSI overbought**:
+   - %K > 80 and %D > 80.
+2. Then **Stoch RSI turns down**:
+   - %K crosses **below** %D and curls down.
+
+### 5.3. Trigger: 3 / 5 MA bear cross
+
+- 3‑EMA crosses **below** 5‑EMA on the 15m.
+
+### 5.4. Entry rule (short)
+
+When all are true:
+
+1. Midband inside the HTF range.
+2. Price in upper third of HTF range (and ideally near LTF Donchian high).
+3. Stoch RSI overbought → crosses down.
+4. 3 EMA crosses below 5 EMA.
+
+→ **Enter short** on the close of that 15m candle.
+
+### 5.5. Stop loss (short)
+
+- Place SL **just above the HTF high**:
+  - A few ticks/pips above `HTF_prev_high`.
+- Or, if that’s very far:
+  - Above the recent swing high on 15m,
+  - But idea is: if the previous HTF high is cleanly broken, mean‑reversion to midband is weaker.
+
+### 5.6. Take profit (short)
+
+- Target = **Donchian midband** on 15m.
+
+Again, you can:
+- Close full at midband, or  
+- Take partials and trail the rest.
+
+---
+
+## 6. When NOT to trade
+
+Skip trades when:
+
+1. **Midband is not inside the HTF range.**
+   - This is your main structural filter.
+
+2. **Price has already cleanly broken the HTF range by a lot.**
+   - Example: price is way above HTF high and not coming back → this is a breakout / trend move, not a mean‑reversion environment.
+
+3. **News / extreme volatility** you don’t want to fade.
+   - e.g. just before/after big economic events, or massive single candles breaking both HTF levels.
+
+4. **Your R:R is terrible.**
+   - If your stop (at/around HTF high/low) is much wider than the distance to midband, skip that trade (reward not worth the risk).
+
+---
+
+## 7. Summary as a checklist
+
+For each new closed **4H** candle:
+
+1. Mark previous 4H high and low on your 15m chart.
+2. Confirm the **15m Donchian midband lies inside that high–low** range.
+   - If not: no trades this 4H cycle.
+
+Then, on the **15m**:
+
+**LONGS:**
+
+- Price in lower third of HTF range (ideally near 15m Donchian low).
+- Stoch RSI oversold, then %K crosses up over %D.
+- 3 EMA crosses above 5 EMA.
+- Enter long; SL just below HTF low (or 15m swing low); TP at 15m Donch midband.
+
+**SHORTS:**
+
+- Price in upper third of HTF range (ideally near 15m Donchian high).
+- Stoch RSI overbought, then %K crosses down under %D.
+- 3 EMA crosses below 5 EMA.
+- Enter short; SL just above HTF high (or 15m swing high); TP at 15m Donch midband.
