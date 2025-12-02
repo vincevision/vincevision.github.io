@@ -124,6 +124,7 @@ Once all three are true:
 2. Price is in the **lower third** of the HTF range (and ideally near LTF Donchian low).
 3. Stoch RSI was oversold and has crossed back up.
 4. 3 EMA has crossed above 5 EMA.
+5. price has tapped ltf outerband enter
 
 → **Enter long** on the close of the 15m candle that confirms the MA cross.
 
