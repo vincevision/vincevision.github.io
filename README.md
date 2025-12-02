@@ -258,3 +258,157 @@ Then, on the **15m**:
 - Stoch RSI overbought, then %K crosses down under %D.
 - 3 EMA crosses below 5 EMA.
 - Enter short; SL just above HTF high (or 15m swing high); TP at 15m Donch midband.
+
+
+MACD SETUP
+
+MACD is *always* going to be late – it’s built from moving averages – so the question isn’t “best” but “how much lag vs. how much noise are you willing to accept?”
+
+Here’s how to think about it and some concrete settings you can actually try.
+
+---
+
+## 1. What changing MACD settings really does
+
+MACD(fast, slow, signal) is just:
+
+- fast EMA – slow EMA = MACD line  
+- Signal = EMA of MACD line  
+
+If you want it **faster** (earlier signals):
+
+- Decrease **fast** length  
+- Decrease **slow** length  
+- Decrease **signal** length  
+
+This will:
+- React earlier
+- Give more false flips / whipsaws
+
+If you want it **slower** (cleaner but later):
+
+- Increase those lengths  
+- Fewer, stronger signals  
+- You’ll enter later and sometimes miss the start of moves
+
+---
+
+## 2. Good starting presets (by use‑case)
+
+### A. For higher‑timeframe bias filter (what we were doing)
+
+Here, you’re *not* using MACD to time entries – just to say “trend is mainly up/down.”  
+Lag is okay; too many flips is bad.
+
+On something like 4H / 1H as the **bias timeframe**:
+
+- **Standard / safe:**  
+  `MACD(12, 26, 9)` – classic; works fine for trend bias.
+
+- **Slightly faster, still stable:**  
+  `MACD(8, 21, 5)` – turns a bit earlier than 12/26/9.
+
+If 12/26/9 feels too late but you still want it pretty smooth, start with **8/21/5** for HTF bias.
+
+Example rule for your system:
+- HTF MACD(8,21,5) line > 0 → only longs on LTF  
+- HTF MACD(8,21,5) line < 0 → only shorts on LTF  
+
+(Don’t wait for every little cross; just use sign of MACD vs 0.)
+
+---
+
+### B. For faster confirmation on the *same* timeframe
+
+If you want to use MACD directly on your trading timeframe (say 15m) to help confirm entries:
+
+Try these:
+
+- **Balanced fast:** `MACD(6, 19, 3)`
+- **Very fast / aggressive:** `MACD(5, 13, 1)` or `MACD(3, 10, 3)`
+
+These will:
+
+- Signal trend shifts earlier
+- Whipsaw more in choppy markets
+
+Use them more as **confirmation**, not a hard gate, e.g.:
+
+- Only take longs when:
+  - Your 3/5 MA cross is bullish
+  - Stoch RSI has turned up from oversold
+  - **MACD histogram is no longer strongly negative** (e.g. > some threshold or turning up), OR MACD line is above signal
+
+Rather than: “wait for perfect MACD cross + other stuff” (which will be way too late).
+
+---
+
+## 3. How I’d plug MACD into *your* strategy
+
+Given your setup (Donchian + Stoch RSI + 3/5 cross + HTF idea), I’d do:
+
+### Option 1 – MACD only on HTF (recommended)
+
+- HTF: 4H, MACD(8,21,5)
+  - If MACD > 0: only long setups on 15m
+  - If MACD < 0: only short setups on 15m
+
+Then on 15m:
+
+- Ignore MACD completely and use:
+  - Donchian extremes
+  - Stoch RSI OB/OS + cross
+  - 3/5 MA cross
+  - Midband target
+
+Here MACD is just a **background filter**, so lag isn’t a big issue.
+
+### Option 2 – MACD on LTF for quicker feel of momentum
+
+On 15m, use a faster MACD like `6,19,3` or `5,13,1`:
+
+- Long side:
+  - 3/5 MA bull cross
+  - Stoch RSI from oversold turning up
+  - MACD histogram **rising** or above 0 (or MACD line > signal)
+
+- Short side:
+  - 3/5 MA bear cross
+  - Stoch RSI from overbought turning down
+  - MACD histogram **falling** or below 0 (or MACD line < signal)
+
+Don’t make MACD a hard must‑have if it puts you *way* behind the move; treat it more as a “don’t fight obvious momentum” clue.
+
+---
+
+## 4. If MACD always feels too late…
+
+For your kind of mean‑reversion system, you might not even need MACD:
+
+Simpler trend filters that are less laggy:
+
+- Price above/below a **higher‑period EMA** (on HTF):
+  - e.g. 4H 100 EMA or 200 EMA:
+    - Above → long bias; below → short bias.
+
+- Slope of an MA:
+  - 4H 50 EMA sloping up → bullish environment.
+  - 4H 50 EMA sloping down → bearish.
+
+These are often **cleaner and easier to read** than MACD, and integrate well with Donchian channels.
+
+---
+
+## 5. What you should actually do now
+
+1. Decide how you want to use MACD:
+   - Only as HTF bias filter? → start with **8,21,5** on 4H.
+   - Also on LTF for confirmation? → try **6,19,3** on 15m.
+
+2. On your charts:
+   - Load both the old (12,26,9) and a faster one (8,21,5 on HTF or 6,19,3 on LTF).
+   - Scroll back and **eyeball**:
+     - Does the faster one flip too much?
+     - Does the slower one get you in absurdly late?
+
+3. Pick one and **backtest 20–50 trades** with your full rules.
