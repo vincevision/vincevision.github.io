@@ -1,0 +1,163 @@
+Here’s your idea written out as a clear, step‑by‑step strategy you can test.
+
+I’ll assume **all indicators are on the same (higher) timeframe** you like to trade (e.g., 1H, 4H, daily). If you later want to split into higher/lower timeframes, you can adapt this logic.
+
+---
+
+## 1. Chart setup
+
+On your chosen trading timeframe:
+
+1. Add a **Donchian Channel**  
+   - Example: 20‑period Donchian (upper, middle, lower bands).
+
+2. Add these **moving averages** on price:
+   - 3‑period MA  
+   - 5‑period MA  
+   - 9‑period MA  
+   - 26‑period MA  
+   (Choose EMA or SMA and stick with it; EMA is common.)
+
+3. Add **MACD**:
+   - Standard: MACD(12, 26, 9).
+
+---
+
+## 2. Long trade (buy) rules
+
+### A. Oversold context
+
+1. **Oversold condition (Donchian)**  
+   - Price must be at or very near the **lower Donchian band**. You can define this as:
+     - Current candle’s low touches or breaks the lower band, **or**
+     - Candle closes within a small distance of the lower band (e.g., within 0.1–0.2% or a few ticks).
+
+Only look for longs while this oversold condition has recently occurred (e.g., within the last 3–5 candles).
+
+---
+
+### B. Trigger conditions
+
+2. **Short-term MA crossover (3 & 5)**  
+   - The **3‑period MA crosses above the 5‑period MA** (bullish cross).  
+   - This should happen **after** or **during** the oversold condition described in step 1.
+
+3. **MACD confirmation**  
+   - MACD line **crosses above** the MACD signal line (bullish MACD cross).  
+   - This can be:
+     - On the same candle as the 3/5 cross, or  
+     - Within the last N candles (e.g., last 3–5 candles).  
+   - Decide and fix this rule in advance.
+
+4. **Price confirmation over the 9 MA**  
+   - After the 3/5 bullish cross, wait for a candle that **closes above the 9‑period MA**.
+
+---
+
+### C. Entry
+
+5. **Enter long**  
+   - When all of the following are true:
+     - Oversold condition (recent touch/close near lower Donchian band),
+     - 3 MA has crossed above 5 MA,
+     - MACD has given a recent bullish cross,
+     - Current candle **closes above the 9 MA**.
+   - Enter at the **close of that candle** (or on the next candle open, depending on how you test/exeute).
+
+---
+
+### D. Stop loss (you need one)
+
+You didn’t specify a stop, but for a workable strategy, choose one and be consistent. Typical options:
+
+6. **Stop loss (pick one rule and keep it fixed):**
+   - Option A: A few ticks / pips **below the recent swing low**.  
+   - Option B: Just below the **lower Donchian band** minus a small buffer (e.g., 0.5 × ATR).  
+   - Option C: Fixed risk like 1× ATR below entry.
+
+Write it as a clear rule, for example:
+> “Stop loss goes below the lowest low of the last 10 bars, minus 0.5 × ATR(14).”
+
+---
+
+### E. Take profit
+
+7. **Primary target = 26‑period MA**
+   - Your take‑profit is when price **reaches or closes at the 26‑period MA**.
+   - You can define:
+     - TP triggers when the candle **touches** or **closes above** the 26 MA.
+
+Optional refinement:
+
+- Take partial profit at the 26 MA:
+  - Close 50% at the 26 MA.
+  - Move stop to breakeven on the rest, and either:
+    - Trail with the 9 MA, or  
+    - Aim for a second target (previous swing high, upper Donchian band, etc.).
+
+---
+
+## 3. Short trade (sell) – mirrored version
+
+If you want to trade both sides, mirror the rules:
+
+### A. Overbought context
+
+1. **Overbought condition (Donchian)**  
+   - Price must be at or near the **upper Donchian band** (touch / break / close near it).
+
+### B. Trigger
+
+2. **Short-term MA crossover (3 & 5)**  
+   - 3 MA **crosses below** 5 MA (bearish cross), after/during overbought condition.
+
+3. **MACD confirmation**  
+   - MACD line **crosses below** signal line (bearish cross), on or near the same time.
+
+4. **Price confirmation below the 9 MA**  
+   - After the 3/5 bearish cross, wait for a candle that **closes below the 9 MA**.
+
+### C. Entry
+
+5. **Enter short**  
+   - At the close of the candle that:
+     - Occurs after overbought condition,
+     - Has 3 < 5 MA,
+     - Has recent bearish MACD cross,
+     - Closes **below** the 9 MA.
+
+### D. Stop & Target
+
+6. **Stop loss**  
+   - Above recent swing high, or  
+   - Above upper Donchian band + buffer, or  
+   - 1× ATR above entry.
+
+7. **Take profit**  
+   - Target when price **reaches or closes at the 26‑period MA** from above.
+
+---
+
+## 4. How to test and refine
+
+For backtesting (manually or coded):
+
+1. Fix all parameters:
+   - Timeframe (e.g., 1H, 4H),
+   - Donchian length (e.g., 20),
+   - MA type (EMA vs SMA),
+   - What “recent” means for MACD and oversold (e.g., last 3–5 bars).
+
+2. Walk through historical charts:
+   - Mark each trade that meets all rules.
+   - Record entry, stop, target, outcome (R profit/loss).
+
+3. After enough trades:
+   - Check win rate,
+   - Average R:R,
+   - Maximum drawdown,
+   - Whether all filters are needed (you might find you can simplify).
+
+---
+
+If you tell me your exact timeframe and which markets you trade, I can rewrite this in even more concrete terms (e.g., “On 4H BTCUSDT, use Donchian 20, EMA MAs, stop = X, etc.”).
