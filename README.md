@@ -284,6 +284,37 @@ For fast intraday trading:
 
 
 
+  
+**[fast MA] / [medium MA] / [slow MA]**
 
+---
 
+**Very fast (scalpy, like 3/9/26)**  
+1. **3 / 9 / 26** – what you’re already using  
+2. **3 / 8 / 21** – tiny change, slightly smoother  
+3. **5 / 13 / 34** – still quick but a bit cleaner
+
+**Intraday / short swing (popular)**  
+4. **5 / 13 / 50** – fast trigger, medium trend, slower anchor  
+5. **8 / 21 / 50** – widely used; 8↔21 cross, 50 as trend filter/target  
+6. **9 / 21 / 50** – similar, just a touch slower on the trigger
+
+**Slower / swing trading**  
+7. **10 / 20 / 50** – classic for 1h/4h/daily  
+8. **20 / 50 / 200** – big‑picture trend set (20 vs 50, 200 as major trend line)
+
+---
+
+**How to use them (same logic as 3/9/26):**
+
+- **Fast vs medium** (e.g., 5 vs 13, or 8 vs 21) = your **crossover trigger**  
+- **Medium vs slow** (e.g., 13 vs 34, 21 vs 50) = **trend direction filter** / extra target
+
+So you can directly swap:
+
+- 3/9/26 → **5/13/34** or **8/21/50**  
+and keep the same idea:  
+outer BB tap + fast/medium cross + MACD confirm.  
+
+Pick one triple, code/mark it, and backtest it on your timeframe.
 
