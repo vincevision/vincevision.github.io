@@ -1,0 +1,410 @@
+//+------------------------------------------------------------------+
+//|                                   MA3_9_MACD_26MA_TP.mq5         |
+//|  3 & 9 MA crossover, then MACD crossover, TP near 26 MA,         |
+//|  SL at Donchian outer band                                       |
+//+------------------------------------------------------------------+
+#property strict
+#property version   "1.00"
+#property description "MT5 EA: 3&9 MA crossover THEN MACD crossover, TP near 26 MA, Donchian SL"
+
+#include <Trade/Trade.mqh>
+
+//--- inputs
+input int               FastMAPeriod       = 3;           // Fast MA period (entry)
+input int               SlowMAPeriod       = 9;           // Slow MA period (entry)
+input int               TargetMAPeriod     = 26;          // Target MA period (for TP)
+input ENUM_MA_METHOD    MAMethod           = MODE_EMA;    // MA method
+input ENUM_APPLIED_PRICE MAPrice           = PRICE_CLOSE; // Applied price for MAs & MACD
+
+// MACD settings (standard: 12,26,9)
+input int               MacdFastEMA        = 12;
+input int               MacdSlowEMA        = 26;
+input int               MacdSignalPeriod   = 9;
+
+// TP: distance from the 26 MA in price units (NOT points)
+// e.g. 0.5 for instruments priced like 208.0, 208.5, 209.0
+// e.g. 0.0010 on EURUSD (10 pips on a 5-digit broker)
+input double            TpOffsetPrice      = 0.5;
+
+// Donchian SL settings
+input int               DonchianPeriod     = 20;
+
+// Money management
+input double            Lots               = 1.11;        // Requested lot size (min 1.11), normalized to broker
+input int               SlippagePoints     = 10;          // Max slippage in points
+input ulong             MagicNumber        = 3005003;     // Magic number for this EA
+input bool              OnlyOnePosition    = true;        // Allow only one position per symbol
+input bool              CloseOnOppSignal   = true;        // Close existing position on opposite entry signal
+
+//--- trade object
+CTrade trade;
+
+//--- indicator handles
+int fastMA_handle      = INVALID_HANDLE;
+int slowMA_handle      = INVALID_HANDLE;
+int targetMA_handle    = INVALID_HANDLE;
+int macd_handle        = INVALID_HANDLE;
+
+//--- run once per bar
+datetime last_bar_time = 0;
+
+//--- pending entry direction after MA cross
+//  0 = none, +1 = bullish MA cross waiting for bullish MACD cross,
+// -1 = bearish MA cross waiting for bearish MACD cross
+int pendingDirection   = 0;
+
+//+------------------------------------------------------------------+
+//| Expert initialization                                            |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   trade.SetExpertMagicNumber((int)MagicNumber);
+   trade.SetDeviationInPoints(SlippagePoints);
+
+   // MA handles
+   fastMA_handle = iMA(_Symbol, _Period, FastMAPeriod, 0, MAMethod, MAPrice);
+   if(fastMA_handle == INVALID_HANDLE)
+   {
+      Print("Error creating fast MA handle: ", GetLastError());
+      return(INIT_FAILED);
+   }
+
+   slowMA_handle = iMA(_Symbol, _Period, SlowMAPeriod, 0, MAMethod, MAPrice);
+   if(slowMA_handle == INVALID_HANDLE)
+   {
+      Print("Error creating slow MA handle: ", GetLastError());
+      return(INIT_FAILED);
+   }
+
+   targetMA_handle = iMA(_Symbol, _Period, TargetMAPeriod, 0, MAMethod, MAPrice);
+   if(targetMA_handle == INVALID_HANDLE)
+   {
+      Print("Error creating target MA handle: ", GetLastError());
+      return(INIT_FAILED);
+   }
+
+   // MACD handle
+   macd_handle = iMACD(_Symbol, _Period, MacdFastEMA, MacdSlowEMA, MacdSignalPeriod, MAPrice);
+   if(macd_handle == INVALID_HANDLE)
+   {
+      Print("Error creating MACD handle: ", GetLastError());
+      return(INIT_FAILED);
+   }
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization                                          |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   if(fastMA_handle   != INVALID_HANDLE) IndicatorRelease(fastMA_handle);
+   if(slowMA_handle   != INVALID_HANDLE) IndicatorRelease(slowMA_handle);
+   if(targetMA_handle != INVALID_HANDLE) IndicatorRelease(targetMA_handle);
+   if(macd_handle     != INVALID_HANDLE) IndicatorRelease(macd_handle);
+}
+
+//+------------------------------------------------------------------+
+//| Count positions for this EA                                      |
+//+------------------------------------------------------------------+
+int CountOurPositions(int &buyCount, int &sellCount)
+{
+   buyCount  = 0;
+   sellCount = 0;
+   int total = PositionsTotal();
+
+   for(int i = 0; i < total; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(!PositionSelectByTicket(ticket))
+         continue;
+
+      string sym    = PositionGetString(POSITION_SYMBOL);
+      long   magic  = PositionGetInteger(POSITION_MAGIC);
+      long   type   = PositionGetInteger(POSITION_TYPE);
+
+      if(sym == _Symbol && magic == (long)MagicNumber)
+      {
+         if(type == POSITION_TYPE_BUY)
+            buyCount++;
+         else if(type == POSITION_TYPE_SELL)
+            sellCount++;
+      }
+   }
+   return (buyCount + sellCount);
+}
+
+//+------------------------------------------------------------------+
+//| Normalize volume to broker constraints                           |
+//+------------------------------------------------------------------+
+double NormalizedVolume(double vol)
+{
+   double minLot, maxLot, lotStep;
+   SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN,  minLot);
+   SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX,  maxLot);
+   SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP, lotStep);
+
+   // Force at least requested 1.11, then clamp to broker bounds
+   if(vol < 1.11) vol = 1.11;
+
+   if(vol < minLot) vol = minLot;
+   if(vol > maxLot) vol = maxLot;
+
+   // Adjust to nearest lower multiple of lotStep
+   vol = MathFloor(vol / lotStep) * lotStep;
+   vol = NormalizeDouble(vol, 2);
+   return vol;
+}
+
+//+------------------------------------------------------------------+
+//| Donchian Channel                                                 |
+//+------------------------------------------------------------------+
+bool GetDonchian(double &upper, double &lower)
+{
+   int bars = Bars(_Symbol, _Period);
+   if(bars <= DonchianPeriod + 2)
+      return false;
+
+   int highestIndex = iHighest(_Symbol, _Period, MODE_HIGH, DonchianPeriod, 1);
+   int lowestIndex  = iLowest(_Symbol, _Period, MODE_LOW,  DonchianPeriod, 1);
+
+   if(highestIndex == -1 || lowestIndex == -1)
+      return false;
+
+   upper = iHigh(_Symbol, _Period, highestIndex);
+   lower = iLow(_Symbol,  _Period, lowestIndex);
+
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| 3 & 9 MA crossover signals                                       |
+//+------------------------------------------------------------------+
+void GetMACrossSignals(bool &bullCross, bool &bearCross)
+{
+   bullCross = false;
+   bearCross = false;
+
+   if(Bars(_Symbol, _Period) < MathMax(FastMAPeriod, SlowMAPeriod) + 3)
+      return;
+
+   double fastVals[2];
+   double slowVals[2];
+
+   // Use last closed bar (shift=1) and previous bar (shift=2)
+   if(CopyBuffer(fastMA_handle, 0, 1, 2, fastVals) != 2)
+      return;
+   if(CopyBuffer(slowMA_handle, 0, 1, 2, slowVals) != 2)
+      return;
+
+   double maFastCurr = fastVals[0];
+   double maFastPrev = fastVals[1];
+   double maSlowCurr = slowVals[0];
+   double maSlowPrev = slowVals[1];
+
+   // Bullish cross: fast crosses above slow
+   if(maFastPrev <= maSlowPrev && maFastCurr > maSlowCurr)
+      bullCross = true;
+
+   // Bearish cross: fast crosses below slow
+   if(maFastPrev >= maSlowPrev && maFastCurr < maSlowCurr)
+      bearCross = true;
+}
+
+//+------------------------------------------------------------------+
+//| MACD line vs signal crossover signals                            |
+//+------------------------------------------------------------------+
+void GetMACDCrossSignals(bool &bullCross, bool &bearCross)
+{
+   bullCross = false;
+   bearCross = false;
+
+   if(Bars(_Symbol, _Period) < MacdSlowEMA + MacdSignalPeriod + 3)
+      return;
+
+   double macdMain[2];
+   double macdSignal[2];
+
+   if(CopyBuffer(macd_handle, 0, 1, 2, macdMain)   != 2) return;
+   if(CopyBuffer(macd_handle, 1, 1, 2, macdSignal) != 2) return;
+
+   double prevDiff = macdMain[1] - macdSignal[1];
+   double currDiff = macdMain[0] - macdSignal[0];
+
+   // Bullish MACD cross (main crosses above signal)
+   if(prevDiff <= 0.0 && currDiff > 0.0)
+      bullCross = true;
+
+   // Bearish MACD cross (main crosses below signal)
+   if(prevDiff >= 0.0 && currDiff < 0.0)
+      bearCross = true;
+}
+
+//+------------------------------------------------------------------+
+//| TP price near 26 MA (offset from MA)                             |
+//+------------------------------------------------------------------+
+bool GetTargetPrice(bool isBuy, double &tp_price)
+{
+   tp_price = 0.0;
+
+   double maArr[1];
+   if(CopyBuffer(targetMA_handle, 0, 1, 1, maArr) != 1)
+      return false;
+
+   double maTarget = maArr[0];
+   if(maTarget <= 0.0)
+      return false;
+
+   if(isBuy)
+      tp_price = maTarget - TpOffsetPrice; // TP just below the 26 MA
+   else
+      tp_price = maTarget + TpOffsetPrice; // TP just above the 26 MA
+
+   tp_price = NormalizeDouble(tp_price, _Digits);
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Manage open positions on opposite entry signal                   |
+//+------------------------------------------------------------------+
+void ManageOpenPositions(bool entryBuyNow, bool entrySellNow)
+{
+   if(!CloseOnOppSignal)
+      return;
+
+   int total = PositionsTotal();
+   for(int i = total - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(!PositionSelectByTicket(ticket))
+         continue;
+
+      string sym   = PositionGetString(POSITION_SYMBOL);
+      long   magic = PositionGetInteger(POSITION_MAGIC);
+      long   type  = PositionGetInteger(POSITION_TYPE);
+
+      if(sym != _Symbol || magic != (long)MagicNumber)
+         continue;
+
+      if(type == POSITION_TYPE_BUY && entrySellNow)
+         trade.PositionClose(ticket);
+      if(type == POSITION_TYPE_SELL && entryBuyNow)
+         trade.PositionClose(ticket);
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick                                                      |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Once per new bar
+   datetime current_bar_time = iTime(_Symbol, _Period, 0);
+   if(current_bar_time == last_bar_time)
+      return;
+   last_bar_time = current_bar_time;
+
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol, tick))
+      return;
+
+   int buyCount, sellCount;
+   int ourPositions = CountOurPositions(buyCount, sellCount);
+
+   // Detect MA and MACD crossovers (based on last closed bar)
+   bool maBullCross, maBearCross;
+   GetMACrossSignals(maBullCross, maBearCross);
+
+   bool macdBullCross, macdBearCross;
+   GetMACDCrossSignals(macdBullCross, macdBearCross);
+
+   // Update pendingDirection based on 3/9 MA cross
+   if(maBullCross)
+      pendingDirection = 1;   // waiting for bullish MACD cross
+   else if(maBearCross)
+      pendingDirection = -1;  // waiting for bearish MACD cross
+
+   // Determine if we have full entry signals this bar
+   bool entryBuyNow  = false;
+   bool entrySellNow = false;
+
+   // BUY: MA(3) crossed above MA(9) earlier, and now MACD crosses up
+   if(pendingDirection == 1 && macdBullCross)
+   {
+      entryBuyNow    = true;
+      pendingDirection = 0;  // reset after use
+   }
+
+   // SELL: MA(3) crossed below MA(9) earlier, and now MACD crosses down
+   if(pendingDirection == -1 && macdBearCross)
+   {
+      entrySellNow   = true;
+      pendingDirection = 0;  // reset after use
+   }
+
+   // Optionally close existing positions when opposite entry fires
+   if(ourPositions > 0)
+      ManageOpenPositions(entryBuyNow, entrySellNow);
+
+   // Recount after any closes
+   ourPositions = CountOurPositions(buyCount, sellCount);
+
+   // Respect "only one position"
+   if(OnlyOnePosition && ourPositions > 0)
+      return;
+
+   // If no new entry signal, stop here
+   if(!entryBuyNow && !entrySellNow)
+      return;
+
+   // Get Donchian channel for SL
+   double donUpper, donLower;
+   if(!GetDonchian(donUpper, donLower))
+      return;
+
+   // Broker's minimal stop distance
+   long stopsLevel = 0;
+   SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL, stopsLevel);
+   double minStop = stopsLevel * _Point;
+
+   // Volume
+   double volume = NormalizedVolume(Lots);
+   if(volume <= 0.0)
+      return;
+
+   double sl = 0.0, tp = 0.0;
+
+   // BUY entry
+   if(entryBuyNow && (!OnlyOnePosition || buyCount == 0))
+   {
+      // SL at lower Donchian band
+      if(donLower > 0 && (tick.ask - donLower) >= minStop)
+         sl = NormalizeDouble(donLower, _Digits);
+      else
+         sl = 0.0;
+
+      // TP near 26 MA
+      if(!GetTargetPrice(true, tp))
+         tp = 0.0;
+
+      trade.Buy(volume, _Symbol, 0.0, sl, tp, "MA3_9_MACD_26MA_TP buy");
+   }
+
+   // SELL entry
+   if(entrySellNow && (!OnlyOnePosition || sellCount == 0))
+   {
+      // SL at upper Donchian band
+      if(donUpper > 0 && (donUpper - tick.bid) >= minStop)
+         sl = NormalizeDouble(donUpper, _Digits);
+      else
+         sl = 0.0;
+
+      // TP near 26 MA
+      if(!GetTargetPrice(false, tp))
+         tp = 0.0;
+
+      trade.Sell(volume, _Symbol, 0.0, sl, tp, "MA3_9_MACD_26MA_TP sell");
+   }
+}
+//+------------------------------------------------------------------+
