@@ -1,0 +1,357 @@
+//+------------------------------------------------------------------+
+//|                                      MA3_5_Donchian_EA_MT5.mq5   |
+//|  3 & 5 MA crossover, TP near 9 MA, SL at Donchian outer band     |
+//+------------------------------------------------------------------+
+#property strict
+#property copyright "You"
+#property version   "1.01"
+#property description "MT5 EA: 3&5 MA crossover, TP near 9 MA, SL at Donchian outer band"
+
+#include <Trade/Trade.mqh>
+
+//--- inputs
+input int               FastMAPeriod       = 3;      // Fast MA period
+input int               SlowMAPeriod       = 5;      // Slow MA period
+input int               TargetMAPeriod     = 9;      // Target MA period (for TP)
+input ENUM_MA_METHOD    MAMethod           = MODE_EMA;      // MA method
+input ENUM_APPLIED_PRICE MAPrice           = PRICE_CLOSE;   // Applied price for MAs
+
+input int               DonchianPeriod     = 20;     // Donchian Channel lookback bars
+input double            Lots               = 1.11;   // Requested lot size (min 1.11, adjusted to broker limits)
+input int               SlippagePoints     = 10;     // Max slippage in points
+input ulong             MagicNumber        = 3005001;// Magic number for this EA
+input bool              OnlyOnePosition    = true;   // Allow only one position per symbol for this EA
+
+// Optional: close on opposite signal as additional exit
+input bool              CloseOnOppSignal   = true;   // Close existing position when opposite crossover appears
+
+//--- trade object
+CTrade trade;
+
+//--- MA indicator handles (MT5 style)
+int fastMA_handle  = INVALID_HANDLE;
+int slowMA_handle  = INVALID_HANDLE;
+int targetMA_handle = INVALID_HANDLE;
+
+//--- for "once per bar" logic
+datetime last_bar_time = 0;
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   trade.SetExpertMagicNumber((int)MagicNumber);
+   trade.SetDeviationInPoints(SlippagePoints);
+
+   // Create MA handles (MT5: 6 parameters, returns handle)
+   fastMA_handle = iMA(_Symbol, _Period, FastMAPeriod, 0, MAMethod, MAPrice);
+   if(fastMA_handle == INVALID_HANDLE)
+   {
+      Print("Error creating fast MA handle: ", GetLastError());
+      return(INIT_FAILED);
+   }
+
+   slowMA_handle = iMA(_Symbol, _Period, SlowMAPeriod, 0, MAMethod, MAPrice);
+   if(slowMA_handle == INVALID_HANDLE)
+   {
+      Print("Error creating slow MA handle: ", GetLastError());
+      return(INIT_FAILED);
+   }
+
+   targetMA_handle = iMA(_Symbol, _Period, TargetMAPeriod, 0, MAMethod, MAPrice);
+   if(targetMA_handle == INVALID_HANDLE)
+   {
+      Print("Error creating target MA handle: ", GetLastError());
+      return(INIT_FAILED);
+   }
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   if(fastMA_handle  != INVALID_HANDLE) IndicatorRelease(fastMA_handle);
+   if(slowMA_handle  != INVALID_HANDLE) IndicatorRelease(slowMA_handle);
+   if(targetMA_handle != INVALID_HANDLE) IndicatorRelease(targetMA_handle);
+}
+
+//+------------------------------------------------------------------+
+//| Get current number of EA positions (this symbol & magic)         |
+//+------------------------------------------------------------------+
+int CountOurPositions(int &buyCount, int &sellCount)
+{
+   buyCount  = 0;
+   sellCount = 0;
+   int total = PositionsTotal();
+
+   for(int i = 0; i < total; i++)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(!PositionSelectByTicket(ticket))
+         continue;
+
+      string sym    = PositionGetString(POSITION_SYMBOL);
+      long   magic  = PositionGetInteger(POSITION_MAGIC);
+      long   type   = PositionGetInteger(POSITION_TYPE);
+
+      if(sym == _Symbol && magic == (long)MagicNumber)
+      {
+         if(type == POSITION_TYPE_BUY)
+            buyCount++;
+         else if(type == POSITION_TYPE_SELL)
+            sellCount++;
+      }
+   }
+   return (buyCount + sellCount);
+}
+
+//+------------------------------------------------------------------+
+//| Normalize volume to broker constraints                           |
+//+------------------------------------------------------------------+
+double NormalizedVolume(double vol)
+{
+   double minLot, maxLot, lotStep;
+   SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN,  minLot);
+   SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX,  maxLot);
+   SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP, lotStep);
+
+   // Force at least requested 1.11, then clamp to broker bounds
+   if(vol < 1.11) vol = 1.11;
+
+   if(vol < minLot) vol = minLot;
+   if(vol > maxLot) vol = maxLot;
+
+   // Adjust to the nearest lower multiple of lotStep
+   vol = MathFloor(vol / lotStep) * lotStep;
+   // 2 decimals is enough for most FX; adjust if needed
+   vol = NormalizeDouble(vol, 2);
+   return vol;
+}
+
+//+------------------------------------------------------------------+
+//| Calculate Donchian Channel                                       |
+//+------------------------------------------------------------------+
+bool GetDonchian(double &upper, double &lower)
+{
+   int bars = Bars(_Symbol, _Period);
+   if(bars <= DonchianPeriod + 2)
+      return false;
+
+   // Use completed bars only: shift from 1 to DonchianPeriod
+   int highestIndex = iHighest(_Symbol, _Period, MODE_HIGH, DonchianPeriod, 1);
+   int lowestIndex  = iLowest(_Symbol, _Period, MODE_LOW,  DonchianPeriod, 1);
+
+   if(highestIndex == -1 || lowestIndex == -1)
+      return false;
+
+   upper = iHigh(_Symbol, _Period, highestIndex);
+   lower = iLow(_Symbol,  _Period, lowestIndex);
+
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Check for MA crossover signals (uses CopyBuffer on MA handles)   |
+//+------------------------------------------------------------------+
+void GetMASignals(bool &buySignal, bool &sellSignal)
+{
+   buySignal  = false;
+   sellSignal = false;
+
+   // Need enough bars
+   if(Bars(_Symbol, _Period) < MathMax(FastMAPeriod, SlowMAPeriod) + 3)
+      return;
+
+   double fastVals[2];
+   double slowVals[2];
+
+   // Copy fast MA: from shift=1 (closed bar) count=2 -> [0]=shift1, [1]=shift2
+   if(CopyBuffer(fastMA_handle, 0, 1, 2, fastVals) != 2)
+      return;
+
+   // Copy slow MA
+   if(CopyBuffer(slowMA_handle, 0, 1, 2, slowVals) != 2)
+      return;
+
+   double maFastCurr = fastVals[0]; // shift 1
+   double maFastPrev = fastVals[1]; // shift 2
+   double maSlowCurr = slowVals[0];
+   double maSlowPrev = slowVals[1];
+
+   // Bullish crossover: fast crosses above slow
+   if(maFastPrev <= maSlowPrev && maFastCurr > maSlowCurr)
+      buySignal = true;
+
+   // Bearish crossover: fast crosses below slow
+   if(maFastPrev >= maSlowPrev && maFastCurr < maSlowCurr)
+      sellSignal = true;
+}
+
+//+------------------------------------------------------------------+
+//| Get TP price based on 9-period MA                                |
+//+------------------------------------------------------------------+
+bool GetTargetPrice(bool isBuy, double &tp_price)
+{
+   tp_price = 0.0;
+
+   double maArr[1];
+
+   // MA on last closed bar (shift=1)
+   if(CopyBuffer(targetMA_handle, 0, 1, 1, maArr) != 1)
+      return false;
+
+   double maTarget = maArr[0];
+   if(maTarget <= 0.0)
+      return false;
+
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol, tick))
+      return false;
+
+   // For buy: TP must be above current Ask
+   if(isBuy)
+   {
+      if(maTarget > tick.ask)
+         tp_price = maTarget;
+   }
+   else // sell
+   {
+      if(maTarget < tick.bid)
+         tp_price = maTarget;
+   }
+
+   if(tp_price > 0.0)
+      tp_price = NormalizeDouble(tp_price, _Digits);
+
+   return (tp_price > 0.0);
+}
+
+//+------------------------------------------------------------------+
+//| Manage existing positions: optional close on opposite signal     |
+//+------------------------------------------------------------------+
+void ManageOpenPositions(bool buySignal, bool sellSignal)
+{
+   if(!CloseOnOppSignal)
+      return;
+
+   int total = PositionsTotal();
+   for(int i = total - 1; i >= 0; i--)
+   {
+      ulong ticket = PositionGetTicket(i);
+      if(!PositionSelectByTicket(ticket))
+         continue;
+
+      string sym    = PositionGetString(POSITION_SYMBOL);
+      long   magic  = PositionGetInteger(POSITION_MAGIC);
+      long   type   = PositionGetInteger(POSITION_TYPE);
+
+      if(sym != _Symbol || magic != (long)MagicNumber)
+         continue;
+
+      // If we have a buy and now a sell signal -> close buy
+      if(type == POSITION_TYPE_BUY && sellSignal)
+      {
+         trade.PositionClose(ticket);
+      }
+      // If we have a sell and now a buy signal -> close sell
+      if(type == POSITION_TYPE_SELL && buySignal)
+      {
+         trade.PositionClose(ticket);
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // "Once per bar" logic
+   datetime current_bar_time = iTime(_Symbol, _Period, 0);
+   if(current_bar_time == last_bar_time)
+      return;
+   last_bar_time = current_bar_time;
+
+   // Get latest tick
+   MqlTick tick;
+   if(!SymbolInfoTick(_Symbol, tick))
+      return;
+
+   // Count our positions
+   int buyCount, sellCount;
+   int ourPositions = CountOurPositions(buyCount, sellCount);
+
+   // Get signals from MA crossover
+   bool buySignal, sellSignal;
+   GetMASignals(buySignal, sellSignal);
+
+   // First, manage open positions if we want to close on opposite signal
+   if(ourPositions > 0)
+      ManageOpenPositions(buySignal, sellSignal);
+
+   // Re-count after possible closes
+   ourPositions = CountOurPositions(buyCount, sellCount);
+
+   // If only one position allowed, skip if one is open
+   if(OnlyOnePosition && ourPositions > 0)
+      return;
+
+   // No new entry signal -> nothing to do
+   if(!buySignal && !sellSignal)
+      return;
+
+   // Calculate Donchian channel for SL
+   double donUpper, donLower;
+   if(!GetDonchian(donUpper, donLower))
+      return;
+
+   // Get minimal stop distance
+   long stopsLevel = 0;
+   SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL, stopsLevel);
+   double minStop = stopsLevel * _Point;
+
+   // Normalize volume
+   double volume = NormalizedVolume(Lots);
+   if(volume <= 0.0)
+      return;
+
+   // Prepare SL and TP
+   double sl = 0.0, tp = 0.0;
+
+   // BUY signal
+   if(buySignal && (!OnlyOnePosition || buyCount == 0))
+   {
+      // SL at lower Donchian band
+      if(donLower > 0 && (tick.ask - donLower) >= minStop)
+         sl = NormalizeDouble(donLower, _Digits);
+      else
+         sl = 0.0;
+
+      // TP near 9 MA
+      GetTargetPrice(true, tp); // 0 means no TP
+
+      // Send buy order at market
+      trade.Buy(volume, _Symbol, 0.0, sl, tp, "MA3_5_Donchian_EA buy");
+   }
+
+   // SELL signal
+   if(sellSignal && (!OnlyOnePosition || sellCount == 0))
+   {
+      // SL at upper Donchian band
+      if(donUpper > 0 && (donUpper - tick.bid) >= minStop)
+         sl = NormalizeDouble(donUpper, _Digits);
+      else
+         sl = 0.0;
+
+      // TP near 9 MA
+      GetTargetPrice(false, tp);
+
+      // Send sell order at market
+      trade.Sell(volume, _Symbol, 0.0, sl, tp, "MA3_5_Donchian_EA sell");
+   }
+}
+//+------------------------------------------------------------------+
