@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Deriv MA Crossover Scanner (3 / 9 / 26)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        :root {
+            --bg: #0b1120;
+            --bg-alt: #020617;
+            --panel: #1e293b;
+            --accent: #38bdf8;
+            --accent-soft: rgba(56, 189, 248, 0.15);
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --danger: #f97373;
+            --success: #4ade80;
+            --border: #334155;
+            --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: var(--font);
+            background: radial-gradient(circle at top, #1e293b 0, #020617 50%, #000 100%);
+            color: var(--text);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1.5rem;
+        }
+
+        h1 {
+            margin: 0 0 0.5rem;
+            font-size: 1.7rem;
+            letter-spacing: 0.03em;
+        }
+
+        .subtitle {
+            margin: 0 0 1.25rem;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+
+        .panel {
+            background: linear-gradient(135deg, rgba(15,23,42,0.97), rgba(15,23,42,0.9));
+            border-radius: 0.75rem;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            padding: 1rem 1.25rem;
+            box-shadow: 0 18px 60px rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(12px);
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1rem;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .controls label {
+            font-size: 0.8rem;
+            color: var(--muted);
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        select,
+        input[type="number"] {
+            background: #020617;
+            color: var(--text);
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            padding: 0.25rem 0.75rem;
+            font-size: 0.85rem;
+            min-height: 30px;
+            outline: none;
+        }
+
+        select:focus,
+        input[type="number"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.6);
+        }
+
+        button {
+            border-radius: 999px;
+            border: none;
+            padding: 0.4rem 0.95rem;
+            font-size: 0.85rem;
+            cursor: pointer;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        #start-btn {
+            background: radial-gradient(circle at top left, #22c55e, #16a34a);
+            color: #ecfdf3;
+        }
+
+        #stop-btn {
+            background: radial-gradient(circle at top left, #f97373, #ef4444);
+            color: #fee2e2;
+        }
+
+        button[disabled] {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        .status {
+            margin-left: auto;
+            font-size: 0.8rem;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+
+        .status::before {
+            content: "● ";
+            color: var(--danger);
+        }
+
+        .status.connected::before {
+            color: var(--success);
+        }
+
+        .status.scanning::before {
+            color: var(--accent);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+        }
+
+        thead {
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        th,
+        td {
+            padding: 0.35rem 0.4rem;
+            border-bottom: 1px solid rgba(30, 64, 175, 0.35);
+            text-align: left;
+            white-space: nowrap;
+        }
+
+        th {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #9ca3af;
+        }
+
+        tbody tr:nth-child(odd) {
+            background: rgba(15, 23, 42, 0.65);
+        }
+
+        tbody tr:nth-child(even) {
+            background: rgba(15, 23, 42, 0.4);
+        }
+
+        tbody tr:hover {
+            background: rgba(56, 189, 248, 0.08);
+        }
+
+        .direction {
+            font-weight: 600;
+        }
+
+        .direction.bull {
+            color: var(--success);
+        }
+
+        .direction.bear {
+            color: var(--danger);
+        }
+
+        .ma-values,
+        .donchian {
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .note {
+            margin-top: 0.75rem;
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+
+        .log {
+            margin-top: 0.75rem;
+            max-height: 120px;
+            overflow-y: auto;
+            font-size: 0.7rem;
+            background: rgba(15, 23, 42, 0.85);
+            border-radius: 0.5rem;
+            padding: 0.5rem 0.7rem;
+            border: 1px dashed rgba(148, 163, 184, 0.35);
+        }
+
+        .log-title {
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+        }
+
+        .log-content {
+            white-space: pre-wrap;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            color: #94a3b8;
+        }
+
+        @media (max-width: 800px) {
+            th:nth-child(7),
+            td:nth-child(7),
+            th:nth-child(8),
+            td:nth-child(8) {
+                display: none;
+            }
+        }
+
+        @media (max-width: 600px) {
+            .controls {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .status {
+                margin-left: 0;
+            }
+
+            th:nth-child(5),
+            td:nth-child(5),
+            th:nth-child(6),
+            td:nth-child(6) {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="panel">
+        <h1>Deriv 3 / 9 / 26 MA Crossover Scanner</h1>
+        <p class="subtitle">
+            Live scan of Deriv markets via WebSocket (app_id 1089). Signals when 3 MA crosses 9 MA and
+            price has not yet reached 26 MA. SL on outer Donchian band (20), TP at 26 MA.
+        </p>
+
+        <div class="controls">
+            <label>
+                Timeframe
+                <select id="timeframe-select"></select>
+            </label>
+
+            <label>
+                Market
+                <select id="market-filter">
+                    <option value="all">All markets</option>
+                    <option value="forex">Forex</option>
+                    <option value="indices">Indices</option>
+                    <option value="synthetics">Synthetic indices</option>
+                    <option value="commodities">Commodities</option>
+                </select>
+            </label>
+
+            <label>
+                Max symbols
+                <input id="max-symbols" type="number" value="30" min="1" max="200" />
+            </label>
+
+            <button id="start-btn">Start scan</button>
+            <button id="stop-btn" disabled>Stop</button>
+
+            <span id="status" class="status">Idle</span>
+        </div>
+
+        <table id="signals-table">
+            <thead>
+            <tr>
+                <th>Symbol</th>
+                <th>TF</th>
+                <th>Signal</th>
+                <th>Last Price</th>
+                <th>TP (26 MA)</th>
+                <th>SL (Donchian)</th>
+                <th>MAs (3, 9, 26)</th>
+                <th>Donchian (H / L)</th>
+                <th>Signal Time</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div class="note">
+            <strong>Notes:</strong>
+            <ul>
+                <li>Simple Moving Averages (SMA) with periods 3, 9, 26.</li>
+                <li>Donchian Channel period = 20 (can be changed in code: <code>DONCHIAN_PERIOD</code>).</li>
+                <li>Signals: 3 MA crosses 9 MA, and current close has not yet reached 26 MA.</li>
+                <li>SL = outer Donchian band (low for LONG, high for SHORT), TP = 26 MA.</li>
+                <li>This is a demo scanner only. No trades are placed. Use at your own risk.</li>
+            </ul>
+        </div>
+
+        <div class="log">
+            <div class="log-title">Log</div>
+            <div id="log" class="log-content"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // === CONFIGURATION ===
+    const API_URL = "wss://ws.derivws.com/websockets/v3?app_id=1089";
+
+    // MA periods
+    const MA_FAST = 3;
+    const MA_SLOW = 9;
+    const MA_TARGET = 26; // TP at this MA
+
+    // Donchian period
+    const DONCHIAN_PERIOD = 20;
+
+    // Supported timeframes (Deriv granularities in seconds)
+    const TIMEFRAMES = {
+        "1m": 60,
+        "2m": 120,
+        "3m": 180,
+        "5m": 300,
+        "10m": 600,
+        "15m": 900,
+        "20m": 1200,
+        "30m": 1800,
+        "1h": 3600,
+        "2h": 7200,
+        "4h": 14400,
+        "8h": 28800,
+        "1d": 86400
+    };
+
+    // === STATE ===
+    let ws = null;
+    let isScanning = false;
+    let currentTimeframe = TIMEFRAMES["5m"]; // default
+    const symbolData = {}; // { [symbol]: { candles: [...], lastSignalTime, lastSignalDirection } }
+    const activeSubscriptions = new Set(); // subscription ids to forget
+
+    // === HELPER SHORTCUT ===
+    function $(id) {
+        return document.getElementById(id);
+    }
+
+    // === UI SETUP ===
+    document.addEventListener("DOMContentLoaded", () => {
+        // Populate timeframe select
+        const tfSelect = $("timeframe-select");
+        Object.entries(TIMEFRAMES).forEach(([label, seconds]) => {
+            const opt = document.createElement("option");
+            opt.value = label;
+            opt.textContent = label;
+            if (label === "5m") opt.selected = true;
+            tfSelect.appendChild(opt);
+        });
+
+        $("start-btn").addEventListener("click", startScanning);
+        $("stop-btn").addEventListener("click", stopScanning);
+
+        tfSelect.addEventListener("change", () => {
+            currentTimeframe = TIMEFRAMES[tfSelect.value];
+            if (isScanning && ws && ws.readyState === WebSocket.OPEN) {
+                switchTimeframe();
+            }
+        });
+    });
+
+    // === STATUS / LOGGING ===
+    function setStatus(text, mode) {
+        const el = $("status");
+        el.textContent = text;
+        el.classList.remove("connected", "scanning");
+        if (mode) el.classList.add(mode);
+    }
+
+    function logMessage(text) {
+        const el = $("log");
+        if (!el) return;
+        const now = new Date().toLocaleTimeString();
+        el.textContent = `[${now}] ${text}\n` + el.textContent;
+    }
+
+    function updateButtons() {
+        $("start-btn").disabled = isScanning;
+        $("stop-btn").disabled = !isScanning;
+    }
+
+    function clearSignalsTable() {
+        const tbody = document.querySelector("#signals-table tbody");
+        tbody.innerHTML = "";
+    }
+
+    // === WEBSOCKET HANDLING ===
+    function connectWebSocket() {
+        if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+
+        setStatus("Connecting to Deriv...", null);
+        ws = new WebSocket(API_URL);
+
+        ws.onopen = () => {
+            logMessage("WebSocket connected.");
+            setStatus("Connected", "connected");
+            if (isScanning) {
+                requestSymbols();
+                setStatus("Connected (scanning...)", "scanning");
+            }
+        };
+
+        ws.onmessage = (event) => {
+            let msg;
+            try {
+                msg = JSON.parse(event.data);
+            } catch (e) {
+                console.error("Failed to parse message", e);
+                return;
+            }
+
+            if (msg.error) {
+                logMessage("Error: " + msg.error.message);
+                return;
+            }
+
+            switch (msg.msg_type) {
+                case "active_symbols":
+                    handleActiveSymbols(msg.active_symbols);
+                    break;
+                case "candles":
+                    handleCandlesMessage(msg);
+                    break;
+                default:
+                    break;
+            }
+        };
+
+        ws.onerror = (err) => {
+            console.error("WebSocket error:", err);
+            logMessage("WebSocket error (see console).");
+        };
+
+        ws.onclose = () => {
+            logMessage("WebSocket closed.");
+            setStatus("Disconnected", null);
+            if (isScanning) {
+                setStatus("Reconnecting...", null);
+                setTimeout(connectWebSocket, 3000);
+            }
+        };
+    }
+
+    function startScanning() {
+        isScanning = true;
+        currentTimeframe = TIMEFRAMES[$("timeframe-select").value];
+        clearSignalsTable();
+        Object.keys(symbolData).forEach((k) => delete symbolData[k]);
+        activeSubscriptions.clear();
+        updateButtons();
+        connectWebSocket();
+
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            requestSymbols();
+            setStatus("Connected (scanning...)", "scanning");
+        }
+    }
+
+    function stopScanning() {
+        isScanning = false;
+        updateButtons();
+        unsubscribeAll();
+        setStatus("Stopped (no active subscriptions).", "connected");
+    }
+
+    function switchTimeframe() {
+        clearSignalsTable();
+        Object.keys(symbolData).forEach((k) => delete symbolData[k]);
+        unsubscribeAll();
+        logMessage("Switching timeframe...");
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            requestSymbols();
+        }
+    }
+
+    function unsubscribeAll() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        activeSubscriptions.forEach((id) => {
+            ws.send(JSON.stringify({ forget: id }));
+        });
+        activeSubscriptions.clear();
+    }
+
+    // === API REQUESTS ===
+    function requestSymbols() {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        setStatus("Requesting active symbols...", "scanning");
+        ws.send(
+            JSON.stringify({
+                active_symbols: "brief",
+                product_type: "basic"
+            })
+        );
+    }
+
+    function subscribeToCandles(symbol) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        ws.send(
+            JSON.stringify({
+                ticks_history: symbol,
+                style: "candles",
+                granularity: currentTimeframe,
+                count: 100,
+                end: "latest",
+                start: 1,
+                adjust_start_time: 1,
+                subscribe: 1
+            })
+        );
+    }
+
+    // === HANDLERS ===
+    function handleActiveSymbols(activeSymbols) {
+        if (!isScanning) return;
+
+        const marketFilter = $("market-filter").value;
+        let symbols = activeSymbols || [];
+
+        if (marketFilter !== "all") {
+            symbols = symbols.filter((s) => {
+                switch (marketFilter) {
+                    case "forex":
+                        return s.market === "forex";
+                    case "indices":
+                        return s.market === "indices";
+                    case "synthetics":
+                        return s.market === "synthetic_index";
+                    case "commodities":
+                        return s.market === "commodities";
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        const maxSymbols = parseInt($("max-symbols").value, 10) || 30;
+        symbols = symbols.slice(0, maxSymbols);
+
+        logMessage(`Subscribing to ${symbols.length} symbols (filter: ${marketFilter}).`);
+
+        symbols.forEach((s) => {
+            symbolData[s.symbol] = {
+                candles: [],
+                lastSignalTime: null,
+                lastSignalDirection: null
+            };
+            subscribeToCandles(s.symbol);
+        });
+    }
+
+    function handleCandlesMessage(msg) {
+        if (!msg.candles || msg.candles.length === 0) return;
+
+        const symbol =
+            (msg.candles[0] && msg.candles[0].symbol) ||
+            (msg.echo_req && msg.echo_req.ticks_history) ||
+            null;
+
+        if (!symbol) return;
+
+        if (!symbolData[symbol]) {
+            symbolData[symbol] = {
+                candles: [],
+                lastSignalTime: null,
+                lastSignalDirection: null
+            };
+        }
+
+        if (msg.subscription && msg.subscription.id) {
+            activeSubscriptions.add(msg.subscription.id);
+        }
+
+        const data = symbolData[symbol];
+        msg.candles.forEach((c) => {
+            data.candles.push({
+                time: c.epoch,
+                open: Number(c.open),
+                high: Number(c.high),
+                low: Number(c.low),
+                close: Number(c.close)
+            });
+        });
+
+        // Limit stored candles
+        if (data.candles.length > 400) {
+            data.candles.splice(0, data.candles.length - 400);
+        }
+
+        checkForSignal(symbol);
+    }
+
+    // === INDICATORS ===
+    function smaAt(values, period, index) {
+        if (index + 1 < period) return null;
+        let sum = 0;
+        for (let i = index - period + 1; i <= index; i++) {
+            sum += values[i];
+        }
+        return sum / period;
+    }
+
+    function donchianAt(highs, lows, period, index) {
+        if (index + 1 < period) return null;
+        let maxHigh = -Infinity;
+        let minLow = Infinity;
+        for (let i = index - period + 1; i <= index; i++) {
+            if (highs[i] > maxHigh) maxHigh = highs[i];
+            if (lows[i] < minLow) minLow = lows[i];
+        }
+        return { high: maxHigh, low: minLow };
+    }
+
+    function checkForSignal(symbol) {
+        const data = symbolData[symbol];
+        if (!data || !data.candles || data.candles.length === 0) return;
+
+        const candles = data.candles;
+        const len = candles.length;
+
+        // Need enough candles for MA_TARGET and Donchian + 1 previous candle
+        const minLen = Math.max(MA_TARGET, DONCHIAN_PERIOD) + 2;
+        if (len < minLen) return;
+
+        const closes = candles.map((c) => c.close);
+        const highs = candles.map((c) => c.high);
+        const lows = candles.map((c) => c.low);
+
+        const iNow = len - 1;
+        const iPrev = len - 2;
+
+        const ma3Now = smaAt(closes, MA_FAST, iNow);
+        const ma9Now = smaAt(closes, MA_SLOW, iNow);
+        const ma26Now = smaAt(closes, MA_TARGET, iNow);
+
+        const ma3Prev = smaAt(closes, MA_FAST, iPrev);
+        const ma9Prev = smaAt(closes, MA_SLOW, iPrev);
+
+        if (
+            ma3Now === null ||
+            ma9Now === null ||
+            ma26Now === null ||
+            ma3Prev === null ||
+            ma9Prev === null
+        ) {
+            return;
+        }
+
+        let direction = null;
+
+        // Detect crossover 3MA vs 9MA
+        if (ma3Prev <= ma9Prev && ma3Now > ma9Now) {
+            direction = "LONG";
+        } else if (ma3Prev >= ma9Prev && ma3Now < ma9Now) {
+            direction = "SHORT";
+        }
+
+        if (!direction) return;
+
+        const close = closes[iNow];
+
+        // Condition: price hasn't reached 26 MA yet
+        if (direction === "LONG" && close >= ma26Now) return;
+        if (direction === "SHORT" && close <= ma26Now) return;
+
+        const candleTime = candles[iNow].time;
+
+        // Avoid duplicate signal for same candle + direction
+        if (data.lastSignalTime === candleTime && data.lastSignalDirection === direction) {
+            return;
+        }
+
+        const don = donchianAt(highs, lows, DONCHIAN_PERIOD, iNow);
+        if (!don) return;
+
+        const sl = direction === "LONG" ? don.low : don.high;
+        const tp = ma26Now;
+        const entry = close;
+
+        const signal = {
+            symbol,
+            direction,
+            entry,
+            tp,
+            sl,
+            ma3: ma3Now,
+            ma9: ma9Now,
+            ma26: ma26Now,
+            donHigh: don.high,
+            donLow: don.low,
+            time: candleTime
+        };
+
+        data.lastSignalTime = candleTime;
+        data.lastSignalDirection = direction;
+
+        updateSignalsTable(signal);
+    }
+
+    // === TABLE UPDATE ===
+    function formatPrice(value) {
+        if (value === null || value === undefined || isNaN(value)) return "";
+        return Number(value).toFixed(5);
+    }
+
+    function timeframeLabelFromSeconds(seconds) {
+        for (const [label, s] of Object.entries(TIMEFRAMES)) {
+            if (s === seconds) return label;
+        }
+        return seconds + "s";
+    }
+
+    function updateSignalsTable(signal) {
+        const tbody = document.querySelector("#signals-table tbody");
+        const rowId = `${signal.symbol}_${currentTimeframe}`;
+        let row = document.getElementById(rowId);
+
+        if (!row) {
+            row = document.createElement("tr");
+            row.id = rowId;
+            row.innerHTML = `
+                <td class="symbol"></td>
+                <td class="timeframe"></td>
+                <td class="direction"></td>
+                <td class="price"></td>
+                <td class="tp"></td>
+                <td class="sl"></td>
+                <td class="ma-values"></td>
+                <td class="donchian"></td>
+                <td class="time"></td>
+            `;
+            tbody.appendChild(row);
+        }
+
+        row.querySelector(".symbol").textContent = signal.symbol;
+        row.querySelector(".timeframe").textContent =
+            timeframeLabelFromSeconds(currentTimeframe);
+
+        const dirCell = row.querySelector(".direction");
+        dirCell.textContent = signal.direction;
+        dirCell.className = "direction " + (signal.direction === "LONG" ? "bull" : "bear");
+
+        row.querySelector(".price").textContent = formatPrice(signal.entry);
+        row.querySelector(".tp").textContent = formatPrice(signal.tp);
+        row.querySelector(".sl").textContent = formatPrice(signal.sl);
+
+        row.querySelector(".ma-values").textContent =
+            `3: ${formatPrice(signal.ma3)}, 9: ${formatPrice(signal.ma9)}, 26: ${formatPrice(
+                signal.ma26
+            )}`;
+
+        row.querySelector(".donchian").textContent =
+            `H: ${formatPrice(signal.donHigh)}, L: ${formatPrice(signal.donLow)}`;
+
+        row.querySelector(".time").textContent = new Date(
+            signal.time * 1000
+        ).toLocaleString();
+    }
+</script>
+</body>
+</html>
