@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <title>Deriv MA Crossover Scanner (3 / 9 / 26)</title>
+    <title>Deriv MA + MACD Crossover Scanner (3 / 9 / 26)</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
         :root {
@@ -233,15 +233,6 @@
         }
 
         @media (max-width: 600px) {
-            .controls {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .status {
-                margin-left: 0;
-            }
-
             th:nth-child(5),
             td:nth-child(5),
             th:nth-child(6),
@@ -254,10 +245,11 @@
 <body>
 <div class="container">
     <div class="panel">
-        <h1>Deriv 3 / 9 / 26 MA Crossover Scanner</h1>
+        <h1>Deriv 3 / 9 / 26 MA + MACD Crossover Scanner</h1>
         <p class="subtitle">
-            Live scan of Deriv markets via WebSocket (app_id 1089). Signals when 3 MA crosses 9 MA and
-            price has not yet reached 26 MA. SL on outer Donchian band (20), TP at 26 MA.
+            Live scan of Deriv markets via WebSocket (app_id 1089). Signals when 3 MA crosses 9 MA,
+            MACD(12,26,9) crosses in the same direction (before or after, within a few bars),
+            and price has not yet reached the 26 MA. SL on outer Donchian band (20), TP at 26 MA.
         </p>
 
         <div class="controls">
@@ -299,6 +291,7 @@
                 <th>SL (Donchian)</th>
                 <th>MAs (3, 9, 26)</th>
                 <th>Donchian (H / L)</th>
+                <th>MACD (12,26,9)</th>
                 <th>Signal Time</th>
             </tr>
             </thead>
@@ -309,10 +302,15 @@
             <strong>Notes:</strong>
             <ul>
                 <li>Simple Moving Averages (SMA) with periods 3, 9, 26.</li>
-                <li>Donchian Channel period = 20 (can be changed in code: <code>DONCHIAN_PERIOD</code>).</li>
-                <li>Signals: 3 MA crosses 9 MA, and current close has not yet reached 26 MA.</li>
+                <li>MACD: EMA(12) – EMA(26) with 9‑EMA signal line.</li>
+                <li>
+                    Signal requires both: 3 / 9 MA crossover and MACD crossover in same direction,
+                    not necessarily on the same bar (default max separation:
+                    <code>MACD_CONFIRM_MAX_BARS = 5</code> bars).
+                </li>
+                <li>Donchian Channel period = 20 (change in code: <code>DONCHIAN_PERIOD</code>).</li>
                 <li>SL = outer Donchian band (low for LONG, high for SHORT), TP = 26 MA.</li>
-                <li>This is a demo scanner only. No trades are placed. Use at your own risk.</li>
+                <li>Demo scanner only. No trades are placed. Use at your own risk.</li>
             </ul>
         </div>
 
@@ -335,6 +333,15 @@
     // Donchian period
     const DONCHIAN_PERIOD = 20;
 
+    // MACD (EMA) parameters
+    const MACD_FAST = 12;
+    const MACD_SLOW = 26;
+    const MACD_SIGNAL = 9;
+
+    // Maximum bar distance between MA crossover and MACD crossover
+    // (MACD crossover can happen before or after MA crossover, within this bar distance)
+    const MACD_CONFIRM_MAX_BARS = 15;
+
     // Supported timeframes (Deriv granularities in seconds)
     const TIMEFRAMES = {
         "1m": 60,
@@ -356,17 +363,15 @@
     let ws = null;
     let isScanning = false;
     let currentTimeframe = TIMEFRAMES["5m"]; // default
-    const symbolData = {}; // { [symbol]: { candles: [...], lastSignalTime, lastSignalDirection } }
+    const symbolData = {}; // per-symbol state
     const activeSubscriptions = new Set(); // subscription ids to forget
 
-    // === HELPER SHORTCUT ===
     function $(id) {
         return document.getElementById(id);
     }
 
     // === UI SETUP ===
     document.addEventListener("DOMContentLoaded", () => {
-        // Populate timeframe select
         const tfSelect = $("timeframe-select");
         Object.entries(TIMEFRAMES).forEach(([label, seconds]) => {
             const opt = document.createElement("option");
@@ -572,7 +577,11 @@
             symbolData[s.symbol] = {
                 candles: [],
                 lastSignalTime: null,
-                lastSignalDirection: null
+                lastSignalDirection: null,
+                lastMaCrossTime: null,
+                lastMaCrossDirection: null,
+                lastMacdCrossTime: null,
+                lastMacdCrossDirection: null
             };
             subscribeToCandles(s.symbol);
         });
@@ -592,7 +601,11 @@
             symbolData[symbol] = {
                 candles: [],
                 lastSignalTime: null,
-                lastSignalDirection: null
+                lastSignalDirection: null,
+                lastMaCrossTime: null,
+                lastMaCrossDirection: null,
+                lastMacdCrossTime: null,
+                lastMacdCrossDirection: null
             };
         }
 
@@ -611,7 +624,6 @@
             });
         });
 
-        // Limit stored candles
         if (data.candles.length > 400) {
             data.candles.splice(0, data.candles.length - 400);
         }
@@ -619,7 +631,7 @@
         checkForSignal(symbol);
     }
 
-    // === INDICATORS ===
+    // === INDICATORS (MA, MACD, DONCHIAN) ===
     function smaAt(values, period, index) {
         if (index + 1 < period) return null;
         let sum = 0;
@@ -640,6 +652,95 @@
         return { high: maxHigh, low: minLow };
     }
 
+    // EMA over entire series, returns array of same length (leading nulls where not enough data)
+    function emaSeries(values, period) {
+        const len = values.length;
+        const ema = new Array(len).fill(null);
+        if (len < period) return ema;
+
+        let sum = 0;
+        for (let i = 0; i < period; i++) sum += values[i];
+        ema[period - 1] = sum / period;
+
+        const k = 2 / (period + 1);
+        for (let i = period; i < len; i++) {
+            ema[i] = values[i] * k + ema[i - 1] * (1 - k);
+        }
+        return ema;
+    }
+
+    // EMA starting from a given index (for MACD signal line)
+    function emaSeriesFromIndex(values, period, startIndex) {
+        const len = values.length;
+        const ema = new Array(len).fill(null);
+        if (startIndex < 0 || len - startIndex < period) return ema;
+
+        let sum = 0;
+        for (let i = startIndex; i < startIndex + period; i++) {
+            sum += values[i];
+        }
+        ema[startIndex + period - 1] = sum / period;
+
+        const k = 2 / (period + 1);
+        for (let i = startIndex + period; i < len; i++) {
+            ema[i] = values[i] * k + ema[i - 1] * (1 - k);
+        }
+        return ema;
+    }
+
+    // Compute MACD(12,26,9) series and detect crossover on last bar
+    function computeMACD(closes) {
+        const len = closes.length;
+        const result = {
+            macdNow: null,
+            signalNow: null,
+            crossDirection: null // "LONG" (bullish) or "SHORT" (bearish) or null
+        };
+
+        if (len < MACD_SLOW + MACD_SIGNAL + 2) return result;
+
+        const fastEMA = emaSeries(closes, MACD_FAST);
+        const slowEMA = emaSeries(closes, MACD_SLOW);
+
+        const macdLine = new Array(len).fill(null);
+        for (let i = 0; i < len; i++) {
+            if (fastEMA[i] != null && slowEMA[i] != null) {
+                macdLine[i] = fastEMA[i] - slowEMA[i];
+            }
+        }
+
+        const firstIndex = macdLine.findIndex((v) => v !== null);
+        if (firstIndex === -1) return result;
+
+        const signalLine = emaSeriesFromIndex(macdLine, MACD_SIGNAL, firstIndex);
+
+        const iNow = len - 1;
+        const iPrev = len - 2;
+
+        const macdNow = macdLine[iNow];
+        const macdPrev = macdLine[iPrev];
+        const signalNow = signalLine[iNow];
+        const signalPrev = signalLine[iPrev];
+
+        result.macdNow = macdNow;
+        result.signalNow = signalNow;
+
+        if (
+            macdNow != null &&
+            macdPrev != null &&
+            signalNow != null &&
+            signalPrev != null
+        ) {
+            if (macdPrev <= signalPrev && macdNow > signalNow) {
+                result.crossDirection = "LONG";
+            } else if (macdPrev >= signalPrev && macdNow < signalNow) {
+                result.crossDirection = "SHORT";
+            }
+        }
+
+        return result;
+    }
+
     function checkForSignal(symbol) {
         const data = symbolData[symbol];
         if (!data || !data.candles || data.candles.length === 0) return;
@@ -647,8 +748,13 @@
         const candles = data.candles;
         const len = candles.length;
 
-        // Need enough candles for MA_TARGET and Donchian + 1 previous candle
-        const minLen = Math.max(MA_TARGET, DONCHIAN_PERIOD) + 2;
+        // Need enough candles for all indicators
+        const minLen =
+            Math.max(
+                MA_TARGET,
+                DONCHIAN_PERIOD,
+                MACD_SLOW + MACD_SIGNAL
+            ) + 2;
         if (len < minLen) return;
 
         const closes = candles.map((c) => c.close);
@@ -658,6 +764,7 @@
         const iNow = len - 1;
         const iPrev = len - 2;
 
+        // --- MAs (3, 9, 26) ---
         const ma3Now = smaAt(closes, MA_FAST, iNow);
         const ma9Now = smaAt(closes, MA_SLOW, iNow);
         const ma26Now = smaAt(closes, MA_TARGET, iNow);
@@ -675,40 +782,80 @@
             return;
         }
 
-        let direction = null;
-
-        // Detect crossover 3MA vs 9MA
+        // Detect 3 vs 9 MA crossover
+        let maCrossDir = null;
         if (ma3Prev <= ma9Prev && ma3Now > ma9Now) {
-            direction = "LONG";
+            maCrossDir = "LONG";
         } else if (ma3Prev >= ma9Prev && ma3Now < ma9Now) {
-            direction = "SHORT";
+            maCrossDir = "SHORT";
         }
 
-        if (!direction) return;
+        // --- MACD ---
+        const macdRes = computeMACD(closes);
+        const macdNow = macdRes.macdNow;
+        const macdSignalNow = macdRes.signalNow;
+        const macdCrossDir = macdRes.crossDirection;
+
+        const candleTime = candles[iNow].time;
+
+        // Update last cross information
+        if (maCrossDir) {
+            data.lastMaCrossDirection = maCrossDir;
+            data.lastMaCrossTime = candleTime;
+        }
+        if (macdCrossDir) {
+            data.lastMacdCrossDirection = macdCrossDir;
+            data.lastMacdCrossTime = candleTime;
+        }
+
+        // If no new MA or MACD crossover on this bar, no new combined signal
+        if (!maCrossDir && !macdCrossDir) return;
+
+        // The direction we care about is the one that crossed this bar (if both, same direction)
+        const triggerDirection = maCrossDir || macdCrossDir;
+
+        // We need both an MA cross and a MACD cross in the same direction
+        if (
+            data.lastMaCrossDirection !== triggerDirection ||
+            data.lastMacdCrossDirection !== triggerDirection ||
+            !data.lastMaCrossTime ||
+            !data.lastMacdCrossTime
+        ) {
+            return;
+        }
+
+        // Check bar distance between MA crossover and MACD crossover
+        const barDiff = Math.round(
+            Math.abs(data.lastMaCrossTime - data.lastMacdCrossTime) / currentTimeframe
+        );
+        if (barDiff > MACD_CONFIRM_MAX_BARS) {
+            return;
+        }
 
         const close = closes[iNow];
 
         // Condition: price hasn't reached 26 MA yet
-        if (direction === "LONG" && close >= ma26Now) return;
-        if (direction === "SHORT" && close <= ma26Now) return;
-
-        const candleTime = candles[iNow].time;
+        if (triggerDirection === "LONG" && close >= ma26Now) return;
+        if (triggerDirection === "SHORT" && close <= ma26Now) return;
 
         // Avoid duplicate signal for same candle + direction
-        if (data.lastSignalTime === candleTime && data.lastSignalDirection === direction) {
+        if (
+            data.lastSignalTime === candleTime &&
+            data.lastSignalDirection === triggerDirection
+        ) {
             return;
         }
 
         const don = donchianAt(highs, lows, DONCHIAN_PERIOD, iNow);
         if (!don) return;
 
-        const sl = direction === "LONG" ? don.low : don.high;
+        const sl = triggerDirection === "LONG" ? don.low : don.high;
         const tp = ma26Now;
         const entry = close;
 
         const signal = {
             symbol,
-            direction,
+            direction: triggerDirection,
             entry,
             tp,
             sl,
@@ -717,11 +864,13 @@
             ma26: ma26Now,
             donHigh: don.high,
             donLow: don.low,
+            macd: macdNow,
+            macdSignal: macdSignalNow,
             time: candleTime
         };
 
         data.lastSignalTime = candleTime;
-        data.lastSignalDirection = direction;
+        data.lastSignalDirection = triggerDirection;
 
         updateSignalsTable(signal);
     }
@@ -756,6 +905,7 @@
                 <td class="sl"></td>
                 <td class="ma-values"></td>
                 <td class="donchian"></td>
+                <td class="macd"></td>
                 <td class="time"></td>
             `;
             tbody.appendChild(row);
@@ -780,6 +930,9 @@
 
         row.querySelector(".donchian").textContent =
             `H: ${formatPrice(signal.donHigh)}, L: ${formatPrice(signal.donLow)}`;
+
+        row.querySelector(".macd").textContent =
+            `MACD: ${formatPrice(signal.macd)}, Sig: ${formatPrice(signal.macdSignal)}`;
 
         row.querySelector(".time").textContent = new Date(
             signal.time * 1000
