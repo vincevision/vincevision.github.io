@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deriv Bot (Auto-Reset Fix)</title>
+    <style>
+        body { background: #000; color: #eee; font-family: monospace; padding: 20px; display: flex; justify-content: center; }
+        .box { width: 100%; max-width: 500px; border: 1px solid #333; padding: 20px; border-radius: 8px; background: #111; }
+        
+        .row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .col { flex: 1; display: flex; flex-direction: column; }
+        
+        input { padding: 10px; background: #222; border: 1px solid #444; color: white; text-align: center; font-size: 1.1rem; }
+        label { color: #888; font-size: 0.8rem; margin-bottom: 5px; }
+        
+        button { width: 100%; padding: 15px; font-weight: bold; cursor: pointer; border: none; }
+        .btn-go { background: #007bff; color: white; }
+        .btn-stop { background: #dc3545; color: white; display: none; }
+        
+        .status { text-align: center; padding: 10px; color: #ffc107; font-size: 0.9rem; }
+        
+        .live-digit { font-size: 4rem; text-align: center; font-weight: bold; margin: 10px 0; color: #333; transition: 0.2s; }
+        .live-digit.trigger { color: #00ff00; text-shadow: 0 0 10px #00ff00; }
+        
+        .logs { height: 200px; overflow-y: auto; border-top: 1px solid #333; margin-top: 10px; padding-top: 10px; font-size: 0.8rem; }
+        .l-win { color: #00ff00; }
+        .l-loss { color: #ff4444; }
+        .l-reset { color: #ff00ff; }
+    </style>
+</head>
+<body>
+
+<div class="box">
+    <div style="display:flex; justify-content:space-between; margin-bottom:10px; font-size:1.2rem;">
+        <span>Balance: <span id="bal" style="color:#00ff00">---</span></span>
+        <span id="currency">---</span>
+    </div>
+
+    <div class="row">
+        <div class="col">
+            <label>WAIT FOR</label>
+            <input type="number" id="t1" value="3">
+        </div>
+        <div class="col">
+            <label>BET DIFFERS</label>
+            <input type="number" id="t2" value="6">
+        </div>
+    </div>
+    
+    <div class="row">
+        <div class="col">
+            <label>API TOKEN</label>
+            <input type="password" id="token" placeholder="Paste Token">
+        </div>
+        <div class="col">
+            <label>STAKE</label>
+            <input type="number" id="stake" value="10">
+        </div>
+    </div>
+
+    <button class="btn-go" id="btnStart" onclick="toggle(true)">START BOT</button>
+    <button class="btn-stop" id="btnStop" onclick="toggle(false)">STOP BOT</button>
+    
+    <div class="status" id="status">Ready</div>
+    <div class="live-digit" id="digit">-</div>
+    <div class="logs" id="logs"></div>
+</div>
+
+<script>
+    const APP_ID = 1089;
+    let ws;
+    let isRunning = false;
+    let isTrading = false;
+    let tradeTimer = null; // The Watchdog Timer
+    
+    function log(msg, type='') {
+        const d = document.createElement('div');
+        d.className = type;
+        d.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+        document.getElementById('logs').prepend(d);
+    }
+
+    function toggle(on) {
+        if(on) {
+            const token = document.getElementById('token').value;
+            if(!token) return alert("Enter Token");
+            
+            isRunning = true;
+            isTrading = false;
+            document.getElementById('btnStart').style.display = 'none';
+            document.getElementById('btnStop').style.display = 'block';
+            connect(token);
+        } else {
+            isRunning = false;
+            if(ws) ws.close();
+            clearTimeout(tradeTimer);
+            document.getElementById('btnStart').style.display = 'block';
+            document.getElementById('btnStop').style.display = 'none';
+            document.getElementById('status').innerText = "Stopped";
+        }
+    }
+
+    function connect(token) {
+        ws = new WebSocket(`wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`);
+        
+        ws.onopen = () => {
+            document.getElementById('status').innerText = "Authenticating...";
+            ws.send(JSON.stringify({ authorize: token }));
+        };
+
+        ws.onmessage = (msg) => {
+            const data = JSON.parse(msg.data);
+            
+            if(data.error) {
+                log(`API Error: ${data.error.message}`, 'l-loss');
+                // Auto-fix: Unlock trading if API errors out
+                forceReset(); 
+                return;
+            }
+
+            if(data.msg_type === 'authorize') {
+                document.getElementById('currency').innerText = data.authorize.currency;
+                document.getElementById('bal').innerText = data.authorize.balance;
+                log("Connected.", 'l-win');
+                
+                // Subscribe to balance & ticks
+                ws.send(JSON.stringify({ balance: 1, subscribe: 1 }));
+                ws.send(JSON.stringify({ ticks: '1HZ100V' }));
+                document.getElementById('status').innerText = "Scanning...";
+            }
+
+            if(data.msg_type === 'balance') {
+                document.getElementById('bal').innerText = data.balance.balance;
+            }
+
+            if(data.msg_type === 'tick') {
+                const price = data.tick.quote;
+                const digit = parseInt(price.toString().slice(-1));
+                const display = document.getElementById('digit');
+                
+                display.innerText = digit;
+                
+                const trigger = parseInt(document.getElementById('t1').value);
+
+                if(digit === trigger) {
+                    display.classList.add('trigger');
+                    if(!isTrading) {
+                        startTrade();
+                    }
+                } else {
+                    display.classList.remove('trigger');
+                }
+            }
+
+            if(data.msg_type === 'proposal') {
+                ws.send(JSON.stringify({ buy: data.proposal.id, price: data.proposal.ask_price }));
+            }
+
+            if(data.msg_type === 'buy') {
+                log(`Order Sent. Waiting for result...`);
+                ws.send(JSON.stringify({ proposal_open_contract: 1, contract_id: data.buy.contract_id }));
+            }
+
+            if(data.msg_type === 'proposal_open_contract') {
+                const contract = data.proposal_open_contract;
+                if(contract.is_sold) {
+                    const profit = parseFloat(contract.profit);
+                    if(contract.status === 'won') log(`WIN +${profit}`, 'l-win');
+                    else log(`LOSS ${profit}`, 'l-loss');
+                    
+                    // Trade complete - unlock successfully
+                    tradeComplete(); 
+                }
+            }
+        };
+        
+        ws.onclose = () => {
+             if(isRunning) setTimeout(() => connect(token), 1000); 
+        };
+    }
+
+    function startTrade() {
+        isTrading = true;
+        document.getElementById('status').innerText = "TRADING...";
+        
+        // 1. Set the Safety Timer (The Watchdog)
+        // If trade isn't finished in 6 seconds, RESET EVERYTHING
+        tradeTimer = setTimeout(() => {
+            if(isTrading) {
+                log("⚠️ Trade timed out. Forcing reset.", "l-reset");
+                forceReset();
+            }
+        }, 6000); 
+
+        // 2. Send the Trade Request
+        const stake = document.getElementById('stake').value;
+        const avoid = document.getElementById('t2').value;
+        const curr = document.getElementById('currency').innerText;
+
+        ws.send(JSON.stringify({
+            proposal: 1,
+            amount: stake,
+            basis: "stake",
+            contract_type: "DIGITDIFF",
+            currency: curr === "---" ? "USD" : curr,
+            duration: 1,
+            duration_unit: "t",
+            symbol: "1HZ100V",
+            barrier: avoid.toString()
+        }));
+    }
+
+    // Called when trade finishes successfully
+    function tradeComplete() {
+        clearTimeout(tradeTimer); // Stop the safety timer
+        isTrading = false; // Unlock
+        document.getElementById('status').innerText = "Scanning...";
+    }
+
+    // Called if error or timeout
+    function forceReset() {
+        clearTimeout(tradeTimer);
+        isTrading = false;
+        document.getElementById('status').innerText = "Resetting...";
+        setTimeout(() => { document.getElementById('status').innerText = "Scanning..."; }, 500);
+    }
+
+</script>
+</body>
+</html>
