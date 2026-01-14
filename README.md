@@ -1,17 +1,3 @@
-
-Conversation opened. 1 unread message.
-
-Skip to content
-Using Gmail with screen readers
-1 of 6,002
-(no subject)
-Inbox
-
-Vincent <vincentomondi449@gmail.com>
-3:00 AM (0 minutes ago)
-to me
-
-
 The DBB Reversal Strategy (3/9 MA + Stochastic)
 1. Indicator Setup
  * 50 EMA: Trend filter (Red line).
