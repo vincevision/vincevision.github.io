@@ -1,0 +1,97 @@
+//@version=5
+indicator("DBB Reversal Strategy (3/9 MA)", shorttitle="DBB Reversal", overlay=true)
+
+// ==========================================
+// 1. INPUTS
+// ==========================================
+grp_bb    = "Bollinger Bands Settings"
+bb_len    = input.int(20, title="BB Period", group=grp_bb)
+bb_dev_out= input.float(2.0, title="Outer Deviation", group=grp_bb)
+bb_dev_in = input.float(1.5, title="Inner Deviation", group=grp_bb)
+
+grp_ma    = "Moving Average Settings"
+ma_fast   = input.int(3, title="Fast MA (Trigger)", group=grp_ma)
+ma_slow   = input.int(9, title="Slow MA", group=grp_ma)
+
+// ==========================================
+// 2. CALCULATIONS
+// ==========================================
+
+// --- Bollinger Bands ---
+bb_basis = ta.sma(close, bb_len)
+bb_dev   = ta.stdev(close, bb_len)
+
+// Outer Bands (2.0 SD)
+dev_outer = bb_dev * bb_dev_out
+upper_outer = bb_basis + dev_outer
+lower_outer = bb_basis - dev_outer
+
+// Inner Bands (1.5 SD)
+dev_inner = bb_dev * bb_dev_in
+upper_inner = bb_basis + dev_inner
+lower_inner = bb_basis - dev_inner
+
+// --- Moving Averages ---
+sma_fast = ta.sma(close, ma_fast)
+sma_slow = ta.sma(close, ma_slow)
+
+// ==========================================
+// 3. LOGIC & CONDITIONS
+// ==========================================
+
+// --- Buy Setup (Bullish) ---
+// 1. Exhaustion: Price touched Lower 2.0 Band (Current or previous candle)
+cond_buy_exhaustion = low <= lower_outer or low[1] <= lower_outer[1]
+
+// 2. The Return: Price closed back above Lower 1.5 Band
+cond_buy_return = close > lower_inner
+
+// 3. The Trigger: 3 MA Crosses Over 9 MA
+cond_buy_trigger = ta.crossover(sma_fast, sma_slow)
+
+// Final Buy Signal
+buy_signal = cond_buy_exhaustion and cond_buy_return and cond_buy_trigger
+
+// --- Sell Setup (Bearish) ---
+// 1. Exhaustion: Price touched Upper 2.0 Band (Current or previous candle)
+cond_sell_exhaustion = high >= upper_outer or high[1] >= upper_outer[1]
+
+// 2. The Return: Price closed back below Upper 1.5 Band
+cond_sell_return = close < upper_inner
+
+// 3. The Trigger: 3 MA Crosses Under 9 MA
+cond_sell_trigger = ta.crossunder(sma_fast, sma_slow)
+
+// Final Sell Signal
+sell_signal = cond_sell_exhaustion and cond_sell_return and cond_sell_trigger
+
+// ==========================================
+// 4. PLOTTING
+// ==========================================
+
+// Plot MAs
+plot(sma_fast, color=color.blue, title="3 SMA", linewidth=1)
+plot(sma_slow, color=color.purple, title="9 SMA", linewidth=2)
+
+// Plot BB Basis (TP1 Target)
+plot(bb_basis, color=color.orange, title="BB Basis (20 SMA)", linewidth=1, style=plot.style_circles)
+
+// Plot Bands
+p_uo = plot(upper_outer, color=color.new(color.red, 50), title="Upper Outer (2.0)")
+p_ui = plot(upper_inner, color=color.new(color.red, 70), title="Upper Inner (1.5)")
+p_li = plot(lower_inner, color=color.new(color.green, 70), title="Lower Inner (1.5)")
+p_lo = plot(lower_outer, color=color.new(color.green, 50), title="Lower Outer (2.0)")
+
+// Fills for visual clarity (The "Zones")
+fill(p_uo, p_ui, color=color.new(color.red, 90), title="Bearish Exhaustion Zone")
+fill(p_lo, p_li, color=color.new(color.green, 90), title="Bullish Exhaustion Zone")
+
+// Plot Signals
+plotshape(buy_signal, title="Buy Signal", location=location.belowbar, color=color.green, style=shape.labelup, text="BUY", textcolor=color.white, size=size.small)
+plotshape(sell_signal, title="Sell Signal", location=location.abovebar, color=color.red, style=shape.labeldown, text="SELL", textcolor=color.white, size=size.small)
+
+// ==========================================
+// 5. ALERTS
+// ==========================================
+alertcondition(buy_signal, title="DBB Buy Alert", message="DBB Reversal BUY Setup Detected")
+alertcondition(sell_signal, title="DBB Sell Alert", message="DBB Reversal SELL Setup Detected")
