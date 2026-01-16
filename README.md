@@ -31,3 +31,13 @@ Use this setup when the market is overextended to the upside.
  * Candle Strength: Look for a strong rejection wick on the 2.0 band. The "meatier" the candle that closes back inside the 1.5 band, the better.
  * Timeframes: This strategy is highly effective on the 15m, 1H, and 4H timeframes.
 
+
+Step by step guide for vincevision strategy
+
+Plot Donchain Channels/bollinger band default, bollinger bands 1.5 deviation, 5 and 3 ma, stochastic rsi and macd
+Price touches lower dochain, forms an engulfing, and moves back into the 1.5 deviation, stochastic crossover/macd tp a few pips before reaching the mid band
+
+
+Plot Donchain Channels/bollinger band default, bollinger bands 1.5 deviation, 5 and 3 ma, stochastic rsi and macd
+Price touches lower dochain, forms an engulfing, and moves back into the 1.5 deviation, stochastic crossover/macd tp a few pips before reaching the mid band
+
