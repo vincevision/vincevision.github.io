@@ -1,0 +1,59 @@
+//@version=5
+indicator("OB/OS + Bollinger TP/SL", overlay=true)
+
+// ───── Inputs ─────
+lenOsc   = input.int(5, "Oscillator Length")
+lenBB    = input.int(20, "Bollinger Length")
+bbMult   = input.float(2.0, "Bollinger Deviation")
+showBars = input.bool(true, "Color Bars")
+
+// ───── Overbought / Oversold Logic (original) ─────
+ys1 = (high + low + close * 2) / 4
+rk3 = ta.ema(ys1, lenOsc)
+rk4 = ta.stdev(ys1, lenOsc)
+rk5 = (ys1 - rk3) * 100 / rk4
+rk6 = ta.ema(rk5, lenOsc)
+
+up   = ta.ema(rk6, lenOsc)
+down = ta.ema(up, lenOsc)
+
+Buy  = ta.crossover(up, down)
+Sell = ta.crossunder(up, down)
+
+// ───── Bollinger Bands ─────
+bbBasis = ta.sma(close, lenBB)
+bbDev   = bbMult * ta.stdev(close, lenBB)
+bbUpper = bbBasis + bbDev
+bbLower = bbBasis - bbDev
+
+plot(bbBasis, "BB Mid (TP)", color=color.orange, linewidth=2)
+plot(bbUpper, "BB Upper (SL Sell)", color=color.red)
+plot(bbLower, "BB Lower (SL Buy)", color=color.green)
+
+// ───── Bar Coloring ─────
+barCol = up > down ? color.new(color.green, 0) : color.new(color.red, 0)
+barcolor(showBars ? barCol : na)
+
+// ───── Signal Markers ─────
+plotshape(Buy, title="Buy", style=shape.triangleup, location=location.belowbar,
+     color=color.green, size=size.small, text="BUY")
+
+plotshape(Sell, title="Sell", style=shape.triangledown, location=location.abovebar,
+     color=color.red, size=size.small, text="SELL")
+
+// ───── TP / SL Lines per Signal ─────
+if Buy
+    line.new(bar_index, bbLower, bar_index + 15, bbLower,
+         color=color.red, style=line.style_dashed, width=2)
+    line.new(bar_index, bbBasis, bar_index + 15, bbBasis,
+         color=color.green, style=line.style_dashed, width=2)
+
+if Sell
+    line.new(bar_index, bbUpper, bar_index + 15, bbUpper,
+         color=color.red, style=line.style_dashed, width=2)
+    line.new(bar_index, bbBasis, bar_index + 15, bbBasis,
+         color=color.green, style=line.style_dashed, width=2)
+
+// ───── Alerts ─────
+alertcondition(Buy, "Buy Alert", "OB/OS Buy → TP: BB Mid | SL: BB Lower")
+alertcondition(Sell, "Sell Alert", "OB/OS Sell → TP: BB Mid | SL: BB Upper")
