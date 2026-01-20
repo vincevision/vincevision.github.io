@@ -1,0 +1,610 @@
+//+------------------------------------------------------------------+
+//|                     OB/OS + Bollinger EA (MT5)                   |
+//|               Based on your TradingView Pine strategy            |
+//+------------------------------------------------------------------+
+#property strict
+#property description "EA implementing OB/OS + Bollinger TP/SL with late entries."
+#property version   "1.01"
+
+#include <Trade\Trade.mqh>
+
+CTrade trade;
+
+//---- Inputs
+input double          InpLots              = 0.10;            // Lot size
+input int             InpSlippagePoints    = 3;               // Max slippage (points)
+input uint            InpMagicNumber       = 123456;          // Magic number
+input ENUM_TIMEFRAMES InpTimeframe         = PERIOD_CURRENT;  // Signal timeframe
+
+input int             InpOscLength         = 5;               // Oscillator Length (lenOsc)
+input int             InpBBLength          = 20;              // Bollinger Length (lenBB)
+input double          InpBBMult            = 2.0;             // Bollinger Deviation (bbMult)
+
+//---- Internal limits for safety
+#define MAX_OSC_LEN 50
+#define MAX_BB_LEN  50
+
+//---- Strategy params (copied from inputs)
+int             lenOsc;
+int             lenBB;
+double          bbMult;
+ENUM_TIMEFRAMES g_timeframe;
+
+//---- Signal state
+int      g_lastSignalDir        = 0; //  1 = BUY, -1 = SELL, 0 = none
+datetime g_lastSignalTime       = 0;
+bool     g_tradeOpenedForSignal = false;
+
+//---- Bar tracking
+datetime g_lastBarTime = 0;
+
+//+------------------------------------------------------------------+
+//| Get current net position direction on this symbol                 |
+//|  1 = BUY, -1 = SELL, 0 = flat                                    |
+//| NOTE: uses net position (no loop, no PositionSelectByIndex)      |
+//+------------------------------------------------------------------+
+int GetPositionDirection()
+{
+   if(!PositionSelect(_Symbol))
+      return 0;
+
+   long type = (long)PositionGetInteger(POSITION_TYPE);
+   if(type == POSITION_TYPE_BUY)  return 1;
+   if(type == POSITION_TYPE_SELL) return -1;
+   return 0;
+}
+
+//+------------------------------------------------------------------+
+//| Close any open net position on this symbol                        |
+//+------------------------------------------------------------------+
+bool CloseCurrentPosition()
+{
+   if(!PositionSelect(_Symbol))
+      return true; // nothing to close
+
+   trade.SetExpertMagicNumber(InpMagicNumber);
+   trade.SetDeviationInPoints(InpSlippagePoints);
+
+   bool res = trade.PositionClose(_Symbol);
+   if(!res)
+      Print("Failed to close position on ", _Symbol, " error: ", _LastError);
+   return res;
+}
+
+//+------------------------------------------------------------------+
+//| Calculate OB/OS + Bollinger for latest bars (closed bars)         |
+//| Returns indicator values for bar 1 and bar 2 (closed bars).       |
+//| bar 1 = last closed bar, bar 2 = previous bar.                    |
+//+------------------------------------------------------------------+
+bool CalculateLatestValues(ENUM_TIMEFRAMES tf,
+                           double &up_bar1,   double &down_bar1,
+                           double &up_bar2,   double &down_bar2,
+                           double &bbBasis1,  double &bbUpper1, double &bbLower1,
+                           double &close_bar1)
+{
+   // Number of bars for stable EMA / BB
+   int barsToUse = lenOsc * 20;
+   if(barsToUse < lenBB * 5) barsToUse = lenBB * 5;
+   if(barsToUse < 300)       barsToUse = 300;
+
+   double high[], low[], close[];
+   int copiedH = CopyHigh (_Symbol, tf, 0, barsToUse, high);
+   int copiedL = CopyLow  (_Symbol, tf, 0, barsToUse, low);
+   int copiedC = CopyClose(_Symbol, tf, 0, barsToUse, close);
+
+   if(copiedH <= 0 || copiedL <= 0 || copiedC <= 0)
+      return false;
+
+   int n = copiedH;
+   if(copiedL < n) n = copiedL;
+   if(copiedC < n) n = copiedC;
+   if(n <= lenOsc + lenBB + 5)
+      return false;
+
+   ArraySetAsSeries(high,  true);
+   ArraySetAsSeries(low,   true);
+   ArraySetAsSeries(close, true);
+
+   double ys1Window[MAX_OSC_LEN];
+   double closeWindow[MAX_BB_LEN];
+   int ysCount = 0;
+   int cCount  = 0;
+
+   double rk3 = 0.0, rk5 = 0.0, rk6 = 0.0, up = 0.0, down = 0.0;
+   bool init_rk3  = false;
+   bool init_rk6  = false;
+   bool init_up   = false;
+   bool init_down = false;
+
+   bool haveBar1  = false;
+   bool haveBar2  = false;
+   bool haveBB1   = false;
+
+   // Process from oldest to newest: i = n-1 .. 0 (0 is latest bar)
+   for(int i = n - 1; i >= 0; i--)
+   {
+      double ys1 = (high[i] + low[i] + 2.0 * close[i]) / 4.0;
+
+      // --- ys1 sliding window for stdev ----
+      if(ysCount < lenOsc)
+         ys1Window[ysCount++] = ys1;
+      else
+      {
+         for(int k = 0; k < lenOsc - 1; k++)
+            ys1Window[k] = ys1Window[k + 1];
+         ys1Window[lenOsc - 1] = ys1;
+      }
+
+      // --- rk3 = EMA(ys1, lenOsc) ---
+      if(!init_rk3)
+      {
+         rk3      = ys1;
+         init_rk3 = true;
+      }
+      else
+      {
+         double alpha = 2.0 / (lenOsc + 1.0);
+         rk3 = alpha * ys1 + (1.0 - alpha) * rk3;
+      }
+
+      if(ysCount == lenOsc)
+      {
+         // rk4 = stdev(ys1, lenOsc)
+         double meanYs = 0.0;
+         for(int j = 0; j < lenOsc; j++)
+            meanYs += ys1Window[j];
+         meanYs /= lenOsc;
+
+         double varYs = 0.0;
+         for(int j = 0; j < lenOsc; j++)
+         {
+            double d = ys1Window[j] - meanYs;
+            varYs += d * d;
+         }
+         varYs /= lenOsc;
+         double rk4 = MathSqrt(varYs);
+         if(rk4 <= 0.0) rk4 = 1e-9;
+
+         rk5 = (ys1 - rk3) * 100.0 / rk4;
+
+         // rk6 = EMA(rk5, lenOsc)
+         double alpha = 2.0 / (lenOsc + 1.0);
+         if(!init_rk6)
+         {
+            rk6      = rk5;
+            init_rk6 = true;
+         }
+         else
+            rk6 = alpha * rk5 + (1.0 - alpha) * rk6;
+
+         // up   = EMA(rk6, lenOsc)
+         if(!init_up)
+         {
+            up      = rk6;
+            init_up = true;
+         }
+         else
+            up = alpha * rk6 + (1.0 - alpha) * up;
+
+         // down = EMA(up, lenOsc)
+         if(!init_down)
+         {
+            down      = up;
+            init_down = true;
+         }
+         else
+            down = alpha * up + (1.0 - alpha) * down;
+      }
+
+      // --- Bollinger windows on close ----
+      if(cCount < lenBB)
+         closeWindow[cCount++] = close[i];
+      else
+      {
+         for(int k = 0; k < lenBB - 1; k++)
+            closeWindow[k] = closeWindow[k + 1];
+         closeWindow[lenBB - 1] = close[i];
+      }
+
+      double basis = 0.0, upper = 0.0, lower = 0.0;
+      bool hasBB = false;
+      if(cCount == lenBB)
+      {
+         double meanC = 0.0;
+         for(int j = 0; j < lenBB; j++)
+            meanC += closeWindow[j];
+         meanC /= lenBB;
+
+         double varC = 0.0;
+         for(int j = 0; j < lenBB; j++)
+         {
+            double d = closeWindow[j] - meanC;
+            varC += d * d;
+         }
+         varC /= lenBB;
+         double dev = MathSqrt(varC);
+
+         basis = meanC;
+         upper = meanC + bbMult * dev;
+         lower = meanC - bbMult * dev;
+         hasBB = true;
+      }
+
+      // Save values for bar 1 and bar 2
+      if(i == 1)
+      {
+         if(init_down)
+         {
+            up_bar1   = up;
+            down_bar1 = down;
+            haveBar1  = true;
+         }
+         if(hasBB)
+         {
+            bbBasis1 = basis;
+            bbUpper1 = upper;
+            bbLower1 = lower;
+            haveBB1  = true;
+         }
+         close_bar1 = close[1];
+      }
+      else if(i == 2)
+      {
+         if(init_down)
+         {
+            up_bar2   = up;
+            down_bar2 = down;
+            haveBar2  = true;
+         }
+      }
+   }
+
+   return (haveBar1 && haveBar2 && haveBB1);
+}
+
+//+------------------------------------------------------------------+
+//| Scan history to find the last crossover (Buy/Sell signal)        |
+//| Used on init so EA can "late enter" an existing signal.          |
+//+------------------------------------------------------------------+
+bool FindLastSignalHistory()
+{
+   int barsToUse = lenOsc * 20;
+   if(barsToUse < lenBB * 5) barsToUse = lenBB * 5;
+   if(barsToUse < 500)       barsToUse = 500;
+
+   double high[], low[], close[];
+   datetime times[];
+
+   int copiedH = CopyHigh (_Symbol, g_timeframe, 0, barsToUse, high);
+   int copiedL = CopyLow  (_Symbol, g_timeframe, 0, barsToUse, low);
+   int copiedC = CopyClose(_Symbol, g_timeframe, 0, barsToUse, close);
+   int copiedT = CopyTime (_Symbol, g_timeframe, 0, barsToUse, times);
+
+   if(copiedH <= 0 || copiedL <= 0 || copiedC <= 0 || copiedT <= 0)
+   {
+      Print("FindLastSignalHistory: not enough bars.");
+      return false;
+   }
+
+   int n = copiedH;
+   if(copiedL < n) n = copiedL;
+   if(copiedC < n) n = copiedC;
+   if(copiedT < n) n = copiedT;
+
+   if(n <= lenOsc + 10)
+   {
+      Print("FindLastSignalHistory: too few bars for oscillator.");
+      return false;
+   }
+
+   ArraySetAsSeries(high,  true);
+   ArraySetAsSeries(low,   true);
+   ArraySetAsSeries(close, true);
+   ArraySetAsSeries(times, true);
+
+   double ys1Window[MAX_OSC_LEN];
+   int ysCount = 0;
+
+   double rk3 = 0.0, rk5 = 0.0, rk6 = 0.0, up = 0.0, down = 0.0;
+   bool init_rk3  = false;
+   bool init_rk6  = false;
+   bool init_up   = false;
+   bool init_down = false;
+
+   int      lastDir  = 0;    // 1 = buy, -1 = sell
+   datetime lastTime = 0;
+
+   double upPrev   = 0.0;
+   double downPrev = 0.0;
+   bool   havePrev = false;
+
+   // Process from oldest to newest: i = n-1 .. 0
+   for(int i = n - 1; i >= 0; i--)
+   {
+      double ys1 = (high[i] + low[i] + 2.0 * close[i]) / 4.0;
+
+      if(ysCount < lenOsc)
+         ys1Window[ysCount++] = ys1;
+      else
+      {
+         for(int k = 0; k < lenOsc - 1; k++)
+            ys1Window[k] = ys1Window[k + 1];
+         ys1Window[lenOsc - 1] = ys1;
+      }
+
+      if(!init_rk3)
+      {
+         rk3      = ys1;
+         init_rk3 = true;
+      }
+      else
+      {
+         double alpha = 2.0 / (lenOsc + 1.0);
+         rk3 = alpha * ys1 + (1.0 - alpha) * rk3;
+      }
+
+      if(ysCount == lenOsc)
+      {
+         double meanYs = 0.0;
+         for(int j = 0; j < lenOsc; j++)
+            meanYs += ys1Window[j];
+         meanYs /= lenOsc;
+
+         double varYs = 0.0;
+         for(int j = 0; j < lenOsc; j++)
+         {
+            double d = ys1Window[j] - meanYs;
+            varYs += d * d;
+         }
+         varYs /= lenOsc;
+         double rk4 = MathSqrt(varYs);
+         if(rk4 <= 0.0) rk4 = 1e-9;
+
+         rk5 = (ys1 - rk3) * 100.0 / rk4;
+
+         double alpha = 2.0 / (lenOsc + 1.0);
+         if(!init_rk6)
+         {
+            rk6      = rk5;
+            init_rk6 = true;
+         }
+         else
+            rk6 = alpha * rk5 + (1.0 - alpha) * rk6;
+
+         if(!init_up)
+         {
+            up      = rk6;
+            init_up = true;
+         }
+         else
+            up = alpha * rk6 + (1.0 - alpha) * up;
+
+         if(!init_down)
+         {
+            down      = up;
+            init_down = true;
+         }
+         else
+            down = alpha * up + (1.0 - alpha) * down;
+      }
+
+      if(init_down)
+      {
+         if(havePrev)
+         {
+            // crossover / crossunder
+            if(upPrev <= downPrev && up > down)
+            {
+               lastDir  = 1;             // Buy
+               lastTime = times[i];
+            }
+            else if(upPrev >= downPrev && up < down)
+            {
+               lastDir  = -1;            // Sell
+               lastTime = times[i];
+            }
+         }
+         upPrev   = up;
+         downPrev = down;
+         havePrev = true;
+      }
+   }
+
+   g_lastSignalDir        = lastDir;
+   g_lastSignalTime       = lastTime;
+   g_tradeOpenedForSignal = false;
+
+   if(lastDir != 0)
+      Print("Last signal in history: ", (lastDir > 0 ? "BUY" : "SELL"), " at ", TimeToString(lastTime, TIME_DATE|TIME_SECONDS));
+   else
+      Print("No previous signal found in history.");
+
+   return true;
+}
+
+//+------------------------------------------------------------------+
+//| Open trade in given direction using BB-based TP/SL               |
+//| dir: 1 = BUY, -1 = SELL                                          |
+//+------------------------------------------------------------------+
+bool OpenTrade(int dir, double bbBasis1, double bbUpper1, double bbLower1)
+{
+   double ask = 0.0, bid = 0.0;
+   if(!SymbolInfoDouble(_Symbol, SYMBOL_ASK, ask)) return false;
+   if(!SymbolInfoDouble(_Symbol, SYMBOL_BID, bid)) return false;
+
+   double price, sl, tp;
+   if(dir > 0) // BUY
+   {
+      price = ask;
+      tp    = bbBasis1; // TP = Bollinger mid
+      sl    = bbLower1; // SL = Bollinger lower
+   }
+   else        // SELL
+   {
+      price = bid;
+      tp    = bbBasis1; // TP = Bollinger mid
+      sl    = bbUpper1; // SL = Bollinger upper
+   }
+
+   int    digits    = (int)_Digits;
+   double point     = _Point;
+   int    stopLevel = (int)SymbolInfoInteger(_Symbol, SYMBOL_TRADE_STOPS_LEVEL);
+   double minStop   = stopLevel * point;
+
+   // Ensure SL/TP are on the correct side and respect minimum distance
+   if(dir > 0) // BUY
+   {
+      if(sl >= price) sl = price - 10 * point;
+      if(tp <= price) tp = price + 10 * point;
+      if(price - sl < minStop) sl = price - minStop;
+      if(tp - price < minStop) tp = price + minStop;
+   }
+   else        // SELL
+   {
+      if(sl <= price) sl = price + 10 * point;
+      if(tp >= price) tp = price - 10 * point;
+      if(sl - price < minStop) sl = price + minStop;
+      if(price - tp < minStop) tp = price - minStop;
+   }
+
+   sl = NormalizeDouble(sl, digits);
+   tp = NormalizeDouble(tp, digits);
+
+   trade.SetExpertMagicNumber(InpMagicNumber);
+   trade.SetDeviationInPoints(InpSlippagePoints);
+
+   bool result = false;
+   if(dir > 0)
+      result = trade.Buy(InpLots, _Symbol, 0.0, sl, tp, "OB/OS+BB BUY");
+   else
+      result = trade.Sell(InpLots, _Symbol, 0.0, sl, tp, "OB/OS+BB SELL");
+
+   if(!result)
+      Print("Trade open failed, dir=", dir, " error=", _LastError);
+   else
+      Print("Opened ", (dir > 0 ? "BUY" : "SELL"), " SL=", DoubleToString(sl, digits),
+            " TP=", DoubleToString(tp, digits));
+
+   return result;
+}
+
+//+------------------------------------------------------------------+
+//| Called on each new bar of selected timeframe                     |
+//+------------------------------------------------------------------+
+void OnNewBar()
+{
+   double up1, down1, up2, down2;
+   double bbBasis1, bbUpper1, bbLower1;
+   double close1;
+
+   if(!CalculateLatestValues(g_timeframe, up1, down1, up2, down2,
+                             bbBasis1, bbUpper1, bbLower1, close1))
+   {
+      Print("Failed to calculate indicators (not enough data?).");
+      return;
+   }
+
+   // Determine new signals on last closed bar (bar 1)
+   bool newBuySignal  = (up1 > down1 && up2 <= down2);
+   bool newSellSignal = (up1 < down1 && up2 >= down2);
+
+   int positionDir = GetPositionDirection();
+
+   // If new signal appears, update global signal direction.
+   // Optionally close opposite trade and prepare for new entry.
+   if(newBuySignal)
+   {
+      Print("New BUY signal detected.");
+      if(positionDir < 0) // existing SELL
+         CloseCurrentPosition();
+
+      g_lastSignalDir        = 1;
+      g_lastSignalTime       = iTime(_Symbol, g_timeframe, 1);
+      g_tradeOpenedForSignal = false;
+   }
+   else if(newSellSignal)
+   {
+      Print("New SELL signal detected.");
+      if(positionDir > 0) // existing BUY
+         CloseCurrentPosition();
+
+      g_lastSignalDir        = -1;
+      g_lastSignalTime       = iTime(_Symbol, g_timeframe, 1);
+      g_tradeOpenedForSignal = false;
+   }
+
+   // Active direction (current OB/OS regime on bar 1)
+   int activeDir = 0;
+   if(up1 > down1)      activeDir = 1;
+   else if(up1 < down1) activeDir = -1;
+
+   // Late-entry logic:
+   // If there is an active signal (g_lastSignalDir) and no trade has yet been opened for it,
+   // and no current position, then open a trade even if we are several bars late,
+   // as long as the OB/OS direction is still the same.
+   if(positionDir == 0 &&
+      g_lastSignalDir != 0 &&
+      !g_tradeOpenedForSignal &&
+      activeDir == g_lastSignalDir)
+   {
+      if(OpenTrade(g_lastSignalDir, bbBasis1, bbUpper1, bbLower1))
+         g_tradeOpenedForSignal = true;
+   }
+}
+
+//+------------------------------------------------------------------+
+//| Expert initialization function                                   |
+//+------------------------------------------------------------------+
+int OnInit()
+{
+   if(InpOscLength < 2 || InpOscLength > MAX_OSC_LEN)
+   {
+      Print("Invalid Oscillator Length. Must be between 2 and ", MAX_OSC_LEN);
+      return(INIT_PARAMETERS_INCORRECT);
+   }
+   if(InpBBLength < 2 || InpBBLength > MAX_BB_LEN)
+   {
+      Print("Invalid Bollinger Length. Must be between 2 and ", MAX_BB_LEN);
+      return(INIT_PARAMETERS_INCORRECT);
+   }
+
+   lenOsc = InpOscLength;
+   lenBB  = InpBBLength;
+   bbMult = InpBBMult;
+
+   g_timeframe = (InpTimeframe == PERIOD_CURRENT ? (ENUM_TIMEFRAMES)_Period : InpTimeframe);
+
+   trade.SetExpertMagicNumber(InpMagicNumber);
+   trade.SetDeviationInPoints(InpSlippagePoints);
+
+   // Pre-scan history for the last signal, so we can late-enter it if still valid
+   FindLastSignalHistory();
+
+   return(INIT_SUCCEEDED);
+}
+
+//+------------------------------------------------------------------+
+//| Expert deinitialization function                                 |
+//+------------------------------------------------------------------+
+void OnDeinit(const int reason)
+{
+   // nothing special
+}
+
+//+------------------------------------------------------------------+
+//| Expert tick function                                             |
+//+------------------------------------------------------------------+
+void OnTick()
+{
+   // Run logic once per new bar of chosen timeframe
+   datetime barTime = iTime(_Symbol, g_timeframe, 0);
+   if(barTime == 0)
+      return;
+
+   if(barTime == g_lastBarTime)
+      return;
+
+   g_lastBarTime = barTime;
+   OnNewBar();
+}
+//+------------------------------------------------------------------+
