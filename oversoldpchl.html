@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Deriv OB/OS + Bollinger + HTF Candle TP</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0b1622;
+      color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #111825;
+      padding: 10px 20px;
+      border-bottom: 1px solid #222c3a;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 20px;
+      flex: 1 1 auto;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      font-size: 14px;
+    }
+    select {
+      background: #1c2838;
+      color: #f0f0f0;
+      border: 1px solid #2b3a4c;
+      padding: 4px 6px;
+      border-radius: 4px;
+    }
+    #status {
+      font-size: 12px;
+      color: #9fb3c8;
+    }
+    main {
+      padding: 15px 20px 30px;
+    }
+    h2 {
+      margin-top: 20px;
+      font-size: 16px;
+      border-bottom: 1px solid #222c3a;
+      padding-bottom: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    th, td {
+      padding: 4px 6px;
+      border-bottom: 1px solid #1a2433;
+      text-align: left;
+      white-space: nowrap;
+    }
+    th {
+      background: #111825;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    tbody tr:nth-child(even) {
+      background: #101823;
+    }
+    .buy {
+      color: #5cf06c;
+      font-weight: bold;
+    }
+    .sell {
+      color: #ff6370;
+      font-weight: bold;
+    }
+    .status-open {
+      color: #ffd86b;
+      font-weight: bold;
+    }
+    .status-tp {
+      color: #5cf06c;
+      font-weight: bold;
+    }
+    .status-sl {
+      color: #ff6370;
+      font-weight: bold;
+    }
+    .status-closed {
+      color: #9fb3c8;
+    }
+    .small {
+      font-size: 11px;
+      color: #9fb3c8;
+    }
+    .flex-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 15px;
+      flex-wrap: wrap;
+    }
+    .panel {
+      flex: 1 1 48%;
+      min-width: 320px;
+      max-height: 400px;
+      overflow: auto;
+      border: 1px solid #222c3a;
+      border-radius: 4px;
+      background: #0f1926;
+      padding: 8px;
+    }
+    .note {
+      font-size: 11px;
+      color: #9fb3c8;
+      margin-top: 5px;
+    }
+    label.inline {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Deriv Signals – OB/OS + BB + HTF Candle TP</h1>
+  <div class="controls">
+    <label for="timeframe-select">Signal TF:</label>
+    <select id="timeframe-select"></select>
+
+    <label for="anchor-timeframe-select">Anchor TF:</label>
+    <select id="anchor-timeframe-select"></select>
+
+    <label class="inline">
+      <input type="checkbox" id="trend-filter-checkbox" checked />
+      200 MA Trend Filter
+    </label>
+
+    <span id="symbol-count" class="small"></span>
+    <span id="status"></span>
+  </div>
+</header>
+
+<main>
+  <div class="note">
+    Logic: OB/OS + Bollinger TP/SL on <b>Signal TF</b>, with 200 MA trend filter.  
+    Take-profit is the <b>previous candle high/low</b> from the <b>Anchor TF</b>:
+    BUY → TP = previous Anchor candle HIGH; SELL → TP = previous Anchor candle LOW.  
+    SL: Bollinger Lower (BUY) / Upper (SELL) on Signal TF.  
+    Signals are virtual only (no auto-trading). Educational use only.
+  </div>
+
+  <div class="flex-row">
+    <section class="panel">
+      <h2>Open Trades (per last signal, per market)</h2>
+      <table>
+        <thead>
+        <tr>
+          <th>Symbol</th>
+          <th>Sig TF</th>
+          <th>Anc TF</th>
+          <th>Dir</th>
+          <th>Entry</th>
+          <th>TP (Anchor H/L)</th>
+          <th>SL (BB Band)</th>
+          <th>Last Price</th>
+          <th>Opened</th>
+          <th>Status</th>
+        </tr>
+        </thead>
+        <tbody id="open-trades-body"></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>Recent Signals</h2>
+      <table>
+        <thead>
+        <tr>
+          <th>Time</th>
+          <th>Symbol</th>
+          <th>Sig TF</th>
+          <th>Anc TF</th>
+          <th>Type</th>
+          <th>Price</th>
+          <th>TP</th>
+          <th>SL</th>
+        </tr>
+        </thead>
+        <tbody id="signals-body"></tbody>
+      </table>
+    </section>
+  </div>
+</main>
+
+<script>
+  // ================== CONFIG ==================
+  const APP_ID = 1089;
+  const WS_URL = `wss://ws.derivws.com/websockets/v3?app_id=${APP_ID}`;
+
+  // Strategy parameters from Pine Script
+  const lenOsc = 5;     // Oscillator Length
+  const lenBB  = 20;    // Bollinger Length
+  const bbMult = 2.0;   // Bollinger deviation multiplier
+
+  const MA_LENGTH = 200; // 200-period MA (SMA) on Signal TF
+
+  // Deriv-supported candle timeframes (granularity in seconds)
+  const TIMEFRAMES = [
+    { value: 60,    label: '1m'  },
+    { value: 120,   label: '2m'  },
+    { value: 300,   label: '5m'  },
+    { value: 600,   label: '10m' },
+    { value: 900,   label: '15m' },
+    { value: 1800,  label: '30m' },
+    { value: 3600,  label: '1h'  },
+    { value: 7200,  label: '2h'  },
+    { value: 14400, label: '4h'  },
+    { value: 28800, label: '8h'  },
+    { value: 86400, label: '1d'  }
+  ];
+
+  let currentGranularity = 60;   // Signal TF (default 1m)
+  let anchorGranularity  = 3600; // Anchor TF (default 1h)
+  let useTrendFilter     = true; // 200 MA filter on Signal TF
+
+  // ================== STATE ==================
+  let ws = null;
+  let activeSymbols = [];
+
+  // subscriptionId -> { symbol, granularity, kind: 'LTF'|'HTF', candles[], state? }
+  let subscriptions = {};
+
+  // req_id -> { symbol, granularity, kind }
+  let reqMeta = {};
+  let nextReqId = 1;
+
+  // Per-symbol Anchor TF levels: previous closed candle high/low
+  // symbol -> { high, low, time }
+  let symbolAnchorLevels = {};
+
+  // Global recent signals (Signal TF)
+  let recentSignals = [];
+
+  // ================== UTIL FUNCTIONS ==================
+  function updateStatus(text) {
+    const el = document.getElementById('status');
+    if (el) el.textContent = `Status: ${text}`;
+  }
+
+  function setSymbolCount() {
+    const el = document.getElementById('symbol-count');
+    if (el) el.textContent = `Scanning markets: ${activeSymbols.length}`;
+  }
+
+  function formatTime(epoch) {
+    if (!epoch) return '';
+    const d = new Date(epoch * 1000);
+    return d.toISOString().replace('T', ' ').substring(0, 19);
+  }
+
+  function findTimeframeLabel(value) {
+    const tf = TIMEFRAMES.find(t => t.value === value);
+    return tf ? tf.label : String(value);
+  }
+
+  function emaUpdate(prevEma, value, length) {
+    const alpha = 2 / (length + 1);
+    if (prevEma == null) return value;
+    return alpha * value + (1 - alpha) * prevEma;
+  }
+
+  function mean(values) {
+    if (!values.length) return 0;
+    return values.reduce((a, b) => a + b, 0) / values.length;
+  }
+
+  function stdDev(values, meanValue) {
+    if (values.length < 2) return 0;
+    const m = (meanValue !== undefined) ? meanValue : mean(values);
+    const variance = values.reduce((acc, v) => acc + (v - m) * (v - m), 0) / values.length;
+    return Math.sqrt(variance);
+  }
+
+  function createEmptySignalState() {
+    return {
+      // Oscillator
+      ys1Values: [],
+      rk3: null,
+      rk4: null,
+      rk5: null,
+      rk6: null,
+      up: null,
+      down: null,
+      prevUp: null,
+      prevDown: null,
+      lastSignal: null,
+      // Bollinger
+      closeValues: [],
+      // 200 MA
+      closeValues200: [],
+      ma200: null,
+      // Trade tracking
+      openTrade: null
+    };
+  }
+
+  // ================== RENDERING ==================
+  function renderOpenTrades() {
+    const tbody = document.getElementById('open-trades-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    const rows = [];
+    for (const subId in subscriptions) {
+      const sub = subscriptions[subId];
+      if (sub.kind !== 'LTF') continue;
+      const st = sub.state;
+      if (!st) continue;
+      const t = st.openTrade;
+      if (!t || t.status !== 'OPEN') continue;
+      rows.push({
+        symbol: sub.symbol,
+        granularity: sub.granularity,
+        trade: t
+      });
+    }
+
+    for (const row of rows) {
+      const tr = document.createElement('tr');
+      const t = row.trade;
+      tr.innerHTML = `
+        <td>${row.symbol}</td>
+        <td>${findTimeframeLabel(row.granularity)}</td>
+        <td>${findTimeframeLabel(anchorGranularity)}</td>
+        <td class="${t.direction === 'BUY' ? 'buy' : 'sell'}">${t.direction}</td>
+        <td>${t.entry.toFixed(5)}</td>
+        <td>${t.tp != null ? t.tp.toFixed(5) : ''}</td>
+        <td>${t.sl != null ? t.sl.toFixed(5) : ''}</td>
+        <td>${t.lastPrice != null ? t.lastPrice.toFixed(5) : ''}</td>
+        <td>${formatTime(t.openTime)}</td>
+        <td class="status-open">${t.status}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  function renderRecentSignals() {
+    const tbody = document.getElementById('signals-body');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    for (const s of recentSignals) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${formatTime(s.time)}</td>
+        <td>${s.symbol}</td>
+        <td>${findTimeframeLabel(s.granularity)}</td>
+        <td>${findTimeframeLabel(anchorGranularity)}</td>
+        <td class="${s.direction === 'BUY' ? 'buy' : 'sell'}">${s.direction}</td>
+        <td>${s.price.toFixed(5)}</td>
+        <td>${s.tp != null ? s.tp.toFixed(5) : ''}</td>
+        <td>${s.sl != null ? s.sl.toFixed(5) : ''}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ================== STRATEGY LOGIC (Signal TF) ==================
+  function handleSignalCandle(sub, candle) {
+    const st = sub.state;
+
+    // --- Overbought / Oversold + EMA chain ---
+    const ys1 = (candle.high + candle.low + candle.close * 2) / 4;
+    st.ys1Values.push(ys1);
+    if (st.ys1Values.length > lenOsc) st.ys1Values.shift();
+
+    const prevUp = st.up;
+    const prevDown = st.down;
+
+    st.rk3 = emaUpdate(st.rk3, ys1, lenOsc);
+
+    if (st.ys1Values.length >= lenOsc) {
+      const ysMean = mean(st.ys1Values);
+      st.rk4 = stdDev(st.ys1Values, ysMean);
+      const rk4NonZero = (st.rk4 !== 0) ? st.rk4 : 1e-9;
+      st.rk5 = (ys1 - st.rk3) * 100 / rk4NonZero;
+      st.rk6 = emaUpdate(st.rk6, st.rk5, lenOsc);
+      st.up   = emaUpdate(st.up,   st.rk6, lenOsc);
+      st.down = emaUpdate(st.down, st.up,  lenOsc);
+    }
+
+    // --- Bollinger Bands (lenBB) ---
+    st.closeValues.push(candle.close);
+    if (st.closeValues.length > lenBB) st.closeValues.shift();
+
+    let bbBasis = null, bbUpper = null, bbLower = null;
+    if (st.closeValues.length >= lenBB) {
+      const closeMean = mean(st.closeValues);
+      const closeStd  = stdDev(st.closeValues, closeMean);
+      bbBasis = closeMean;
+      bbUpper = closeMean + bbMult * closeStd;
+      bbLower = closeMean - bbMult * closeStd;
+    }
+
+    // --- 200-period MA (trend filter) ---
+    st.closeValues200.push(candle.close);
+    if (st.closeValues200.length > MA_LENGTH) st.closeValues200.shift();
+    if (st.closeValues200.length >= MA_LENGTH) {
+      st.ma200 = mean(st.closeValues200); // SMA(200)
+    }
+
+    // --- Detect buy/sell signal (crossover of up & down) ---
+    let buy = false, sell = false;
+    if (prevUp != null && prevDown != null && st.up != null && st.down != null) {
+      buy  = (prevUp <= prevDown) && (st.up > st.down);   // crossover
+      sell = (prevUp >= prevDown) && (st.up < st.down);   // crossunder
+    }
+
+    // --- Trend filter based on 200 MA ---
+    let trendDir = 0;
+    if (st.ma200 != null) {
+      if (candle.close > st.ma200) trendDir = 1;       // uptrend
+      else if (candle.close < st.ma200) trendDir = -1; // downtrend
+    }
+
+    const filteredBuy  = buy  && (!useTrendFilter || trendDir === 1);
+    const filteredSell = sell && (!useTrendFilter || trendDir === -1);
+
+    // Need Bollinger AND Anchor TF previous candle levels
+    const anchor = symbolAnchorLevels[sub.symbol];
+    const haveAnchor = !!(anchor && anchor.high != null && anchor.low != null);
+
+    // Create signal & virtual trade if all conditions align
+    if (bbBasis != null && haveAnchor && (filteredBuy || filteredSell)) {
+      const direction = filteredBuy ? 'BUY' : 'SELL';
+
+      // Close previous virtual trade if any
+      if (st.openTrade && st.openTrade.status === 'OPEN') {
+        st.openTrade.status = 'CLOSED_BY_SIGNAL';
+      }
+
+      // TP from Anchor TF previous candle high/low
+      const tp = direction === 'BUY' ? anchor.high : anchor.low;
+
+      // SL from Bollinger bands on Signal TF
+      const sl = direction === 'BUY' ? bbLower : bbUpper;
+
+      const trade = {
+        symbol: sub.symbol,
+        direction,
+        granularity: sub.granularity,
+        entry: candle.close,
+        tp,
+        sl,
+        openTime: candle.time,
+        lastPrice: candle.close,
+        status: 'OPEN'
+      };
+      st.openTrade = trade;
+      st.lastSignal = direction;
+
+      // Add to recent signals list
+      recentSignals.unshift({
+        time: candle.time,
+        symbol: sub.symbol,
+        granularity: sub.granularity,
+        direction,
+        price: candle.close,
+        tp,
+        sl
+      });
+      if (recentSignals.length > 100) recentSignals.pop();
+
+      renderRecentSignals();
+      renderOpenTrades();
+    }
+
+    // Update open trade status with latest candle (TP/SL reached?)
+    if (st.openTrade && st.openTrade.status === 'OPEN') {
+      const t = st.openTrade;
+      t.lastPrice = candle.close;
+
+      if (t.direction === 'BUY') {
+        if (candle.low <= t.sl) {
+          t.status = 'SL_HIT';
+          t.closeTime = candle.time;
+        } else if (candle.high >= t.tp) {
+          t.status = 'TP_HIT';
+          t.closeTime = candle.time;
+        }
+      } else if (t.direction === 'SELL') {
+        if (candle.high >= t.sl) {
+          t.status = 'SL_HIT';
+          t.closeTime = candle.time;
+        } else if (candle.low <= t.tp) {
+          t.status = 'TP_HIT';
+          t.closeTime = candle.time;
+        }
+      }
+
+      renderOpenTrades();
+    }
+
+    // Update previous up/down for next crossover detection
+    st.prevUp = st.up;
+    st.prevDown = st.down;
+  }
+
+  // ================== ANCHOR TF LOGIC ==================
+  // Track previous closed candle (HTF) high/low per symbol
+  function handleAnchorCandle(sub) {
+    const candles = sub.candles;
+    if (candles.length < 2) return;
+    const prev = candles[candles.length - 2]; // previous closed candle
+    symbolAnchorLevels[sub.symbol] = {
+      high: prev.high,
+      low: prev.low,
+      time: prev.time
+    };
+  }
+
+  // ================== WEBSOCKET HANDLERS ==================
+  function connectWS() {
+    ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => {
+      updateStatus('Connected');
+      requestActiveSymbols();
+    };
+
+    ws.onclose = () => {
+      updateStatus('Disconnected, reconnecting...');
+      setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = () => {
+      updateStatus('WebSocket error');
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.msg_type === 'active_symbols') {
+        onActiveSymbols(data);
+      } else if (data.msg_type === 'candles') {
+        onCandles(data);
+      } else if (data.msg_type === 'error') {
+        console.error('Deriv API error:', data.error);
+        updateStatus(`API error: ${data.error.code} – ${data.error.message}`);
+      }
+    };
+  }
+
+  function requestActiveSymbols() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    updateStatus('Requesting active symbols...');
+    ws.send(JSON.stringify({
+      active_symbols: 'brief',
+      product_type: 'basic'
+    }));
+  }
+
+  function onActiveSymbols(data) {
+    activeSymbols = data.active_symbols || [];
+    setSymbolCount();
+    if (!activeSymbols.length) {
+      updateStatus('No active symbols.');
+      return;
+    }
+    updateStatus('Subscribing to Signal & Anchor TF candles...');
+    subscribeAllSymbols();
+  }
+
+  function clearSubscriptions() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    for (const subId in subscriptions) {
+      ws.send(JSON.stringify({ forget: subId }));
+    }
+    subscriptions = {};
+    reqMeta = {};
+    symbolAnchorLevels = {};
+  }
+
+  function subscribeAllSymbols() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    clearSubscriptions();
+
+    recentSignals = [];
+    renderRecentSignals();
+    renderOpenTrades();
+
+    // You can limit symbols if you hit rate limits:
+    // const symbolsToUse = activeSymbols.slice(0, 40);
+    const symbolsToUse = activeSymbols;
+
+    for (const sym of symbolsToUse) {
+      // Signal TF (LTF)
+      subscribeSymbol(sym.symbol, currentGranularity, 'LTF');
+      // Anchor TF (HTF)
+      subscribeSymbol(sym.symbol, anchorGranularity, 'HTF');
+    }
+
+    updateStatus(
+      `Scanning ${symbolsToUse.length} markets | ` +
+      `Signal TF: ${findTimeframeLabel(currentGranularity)} | ` +
+      `Anchor TF: ${findTimeframeLabel(anchorGranularity)}`
+    );
+  }
+
+  function subscribeSymbol(symbol, granularity, kind) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    const req_id = nextReqId++;
+    reqMeta[req_id] = { symbol, granularity, kind };
+
+    const req = {
+      ticks_history: symbol,
+      style: 'candles',
+      granularity: granularity,
+      // Need enough candles for MA(200) on Signal TF; using same count for both.
+      count: 250,
+      end: 'latest',
+      subscribe: 1,
+      req_id
+    };
+
+    ws.send(JSON.stringify(req));
+  }
+
+  function onCandles(data) {
+    if (!data.candles || !data.subscription) return;
+
+    const subId = data.subscription.id;
+    let sub = subscriptions[subId];
+
+    // New subscription mapping
+    if (!sub) {
+      const reqId = data.req_id ?? (data.echo_req && data.echo_req.req_id);
+      const meta = reqId && reqMeta[reqId];
+
+      let symbol = meta?.symbol || (data.echo_req && (data.echo_req.ticks_history || data.echo_req.symbol));
+      let gran   = meta?.granularity || (data.echo_req && data.echo_req.granularity);
+      let kind   = meta?.kind || 'LTF';
+
+      if (!symbol || !gran) return;
+
+      sub = {
+        symbol,
+        granularity: gran,
+        kind,
+        candles: [],
+        state: kind === 'LTF' ? createEmptySignalState() : null
+      };
+      subscriptions[subId] = sub;
+    }
+
+    const arr = Array.isArray(data.candles) ? data.candles : [data.candles];
+
+    for (const c of arr) {
+      const candle = {
+        time:  c.epoch || c.open_time,
+        open:  parseFloat(c.open),
+        high:  parseFloat(c.high),
+        low:   parseFloat(c.low),
+        close: parseFloat(c.close)
+      };
+      if (!candle.time || isNaN(candle.close)) continue;
+
+      const candles = sub.candles;
+      const last = candles[candles.length - 1];
+      if (last && last.time === candle.time) {
+        // Update in-place (still same candle)
+        candles[candles.length - 1] = candle;
+      } else {
+        candles.push(candle);
+      }
+
+      if (sub.kind === 'LTF') {
+        handleSignalCandle(sub, candle);
+      } else if (sub.kind === 'HTF') {
+        handleAnchorCandle(sub);
+      }
+    }
+  }
+
+  // ================== UI / TIMEFRAME ==================
+  function initSignalTimeframeSelect() {
+    const select = document.getElementById('timeframe-select');
+    if (!select) return;
+    select.innerHTML = '';
+
+    for (const tf of TIMEFRAMES) {
+      const opt = document.createElement('option');
+      opt.value = tf.value;
+      opt.textContent = tf.label;
+      if (tf.value === currentGranularity) opt.selected = true;
+      select.appendChild(opt);
+    }
+
+    select.addEventListener('change', (e) => {
+      const val = parseInt(e.target.value, 10);
+      if (!isNaN(val)) {
+        currentGranularity = val;
+        updateStatus(`Changing Signal TF to ${findTimeframeLabel(val)} and resubscribing...`);
+        subscribeAllSymbols();
+      }
+    });
+  }
+
+  function initAnchorTimeframeSelect() {
+    const select = document.getElementById('anchor-timeframe-select');
+    if (!select) return;
+    select.innerHTML = '';
+
+    for (const tf of TIMEFRAMES) {
+      const opt = document.createElement('option');
+      opt.value = tf.value;
+      opt.textContent = tf.label;
+      if (tf.value === anchorGranularity) opt.selected = true;
+      select.appendChild(opt);
+    }
+
+    select.addEventListener('change', (e) => {
+      const val = parseInt(e.target.value, 10);
+      if (!isNaN(val)) {
+        anchorGranularity = val;
+        updateStatus(`Changing Anchor TF to ${findTimeframeLabel(val)} and resubscribing...`);
+        subscribeAllSymbols();
+      }
+    });
+  }
+
+  function initTrendFilterCheckbox() {
+    const cb = document.getElementById('trend-filter-checkbox');
+    if (!cb) return;
+    useTrendFilter = cb.checked;
+    cb.addEventListener('change', (e) => {
+      useTrendFilter = e.target.checked;
+      updateStatus(
+        useTrendFilter
+          ? '200 MA trend filter ON'
+          : '200 MA trend filter OFF'
+      );
+    });
+  }
+
+  // ================== INIT ==================
+  document.addEventListener('DOMContentLoaded', () => {
+    initSignalTimeframeSelect();
+    initAnchorTimeframeSelect();
+    initTrendFilterCheckbox();
+    connectWS();
+  });
+</script>
+</body>
+</html>
