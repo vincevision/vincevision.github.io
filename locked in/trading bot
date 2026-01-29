@@ -1,0 +1,87 @@
+//+------------------------------------------------------------------+
+//|                                           JujuieScalper_Pro.mq5 |
+//|                                  Copyright 2026, AI Collaborator |
+//+------------------------------------------------------------------+
+#property strict
+#include <Trade\Trade.mqh>
+
+// --- Input Parameters ---
+input group "EMA Settings"
+input int      FastEMAPeriod = 9;          
+input int      SlowEMAPeriod = 21;         
+
+input group "Money Management"
+input double   RiskPercent   = 1.0;        // Risk % of Balance per trade
+input int      StopLossPips  = 150;        // Stop Loss in Pips
+
+input group "Partial Take Profit"
+input int      TP1_Pips      = 150;        // Target 1 (Close 50%)
+input int      TP2_Pips      = 400;        // Target 2 (Close remainder)
+input bool     UseBreakEven  = true;       // Move SL to Entry after TP1
+
+// --- Global Variables ---
+int            handleFastEMA, handleSlowEMA;
+CTrade         trade;
+bool           TP1_Hit = false;
+
+int OnInit() {
+    handleFastEMA = iMA(_Symbol, _Period, FastEMAPeriod, 0, MODE_EMA, PRICE_CLOSE);
+    handleSlowEMA = iMA(_Symbol, _Period, SlowEMAPeriod, 0, MODE_EMA, PRICE_CLOSE);
+    return(INIT_SUCCEEDED);
+}
+
+// Function to calculate Lot Size based on Risk %
+double CalculateLotSize(double slPips) {
+    double balance = AccountInfoDouble(ACCOUNT_BALANCE);
+    double tickValue = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+    double tickSize = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+    double lotStep = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+    
+    if (slPips <= 0) return 0.1;
+    double riskAmount = balance * (RiskPercent / 100.0);
+    double lotSize = riskAmount / (slPips * (tickValue / tickSize) * _Point);
+    
+    return MathFloor(lotSize / lotStep) * lotStep;
+}
+
+void OnTick() {
+    // 1. Manage Existing Position (Partials & Break Even)
+    if (PositionSelect(_Symbol)) {
+        double entryPrice = PositionGetDouble(POSITION_PRICE_OPEN);
+        double currentPrice = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? SymbolInfoDouble(_Symbol, SYMBOL_BID) : SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+        double volume = PositionGetDouble(POSITION_VOLUME);
+        
+        // Check for TP1
+        if (volume > CalculateLotSize(StopLossPips) / 2.1) { // Check if we haven't taken partials yet
+            bool pProfit = (PositionGetInteger(POSITION_TYPE) == POSITION_TYPE_BUY) ? (currentPrice >= entryPrice + TP1_Pips * _Point) : (currentPrice <= entryPrice - TP1_Pips * _Point);
+            
+            if (pProfit) {
+                trade.PositionClosePartial(PositionGetInteger(POSITION_TICKET), volume / 2.0);
+                if (UseBreakEven) trade.PositionModify(PositionGetInteger(POSITION_TICKET), entryPrice, 0);
+                Print("TP1 Hit: Closed 50% and moved to Break Even.");
+            }
+        }
+        return; 
+    }
+
+    // 2. New Entry Logic
+    double fast[], slow[];
+    ArraySetAsSeries(fast, true); ArraySetAsSeries(slow, true);
+    if(CopyBuffer(handleFastEMA, 0, 0, 3, fast) < 2 || CopyBuffer(handleSlowEMA, 0, 0, 3, slow) < 2) return;
+
+    bool buySignal = fast[1] > slow[1] && fast[2] <= slow[2];
+    bool sellSignal = fast[1] < slow[1] && fast[2] >= slow[2];
+
+    double lots = CalculateLotSize(StopLossPips);
+    if (lots <= 0) return;
+
+    if (buySignal) {
+        double sl = SymbolInfoDouble(_Symbol, SYMBOL_ASK) - StopLossPips * _Point;
+        double tp = SymbolInfoDouble(_Symbol, SYMBOL_ASK) + TP2_Pips * _Point;
+        trade.Buy(lots, _Symbol, 0, sl, tp, "Jujuie Pro Long");
+    } else if (sellSignal) {
+        double sl = SymbolInfoDouble(_Symbol, SYMBOL_BID) + StopLossPips * _Point;
+        double tp = SymbolInfoDouble(_Symbol, SYMBOL_BID) - TP2_Pips * _Point;
+        trade.Sell(lots, _Symbol, 0, sl, tp, "Jujuie Pro Short");
+    }
+}
