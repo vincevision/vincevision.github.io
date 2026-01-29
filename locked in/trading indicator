@@ -1,0 +1,47 @@
+//@version=5
+strategy("Jujuie ScalperX with SL/TP", overlay=true, initial_capital=1000, currency=currency.USD)
+
+// --- Input Parameters ---
+fastLength = input.int(9, title="Fast EMA Length")
+slowLength = input.int(21, title="Slow EMA Length")
+
+// Risk Management Inputs (Adjust these based on asset volatility)
+tpPercent = input.float(0.5, title="Take Profit (%)", step=0.1) / 100
+slPercent = input.float(0.25, title="Stop Loss (%)", step=0.1) / 100
+
+// --- Calculations ---
+fastEMA = ta.ema(close, fastLength)
+slowEMA = ta.ema(close, slowLength)
+
+// --- Signal Logic ---
+longCondition  = ta.crossover(fastEMA, slowEMA)
+shortCondition = ta.crossunder(fastEMA, slowEMA)
+
+// --- Strategy Execution ---
+// Calculate Price Levels for SL/TP
+var float longExitPrice = na
+var float longStopPrice = na
+var float shortExitPrice = na
+var float shortStopPrice = na
+
+// Long Entry
+if (longCondition)
+    longExitPrice := close * (1 + tpPercent)
+    longStopPrice := close * (1 - slPercent)
+    strategy.entry("Long", strategy.long, comment="Entry")
+    strategy.exit("Exit Long", "Long", limit=longExitPrice, stop=longStopPrice, comment_loss="SL", comment_profit="TP")
+
+// Short Entry
+if (shortCondition)
+    shortExitPrice := close * (1 - tpPercent)
+    shortStopPrice := close * (1 + slPercent)
+    strategy.entry("Short", strategy.short, comment="Entry")
+    strategy.exit("Exit Short", "Short", limit=shortExitPrice, stop=shortStopPrice, comment_loss="SL", comment_profit="TP")
+
+// --- Plotting ---
+plot(fastEMA, color=color.blue, title="Fast EMA (9)")
+plot(slowEMA, color=color.orange, title="Slow EMA (21)")
+
+// Visual signal markers
+plotshape(longCondition, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, title="Long Signal")
+plotshape(shortCondition, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small, title="Short Signal")
