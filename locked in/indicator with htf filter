@@ -1,0 +1,33 @@
+//@version=5
+indicator("EMA 9/21 with HTF Filter", overlay=true)
+
+// Inputs
+htf = input.timeframe("15", "Higher Timeframe")
+fastLen = 9
+slowLen = 21
+
+// LTF EMAs (Current Chart)
+fastEMA = ta.ema(close, fastLen)
+slowEMA = ta.ema(close, slowLen)
+
+// HTF EMAs (Requested from M15)
+htfFast = request.security(syminfo.tickerid, htf, ta.ema(close, fastLen))
+htfSlow = request.security(syminfo.tickerid, htf, ta.ema(close, slowLen))
+
+// Bias Logic
+htfBullish = htfFast > htfSlow
+htfBearish = htfFast < htfSlow
+
+// Signals
+buySignal = ta.crossover(fastEMA, slowEMA) and htfBullish
+sellSignal = ta.crossunder(fastEMA, slowEMA) and htfBearish
+
+// Plotting
+plot(fastEMA, color=color.blue, title="9 EMA")
+plot(slowEMA, color=color.orange, title="21 EMA")
+
+// Visualizing HTF Trend
+bgcolor(htfBullish ? color.new(color.green, 90) : color.new(color.red, 90))
+
+plotshape(buySignal, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small)
+plotshape(sellSignal, style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small)
