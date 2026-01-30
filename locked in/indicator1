@@ -1,0 +1,60 @@
+//@version=5
+strategy("Jujuie Pro: 9/21 Entry - 5/9 Exit", overlay=true, initial_capital=1000)
+
+// --- Inputs ---
+ema5Len  = input.int(5, "Exit EMA (5)")
+ema9Len  = input.int(9, "Fast EMA (9)")
+ema21Len = input.int(21, "Slow EMA (21)")
+
+// --- EMA Calculations ---
+ema5  = ta.ema(close, ema5Len)
+ema9  = ta.ema(close, ema9Len)
+ema21 = ta.ema(close, ema21Len)
+
+// --- State Variables ---
+var float entrySL = na
+
+// --- Entry Logic (9/21 Cross) ---
+longCondition  = ta.crossover(ema9, ema21)
+shortCondition = ta.crossunder(ema9, ema21)
+
+// --- Exit Logic (5/9 Cross) ---
+// We only want to exit if we are already in a trade
+longExit  = strategy.position_size > 0 and ta.crossunder(ema5, ema9)
+shortExit = strategy.position_size < 0 and ta.crossover(ema5, ema9)
+
+// --- Strategy Execution ---
+// LONG SETUP
+if (longCondition)
+    entrySL := low // Set SL at the low of the crossover candle
+    strategy.entry("Long", strategy.long)
+
+if (longExit)
+    strategy.close("Long", comment="5/9 Exit")
+
+// SHORT SETUP
+if (shortCondition)
+    entrySL := high // Set SL at the high of the crossover candle
+    strategy.entry("Short", strategy.short)
+
+if (shortExit)
+    strategy.close("Short", comment="5/9 Exit")
+
+// Apply Stop Loss at Crossover Point
+if (strategy.position_size != 0)
+    strategy.exit("SL", "Long", stop=entrySL)
+    strategy.exit("SL", "Short", stop=entrySL)
+
+// --- Visual Labels ---
+// Entry Labels
+plotshape(longCondition,  title="Long Entry Label",  text="ENTRY", style=shape.labelup,   location=location.belowbar, color=color.green, textcolor=color.white, size=size.small)
+plotshape(shortCondition, title="Short Entry Label", text="ENTRY", style=shape.labeldown, location=location.abovebar, color=color.red,   textcolor=color.white, size=size.small)
+
+// Exit Labels
+plotshape(longExit,  title="Long Exit Label",  text="EXIT", style=shape.labeldown, location=location.abovebar, color=color.orange, textcolor=color.white, size=size.small)
+plotshape(shortExit, title="Short Exit Label", text="EXIT", style=shape.labelup,   location=location.belowbar, color=color.orange, textcolor=color.white, size=size.small)
+
+// --- Plot EMAs ---
+plot(ema5,  color=color.white, title="5 EMA")
+plot(ema9,  color=color.blue,  title="9 EMA")
+plot(ema21, color=color.orange, title="21 EMA")
