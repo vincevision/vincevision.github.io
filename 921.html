@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VinceVision Ultimate Scanner</title>
+    <style>
+        :root { --bg: #0b0e11; --card: #1e2329; --text: #eaecef; --buy: #0ecb81; --sell: #f6465d; --accent: #f0b90b; --border: #353945; }
+        body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1300px; margin: 0 auto; }
+        
+        header { 
+            display: flex; justify-content: space-between; align-items: center; 
+            background: var(--card); padding: 15px 25px; border-radius: 12px; margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .controls { display: flex; gap: 15px; align-items: center; }
+        select { 
+            background: #2b3139; color: white; border: 1px solid var(--border); 
+            padding: 8px 12px; border-radius: 6px; outline: none; cursor: pointer; font-size: 14px;
+        }
+
+        .status-box { font-size: 13px; display: flex; align-items: center; gap: 8px; }
+        .dot { height: 8px; width: 8px; background: #5e6673; border-radius: 50%; }
+        .dot.online { background: var(--buy); box-shadow: 0 0 8px var(--buy); }
+
+        table { width: 100%; border-collapse: separate; border-spacing: 0 5px; }
+        th { text-align: left; padding: 12px 20px; color: #848e9c; font-size: 13px; text-transform: uppercase; }
+        tr.signal-row { background: var(--card); }
+        td { padding: 12px 20px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        td:first-child { border-left: 1px solid var(--border); border-radius: 8px 0 0 8px; }
+        td:last-child { border-right: 1px solid var(--border); border-radius: 0 8px 8px 0; }
+
+        .badge { padding: 4px 10px; border-radius: 4px; font-weight: bold; font-size: 11px; }
+        .buy { background: rgba(14, 203, 129, 0.15); color: var(--buy); }
+        .sell { background: rgba(246, 70, 93, 0.15); color: var(--sell); }
+        
+        .loader { color: var(--accent); font-size: 12px; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h2 style="margin:0; color:var(--accent);">VinceVision 9/21 Scanner</h2>
+            <div class="status-box">
+                <span id="dot" class="dot"></span> 
+                <span id="status">Connecting...</span>
+                <span id="scanProgress" class="loader"></span>
+            </div>
+        </div>
+
+        <div class="controls">
+            <label>Scan Timeframe:</label>
+            <select id="tfSelect" onchange="restartScanner()">
+                <option value="60">1 Minute</option>
+                <option value="120">2 Minutes</option>
+                <option value="180">3 Minutes</option>
+                <option value="300">5 Minutes</option>
+                <option value="600">10 Minutes</option>
+                <option value="900">15 Minutes</option>
+                <option value="1800">30 Minutes</option>
+                <option value="3600">1 Hour</option>
+                <option value="7200">2 Hours</option>
+                <option value="14400">4 Hours</option>
+                <option value="28800">8 Hours</option>
+                <option value="86400">1 Day (Daily)</option>
+            </select>
+            <button onclick="clearTable()" style="background:none; border:1px solid #5e6673; color:white; padding:5px 10px; border-radius:4px; cursor:pointer;">Clear List</button>
+        </div>
+    </header>
+
+    <table id="scannerTable">
+        <thead>
+            <tr>
+                <th>Market</th>
+                <th>Signal</th>
+                <th>Price</th>
+                <th>EMA 9/21 Status</th>
+                <th>Time Detected</th>
+            </tr>
+        </thead>
+        <tbody id="signalList"></tbody>
+    </table>
+</div>
+
+<script>
+    const APP_ID = 1089;
+    let socket;
+    let activeSymbols = [];
+    let currentTF = 60;
+    let isScanning = false;
+
+    function init() {
+        socket = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${APP_ID}`);
+
+        socket.onopen = () => {
+            document.getElementById('status').innerText = "Fetching Markets...";
+            document.getElementById('dot').classList.add('online');
+            socket.send(JSON.stringify({ active_symbols: "brief", product_type: "basic" }));
+        };
+
+        socket.onmessage = (msg) => {
+            const data = JSON.parse(msg.data);
+
+            if (data.msg_type === 'active_symbols') {
+                // Filter for common trading markets
+                activeSymbols = data.active_symbols.filter(s => 
+                    s.market === 'synthetic_index' || 
+                    s.market === 'forex' || 
+                    s.market === 'indices' || 
+                    s.market === 'cryptocurrency'
+                );
+                startScanning();
+            }
+
+            if (data.msg_type === 'candles') {
+                processLogic(data.echo_req.ticks_history, data.candles);
+            }
+        };
+
+        socket.onclose = () => {
+            document.getElementById('dot').classList.remove('online');
+            setTimeout(init, 3000);
+        };
+    }
+
+    function startScanning() {
+        if (isScanning) return;
+        isScanning = true;
+        
+        let count = 0;
+        activeSymbols.forEach((symbol, index) => {
+            // Staggered delay to prevent API flooding
+            setTimeout(() => {
+                if(socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        ticks_history: symbol.symbol,
+                        count: 50, // Need enough for EMA 21
+                        end: "latest",
+                        granularity: parseInt(currentTF),
+                        style: "candles"
+                    }));
+                    count++;
+                    document.getElementById('scanProgress').innerText = `| Progress: ${Math.round((count/activeSymbols.length)*100)}%`;
+                    if(count === activeSymbols.length) isScanning = false;
+                }
+            }, index * 150); 
+        });
+    }
+
+    function restartScanner() {
+        currentTF = document.getElementById('tfSelect').value;
+        clearTable();
+        startScanning();
+    }
+
+    function clearTable() {
+        document.getElementById('signalList').innerHTML = "";
+    }
+
+    function calculateEMA(data, period) {
+        const k = 2 / (period + 1);
+        let ema = [data[0]];
+        for (let i = 1; i < data.length; i++) {
+            ema.push(data[i] * k + ema[i - 1] * (1 - k));
+        }
+        return ema;
+    }
+
+    function processLogic(symbol, candles) {
+        if (!candles || candles.length < 22) return;
+        
+        const closes = candles.map(c => parseFloat(c.close));
+        const ema9 = calculateEMA(closes, 9);
+        const ema21 = calculateEMA(closes, 21);
+
+        const last = closes.length - 1;
+        const prev = last - 1;
+
+        // Entry Logic (9/21 Crossover)
+        const isLong = ema9[prev] <= ema21[prev] && ema9[last] > ema21[last];
+        const isShort = ema9[prev] >= ema21[prev] && ema9[last] < ema21[last];
+
+        if (isLong || isShort) {
+            updateUI(symbol, isLong ? 'BUY' : 'SELL', closes[last], ema9[last], ema21[last]);
+        }
+    }
+
+    function updateUI(market, type, price, e9, e21) {
+        const list = document.getElementById('signalList');
+        const time = new Date().toLocaleTimeString();
+        
+        const row = document.createElement('tr');
+        row.className = 'signal-row';
+        row.innerHTML = `
+            <td><strong>${market.replace('_', ' ')}</strong></td>
+            <td><span class="badge ${type.toLowerCase()}">${type}</span></td>
+            <td>${price.toFixed(4)}</td>
+            <td style="font-size:12px; color:#848e9c">E9: ${e9.toFixed(2)} / E21: ${e21.toFixed(2)}</td>
+            <td>${time}</td>
+        `;
+        list.prepend(row);
+        
+        // Limit table to 50 latest signals to prevent browser lag
+        if (list.children.length > 50) list.lastElementChild.remove();
+    }
+
+    init();
+</script>
+</body>
+</html>
