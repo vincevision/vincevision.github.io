@@ -1,0 +1,97 @@
+//@version=5
+strategy("VinceVision 9/21 + PSAR Guard", overlay=true, initial_capital=1000)
+
+// ==========================================
+// --- PSAR Inputs (from Alex Orekhov) ---
+// ==========================================
+const string psarGroup = 'PSAR Calculation'
+start      = input.float(0.02, step = 0.001, title = 'PSAR Start', group = psarGroup)
+increment  = input.float(0.02, step = 0.001, title = 'PSAR Increment', group = psarGroup)
+maximum    = input.float(0.2, step = 0.01, title = 'PSAR Maximum', group = psarGroup)
+
+const string psarVisual = 'PSAR Visuals'
+showPsarLabels = input.bool(false, title = 'Show PSAR Buy/Sell Labels', group = psarVisual)
+highlightState = input.bool(true, title = 'Highlight Trend State (Background)', group = psarVisual)
+
+// ==========================================
+// --- EMA Inputs ---
+// ==========================================
+const string emaGroup = 'EMA Settings'
+ema5Len  = input.int(5, "Exit EMA (5)", group = emaGroup)
+ema9Len  = input.int(9, "Fast EMA (9)", group = emaGroup)
+ema21Len = input.int(21, "Slow EMA (21)", group = emaGroup)
+
+// ==========================================
+// --- Calculations ---
+// ==========================================
+// EMA Calculations
+ema5  = ta.ema(close, ema5Len)
+ema9  = ta.ema(close, ema9Len)
+ema21 = ta.ema(close, ema21Len)
+
+// PSAR Calculations
+psar = ta.sar(start, increment, maximum)
+dir = psar < close ? 1 : -1
+
+// ==========================================
+// --- Strategy Logic (9/21 Entry, 5/9 Exit) ---
+// ==========================================
+var float entrySL = na
+
+// Entry Logic
+longCondition  = ta.crossover(ema9, ema21)
+shortCondition = ta.crossunder(ema9, ema21)
+
+// Exit Logic
+longExit  = strategy.position_size > 0 and ta.crossunder(ema5, ema9)
+shortExit = strategy.position_size < 0 and ta.crossover(ema5, ema9)
+
+// Execution
+if (longCondition)
+    entrySL := low
+    strategy.entry("Long", strategy.long)
+
+if (longExit)
+    strategy.close("Long", comment="5/9 Exit")
+
+if (shortCondition)
+    entrySL := high
+    strategy.entry("Short", strategy.short)
+
+if (shortExit)
+    strategy.close("Short", comment="5/9 Exit")
+
+// Stop Loss Management
+if (strategy.position_size != 0)
+    strategy.exit("SL", "Long", stop=entrySL)
+    strategy.exit("SL", "Short", stop=entrySL)
+
+// ==========================================
+// --- Visuals & Plotting ---
+// ==========================================
+// 1. Plot EMAs
+plot(ema5,  color=color.new(color.white, 50), title="5 EMA (Exit Line)")
+plot(ema9,  color=color.blue,  title="9 EMA", linewidth=2)
+plot(ema21, color=color.orange, title="21 EMA", linewidth=2)
+
+// 2. Plot PSAR Dots
+psarColor = dir == 1 ? #3388bb : #fdcc02
+psarPlot = plot(psar, title = 'PSAR Dots', style = plot.style_circles, linewidth = 2, color = psarColor)
+
+// 3. PSAR Background Filling (Trade State)
+midPricePlot = plot(ohlc4, title = '', display = display.none, editable = false)
+fillColor = highlightState ? (dir == 1 ? color.new(color.green, 90) : color.new(color.red, 90)) : na
+fill(midPricePlot, psarPlot, title = 'Trade State Filling', color = fillColor)
+
+// 4. Entry/Exit Labels
+plotshape(longCondition,  text="ENTRY", style=shape.labelup,   location=location.belowbar, color=color.green,  textcolor=color.white, size=size.small)
+plotshape(shortCondition, text="ENTRY", style=shape.labeldown, location=location.abovebar, color=color.red,    textcolor=color.white, size=size.small)
+
+plotshape(longExit,  text="EXIT",  style=shape.labeldown, location=location.abovebar, color=color.orange, textcolor=color.white, size=size.small)
+plotshape(shortExit, text="EXIT",  style=shape.labelup,   location=location.belowbar, color=color.orange, textcolor=color.white, size=size.small)
+
+// 5. PSAR Buy/Sell Labels (Optional)
+buySignal = dir == 1 and dir[1] == -1
+sellSignal = dir == -1 and dir[1] == 1
+plotshape(buySignal and showPsarLabels ? psar : na,  text = 'PSAR Buy',  location = location.absolute, style = shape.labelup,   size = size.tiny, color = color.green, textcolor = color.white)
+plotshape(sellSignal and showPsarLabels ? psar : na, text = 'PSAR Sell', location = location.absolute, style = shape.labeldown, size = size.tiny, color = color.red,   textcolor = color.white)
