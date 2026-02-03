@@ -1,0 +1,71 @@
+//+------------------------------------------------------------------+
+//|                                     VinceVision_FINAL_MASTER.mq5 |
+//+------------------------------------------------------------------+
+#property strict
+#include <Trade\Trade.mqh>
+
+// --- Inputs ---
+input int    InpEMA5       = 5;    // Exit Helper
+input int    InpEMA9       = 9;    // Fast Trend
+input int    InpEMA21      = 21;   // Slow Trend
+input double InpPSARStep   = 0.02; 
+input double InpPSARMax    = 0.2;
+input double InpFixedLot   = 1.0;  
+input double InpTargetUSD  = 50.0; // Scalp Target
+
+// --- Globals ---
+int hEMA5, hEMA9, hEMA21, hPSAR;
+CTrade trade;
+uint magicScalp = 111, magicRunner = 222;
+datetime lastTradeTime = 0;
+
+int OnInit() {
+    hEMA5  = iMA(_Symbol, _Period, InpEMA5,  0, MODE_EMA, PRICE_CLOSE);
+    hEMA9  = iMA(_Symbol, _Period, InpEMA9,  0, MODE_EMA, PRICE_CLOSE);
+    hEMA21 = iMA(_Symbol, _Period, InpEMA21, 0, MODE_EMA, PRICE_CLOSE);
+    hPSAR  = iSAR(_Symbol, _Period, InpPSARStep, InpPSARMax);
+    return(INIT_SUCCEEDED);
+}
+
+void OnTick() {
+    double e5[], e9[], e21[], psar[];
+    ArraySetAsSeries(e5,true); ArraySetAsSeries(e9,true); ArraySetAsSeries(e21,true); ArraySetAsSeries(psar,true);
+    
+    if(CopyBuffer(hEMA5,0,0,3,e5)<3 || CopyBuffer(hEMA9,0,0,3,e9)<3 || CopyBuffer(hEMA21,0,0,3,e21)<3 || CopyBuffer(hPSAR,0,0,2,psar)<2) return;
+
+    bool longSignal  = (e9[1] > e21[1] && e9[2] <= e21[2]) && (psar[0] < SymbolInfoDouble(_Symbol, SYMBOL_BID));
+    bool shortSignal = (e9[1] < e21[1] && e9[2] >= e21[2]) && (psar[0] > SymbolInfoDouble(_Symbol, SYMBOL_ASK));
+
+    // --- Entry ---
+    if(lastTradeTime != iTime(_Symbol, _Period, 0) && PositionsTotal() == 0) {
+        if(longSignal || shortSignal) {
+            double sl = longSignal ? iLow(_Symbol, _Period, 1) : iHigh(_Symbol, _Period, 1);
+            
+            trade.SetExpertMagicNumber(magicScalp);
+            if(longSignal) trade.Buy(InpFixedLot, _Symbol, 0, sl, 0, "Scalp");
+            else           trade.Sell(InpFixedLot, _Symbol, 0, sl, 0, "Scalp");
+
+            trade.SetExpertMagicNumber(magicRunner);
+            if(longSignal) trade.Buy(InpFixedLot, _Symbol, 0, sl, 0, "Runner");
+            else           trade.Sell(InpFixedLot, _Symbol, 0, sl, 0, "Runner");
+            
+            lastTradeTime = iTime(_Symbol, _Period, 0);
+        }
+    }
+
+    // --- Exit Management ---
+    for(int i=PositionsTotal()-1; i>=0; i--) {
+        ulong t = PositionGetTicket(i);
+        if(PositionSelectByTicket(t)) {
+            uint m = (uint)PositionGetInteger(POSITION_MAGIC);
+            double p = PositionGetDouble(POSITION_PROFIT);
+            long type = PositionGetInteger(POSITION_TYPE);
+
+            if(m == magicScalp && p >= InpTargetUSD) trade.PositionClose(t);
+            
+            // Fast Runner Exit: Exit if 5 crosses back over 9
+            bool exitRunner = (type == POSITION_TYPE_BUY) ? (e5[1] < e9[1]) : (e5[1] > e9[1]);
+            if(m == magicRunner && exitRunner) trade.PositionClose(t);
+        }
+    }
+}
