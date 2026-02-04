@@ -1,0 +1,49 @@
+//@version=5
+indicator("VinceVision Master Pro [9/21 + HTF]", overlay=true)
+
+// --- Inputs ---
+fastLen = input.int(9, "Fast EMA (Entry)", minval=1)
+slowLen = input.int(21, "Slow EMA (Entry)", minval=1)
+exitLen = input.int(5, "Exit EMA (Fast Exit)", minval=1)
+htfRes  = input.timeframe("15", "Higher Timeframe Filter")
+
+// --- Calculations ---
+// Local EMAs
+ema5  = ta.ema(close, exitLen)
+ema9  = ta.ema(close, fastLen)
+ema21 = ta.ema(close, slowLen)
+
+// HTF EMAs
+htfEMA9  = request.security(syminfo.tickerid, htfRes, ta.ema(close, fastLen))
+htfEMA21 = request.security(syminfo.tickerid, htfRes, ta.ema(close, slowLen))
+
+// --- Logic ---
+htfBullish = htfEMA9 > htfEMA21
+htfBearish = htfEMA9 < htfEMA21
+
+longCross  = ta.crossover(ema9, ema21) and htfBullish
+shortCross = ta.crossunder(ema9, ema21) and htfBearish
+
+// Runner Exit Logic (5/9 Cross)
+exitLong  = ta.crossunder(ema5, ema9)
+exitShort = ta.crossover(ema5, ema9)
+
+// --- Visuals ---
+plot(ema9, color=color.new(color.blue, 0), title="9 EMA")
+plot(ema21, color=color.new(color.orange, 0), title="21 EMA", linewidth=2)
+plot(ema5, color=color.new(color.gray, 50), title="5 EMA (Exit)")
+
+// Background color based on HTF Bias
+bgcolor(htfBullish ? color.new(color.green, 90) : htfBearish ? color.new(color.red, 90) : color.new(color.gray, 90))
+
+// Signal Shapes
+plotshape(longCross,  title="Entry Long",  style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, text="PRO BUY")
+plotshape(shortCross, title="Entry Short", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small, text="PRO SELL")
+
+// Exit Shapes (For the Runner)
+plotshape(exitLong,  title="Exit Long",  style=shape.xcross, location=location.abovebar, color=color.yellow, size=size.tiny, text="RUNNER EXIT")
+plotshape(exitShort, title="Exit Short", style=shape.xcross, location=location.belowbar, color=color.yellow, size=size.tiny, text="RUNNER EXIT")
+
+// --- Alerts ---
+alertcondition(longCross,  "VinceVision Long",  "9/21 Cross + HTF Bullish")
+alertcondition(shortCross, "VinceVision Short", "9/21 Cross + HTF Bearish")
