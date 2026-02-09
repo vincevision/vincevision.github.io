@@ -1,0 +1,118 @@
+//@version=5
+indicator("Combined: VinceVision & OB/OS [Neat]", overlay=true)
+
+// ═════════════════════════════════════════════════════════════════════════════
+//      SETTINGS & INPUTS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// --- Group 1: VinceVision (Trend Strategy) ---
+grp_vv      = "1. VinceVision (Trend Pro)"
+show_vv     = input.bool(true, "Show Trend Signals & EMAs", group=grp_vv)
+show_bg     = input.bool(true, "Show Trend Background", group=grp_vv)
+len_fast    = input.int(9, "Fast EMA Length", group=grp_vv)
+len_slow    = input.int(21, "Slow EMA Length", group=grp_vv)
+len_exit    = input.int(5, "Exit EMA Length", group=grp_vv)
+res_htf     = input.timeframe("15", "HTF Filter", group=grp_vv, tooltip="Higher Timeframe used to filter trends")
+
+// --- Group 2: OB/OS (Reversal Strategy) ---
+grp_ob      = "2. Overbought/Oversold (Reversals)"
+show_ob     = input.bool(true, "Show Reversal Signals", group=grp_ob)
+color_bars  = input.bool(true, "Color Bars based on Momentum", group=grp_ob)
+len_ob      = input.int(5, "Calculation Length", group=grp_ob)
+
+// ═════════════════════════════════════════════════════════════════════════════
+//      CALCULATIONS: VINCEVISION
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Current Timeframe EMAs
+ema_exit = ta.ema(close, len_exit)
+ema_fast = ta.ema(close, len_fast)
+ema_slow = ta.ema(close, len_slow)
+
+// Higher Timeframe EMAs (Non-Repainting Security)
+htf_fast = request.security(syminfo.tickerid, res_htf, ta.ema(close, len_fast)[1], lookahead=barmerge.lookahead_on)
+htf_slow = request.security(syminfo.tickerid, res_htf, ta.ema(close, len_slow)[1], lookahead=barmerge.lookahead_on)
+
+// Trend Logic
+is_htf_bull = htf_fast > htf_slow
+is_htf_bear = htf_fast < htf_slow
+
+// Signal Logic
+vv_buy  = ta.crossover(ema_fast, ema_slow) and is_htf_bull
+vv_sell = ta.crossunder(ema_fast, ema_slow) and is_htf_bear
+
+// Runner Exit Logic
+vv_exit_L = ta.crossunder(ema_exit, ema_fast)
+vv_exit_S = ta.crossover(ema_exit, ema_fast)
+
+// ═════════════════════════════════════════════════════════════════════════════
+//      CALCULATIONS: OB/OS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// Custom Average
+src_avg = (high + low + close * 2) / 4
+
+// Statistical Calculation
+ob_ema  = ta.ema(src_avg, len_ob)
+ob_std  = ta.stdev(src_avg, len_ob)
+ob_osc  = (src_avg - ob_ema) * 100 / ob_std
+ob_smth = ta.ema(ob_osc, len_ob)
+
+// Directional Smoothing
+ob_up   = ta.ema(ta.ema(ob_smth, len_ob), len_ob)
+ob_down = ta.ema(ob_up, len_ob)
+
+// Visual Logic for Bar Coloring
+hist_o  = ob_up < ob_down ? ob_up : ob_down
+hist_c  = ob_up < ob_down ? ob_down : ob_up
+is_up   = ob_up > ob_down
+is_dn   = ob_up < ob_down
+
+// Bar Color Logic
+col_gold  = color.new(#FFD700, 0)
+col_green = color.new(#008000, 0)
+col_red   = color.new(#FF0000, 0)
+
+bar_col = hist_o[1] < hist_o and hist_c < hist_c[1] ? col_gold : is_up ? col_green : col_red
+
+// Signal Logic
+ob_sig_buy  = ta.crossover(ob_up, ob_down)
+ob_sig_sell = ta.crossunder(ob_up, ob_down)
+
+// ═════════════════════════════════════════════════════════════════════════════
+//      PLOTTING & VISUALS
+// ═════════════════════════════════════════════════════════════════════════════
+
+// 1. Bar Coloring
+barcolor(color_bars ? bar_col : na, title="OB/OS Bar Color")
+
+// 2. Background (Trend Bias)
+bg_col = is_htf_bull ? color.new(color.green, 90) : is_htf_bear ? color.new(color.red, 90) : color.new(color.gray, 90)
+bgcolor(show_bg ? bg_col : na, title="Trend Background")
+
+// 3. EMAs (VinceVision)
+plot(show_vv ? ema_fast : na, "Fast EMA", color.new(color.blue, 0))
+plot(show_vv ? ema_slow : na, "Slow EMA", color.new(color.orange, 0), linewidth=2)
+plot(show_vv ? ema_exit : na, "Exit EMA", color.new(color.gray, 50))
+
+// 4. Signals: VinceVision (Triangles)
+plotshape(show_vv and vv_buy,  "Trend Buy",  shape.triangleup,   location.belowbar, color.green, size=size.small, text="PRO\nBUY", textcolor=color.green)
+plotshape(show_vv and vv_sell, "Trend Sell", shape.triangledown, location.abovebar, color.red,   size=size.small, text="PRO\nSELL", textcolor=color.red)
+
+// 5. Exits: VinceVision (X-Cross)
+plotshape(show_vv and vv_exit_L, "Runner Exit L", shape.xcross, location.abovebar, color.new(color.yellow, 20), size=size.tiny)
+plotshape(show_vv and vv_exit_S, "Runner Exit S", shape.xcross, location.belowbar, color.new(color.yellow, 20), size=size.tiny)
+
+// 6. Signals: OB/OS (Circles)
+// We use Circles here to distinguish them from the Triangles of the Trend strategy
+plotshape(show_ob and ob_sig_buy,  "OB Buy",  shape.circle, location.bottom, color.lime, size=size.tiny, text="OB", textcolor=color.lime)
+plotshape(show_ob and ob_sig_sell, "OB Sell", shape.circle, location.top,    color.red,  size=size.tiny, text="OB", textcolor=color.red)
+
+// ═════════════════════════════════════════════════════════════════════════════
+//      ALERTS
+// ═════════════════════════════════════════════════════════════════════════════
+
+alertcondition(vv_buy,      "Trend Buy (VV)",  "VinceVision Buy Signal")
+alertcondition(vv_sell,     "Trend Sell (VV)", "VinceVision Sell Signal")
+alertcondition(ob_sig_buy,  "Reversal Buy (OB)",  "Overbought/Oversold Buy Signal")
+alertcondition(ob_sig_sell, "Reversal Sell (OB)", "Overbought/Oversold Sell Signal")
