@@ -1,58 +1,46 @@
-BUY WHEN 9 and 21 crossover and trail, when 5 crosses over 9 close trade as for sell vice versa
-Use overbought over sold indicator for early signals
-use macd for added confluence
+### **Step 1: The Setup (The Crossover)**
 
+Wait for the **9 EMA** to cross the **21 EMA**.
 
+* **Bullish:** 9 crosses above 21.
+* **Bearish:** 9 crosses below 21.
+* **Rule:** The candle **must close** to confirm the cross. If the lines are just touching, it is not a trade yet.
 
-## **The Setup: Identifying the "Stretch"**
+### **Step 2: The RSI Filter (The Fuel)**
 
-### **1. High Timeframe (HTF) Context**
+Look at the RSI (14) immediately after the candle closes.
 
-* **Action:** Mark the High, Low, and Midpoint of the previous HTF candle (e.g., Daily or 4H).
-* **Purpose:** These levels act as your primary magnets and psychological barriers.
+* **For a Buy:** RSI must be **above 50** (shows momentum is up).
+* **For a Sell:** RSI must be **below 50** (shows momentum is down).
+* *If RSI is flat at 50, skip the trade; there is no power.*
 
-### **2. Lower Timeframe (LTF) Alignment**
+### **Step 3: The Parabolic SAR (The Trigger & SL)**
 
-Drop down to your execution timeframe (e.g., 15M or 5M) and observe the **Bollinger Bands**.
+Check the dots.
 
-* **The Signal:** Look for the price to touch or pierce the **Outer Bollinger Band** while simultaneously hitting the HTF High or Low you marked.
-* **The Expectation:** When price hits the outer band and an HTF level, we expect a retrace toward the **Midband** (the 20-period SMA).
-
----
-
-## **The Confirmation: Adding Confluence**
-
-To avoid "catching a falling knife," you require two layers of confirmation:
-
-### **3. Overbought/Oversold (OBOS) Check**
-
-* **Condition:** Your indicator (RSI, Stochastic, or Williams %R) must be in the extreme zones.
-* **Bullish:** Price at lower outer band + Indicator Oversold (<30).
-* **Bearish:** Price at upper outer band + Indicator Overbought (>70).
-
-### **4. The "Trigger" (The Crossover)**
-
-* **Action:** Wait for the **9 MA to cross the 21 MA**.
-* **Entry:** Enter the trade only *after* the crossover occurs. This ensures that the momentum has actually shifted in your favor.
+* **For a Buy:** A dot must appear **below** the candle.
+* **For a Sell:** A dot must appear **above** the candle.
+* **Action:** Place your **Stop Loss (SL)** exactly on that current SAR dot.
 
 ---
 
-## **Trade Management: Risk & Reward**
+### **Step 4: The 5 EMA Exit (The "Scout")**
 
-| Element | Placement Logic |
+Add the **5 EMA** to your chart. You use this strictly for managing the exit.
+
+* **How to use it:** Once you are in the trade and the price is moving in your favor, watch the 5 EMA.
+* **Exit Signal:** Close the trade if the **price crosses and closes on the opposite side of the 5 EMA**.
+* *Example:* If you are in a Buy, and a candle closes **below** the 5 EMA, get out. This gets you out faster than waiting for a 9/21 re-cross.
+
+
+
+---
+
+### **The "Quick-Look" Checklist**
+
+| Sequence | What to look for |
 | --- | --- |
-| **Entry** | Immediate market order on the 9/21 MA Cross. |
-| **Stop Loss (SL)** | Just outside the **Outer Bollinger Band** (to allow for one last wick). |
-| **Take Profit (TP)** | The nearest **Supply/Demand zone** that aligns with the HTF levels on your LTF chart. |
-
----
-
-## **Quick Checklist for Your Journal**
-
-* [ ] Is price at an HTF High/Low?
-* [ ] Is price touching the LTF Outer Bollinger Band?
-* [ ] Is the OBOS indicator showing an extreme?
-* [ ] Has the 9 MA crossed the 21 MA?
-* [ ] Is the Reward-to-Risk ratio at least 1.5:1?
-
-> **Pro-Tip:** If the Bollinger Bands are "walking the band" (price stays glued to the outer band while it expands), do not enter. Wait for the 9/21 crossover to prove the expansion has ended.
+| **1. ENTRY** | 9/21 Cross (Confirmed) |
+| **2. CONFIRM** | RSI > 50 (Buy) or < 50 (Sell) |
+| **3. PROTECT** | Set SL at the Parabolic SAR dot |
+| **4. EXIT** | Price closes past the 5 EMA |
