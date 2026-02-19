@@ -1,0 +1,130 @@
+//@version=5
+indicator("HTF Range & LTF Zones with MA Cross", overlay=true, max_lines_count=500, max_boxes_count=500, max_labels_count=500)
+
+// ==========================================
+// 1. INPUTS
+// ==========================================
+grp_htf = "Higher Timeframe Settings"
+htf_tf = input.timeframe("240", "HTF Selection (e.g. 4H)", group=grp_htf)
+show_htf_box = input.bool(true, "Show HTF Range Box", group=grp_htf)
+
+grp_ma = "Moving Averages"
+ma_fast_len = input.int(9, "Fast MA", group=grp_ma)
+ma_slow_len = input.int(21, "Slow MA", group=grp_ma)
+
+grp_sd = "Supply & Demand / BOS"
+pivot_len = input.int(5, "Pivot Lookback", group=grp_sd)
+show_bos = input.bool(true, "Show BOS", group=grp_sd)
+
+// ==========================================
+// 2. HTF DATA CALCULATIONS
+// ==========================================
+// We get the [1] index to ensure we get the LAST COMPLETED candle, not the currently forming one.
+// We use lookahead_on to get the data at the start of the period for drawing purposes.
+[htf_h, htf_l, htf_t] = request.security(syminfo.tickerid, htf_tf, [high[1], low[1], time[1]], lookahead=barmerge.lookahead_on)
+
+// Detect if we are in a new HTF session
+var float current_htf_high = na
+var float current_htf_low = na
+var int current_htf_time = 0
+
+bool new_htf_bar = htf_t != current_htf_time
+
+if new_htf_bar
+    current_htf_high := htf_h
+    current_htf_low := htf_l
+    current_htf_time := int(htf_t)
+
+// ==========================================
+// 3. MOVING AVERAGES & CROSSOVERS
+// ==========================================
+ma9 = ta.ema(close, ma_fast_len)
+ma21 = ta.ema(close, ma_slow_len)
+
+plot(ma9, color=color.new(color.blue, 0), title="MA 9")
+plot(ma21, color=color.new(color.orange, 0), title="MA 21")
+
+ma_cross_up = ta.crossover(ma9, ma21)
+ma_cross_dn = ta.crossunder(ma9, ma21)
+
+// Plot Signals
+plotshape(ma_cross_up, style=shape.labelup, location=location.belowbar, color=color.green, text="BUY", textcolor=color.white, size=size.tiny)
+plotshape(ma_cross_dn, style=shape.labeldown, location=location.abovebar, color=color.red, text="SELL", textcolor=color.white, size=size.tiny)
+
+// ==========================================
+// 4. DRAWING THE HTF PLAYGROUND
+// ==========================================
+var box htf_box_id = na
+
+// Only update the box on the last bar to keep chart clean, or if new HTF bar detected
+if show_htf_box and barstate.islast
+    box.delete(htf_box_id)
+    // Draw box from HTF start time to future
+    htf_box_id := box.new(current_htf_time, current_htf_high, time + timeframe.multiplier*60000*30, current_htf_low, xloc=xloc.bar_time, border_color=color.new(color.gray, 50), bgcolor=color.new(color.gray, 90))
+
+// ==========================================
+// 5. LTF SUPPLY & DEMAND (WITHIN RANGE ONLY)
+// ==========================================
+
+// Arrays to store zone boxes so we can delete them when a NEW HTF candle starts
+var box[] supply_boxes = array.new_box()
+var box[] demand_boxes = array.new_box()
+
+// Clear old zones if a new HTF candle has started
+if new_htf_bar
+    if array.size(supply_boxes) > 0
+        for i = 0 to array.size(supply_boxes) - 1
+            box.delete(array.get(supply_boxes, i))
+        array.clear(supply_boxes)
+    
+    if array.size(demand_boxes) > 0
+        for i = 0 to array.size(demand_boxes) - 1
+            box.delete(array.get(demand_boxes, i))
+        array.clear(demand_boxes)
+
+// Calculate Pivots
+ph = ta.pivothigh(high, pivot_len, pivot_len)
+pl = ta.pivotlow(low, pivot_len, pivot_len)
+
+// Logic: Is the current chart timeframe lower than the HTF?
+bool is_ltf = timeframe.in_seconds(timeframe.period) < timeframe.in_seconds(htf_tf)
+
+// Draw Supply (Pivot High)
+if not na(ph) and is_ltf
+    // CRITICAL CHECK: Is this pivot inside the HTF Range?
+    if ph <= current_htf_high and ph >= current_htf_low
+        // Draw Supply Zone
+        b = box.new(time[pivot_len], high[pivot_len], time + timeframe.multiplier*60000*50, low[pivot_len], xloc=xloc.bar_time, bgcolor=color.new(color.red, 80), border_color=color.new(color.red, 50))
+        array.push(supply_boxes, b)
+
+// Draw Demand (Pivot Low)
+if not na(pl) and is_ltf
+    // CRITICAL CHECK: Is this pivot inside the HTF Range?
+    if pl >= current_htf_low and pl <= current_htf_high
+        // Draw Demand Zone
+        b = box.new(time[pivot_len], high[pivot_len], time + timeframe.multiplier*60000*50, low[pivot_len], xloc=xloc.bar_time, bgcolor=color.new(color.green, 80), border_color=color.new(color.green, 50))
+        array.push(demand_boxes, b)
+
+// ==========================================
+// 6. BOS (BREAK OF STRUCTURE)
+// ==========================================
+var float last_ph = na
+var float last_pl = na
+
+if not na(ph)
+    last_ph := ph
+if not na(pl)
+    last_pl := pl
+
+// Bullish BOS
+bool bos_bull = close > last_ph and close[1] <= last_ph and not na(last_ph)
+// Bearish BOS
+bool bos_bear = close < last_pl and close[1] >= last_pl and not na(last_pl)
+
+if show_bos and bos_bull
+    line.new(bar_index, last_ph, bar_index - 10, last_ph, color=color.green, style=line.style_dashed)
+    label.new(bar_index, last_ph, "BOS", color=color.green, style=label.style_none, textcolor=color.green, size=size.tiny)
+
+if show_bos and bos_bear
+    line.new(bar_index, last_pl, bar_index - 10, last_pl, color=color.red, style=line.style_dashed)
+    label.new(bar_index, last_pl, "BOS", color=color.red, style=label.style_none, textcolor=color.red, size=size.tiny)
