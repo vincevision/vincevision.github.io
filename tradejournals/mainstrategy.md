@@ -18,8 +18,8 @@ What I want to keep repeating:
 - Marking the last imbalance before the move and being disciplined about letting it fill
 
 
-##VINCEVISION STRATEGY
-
+## VINCEVISION STRATEGY
+---
 
 
 Below is a complete, repeatable **step‑by‑step guide** for the exact process you described (BOS → mark last imbalance → wait retrace → confirm shift → refine entry zone → target imbalance fill → then target the high price came from).
