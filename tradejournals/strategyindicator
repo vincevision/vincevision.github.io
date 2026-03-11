@@ -1,0 +1,70 @@
+//@version=5
+indicator("Strategy Checklist Table", overlay=true)
+
+// ==========================================
+// ─── INPUTS ───
+// ==========================================
+grp_settings = "Table Settings"
+tablePosInput = input.string("Top Right", "Position", options=["Top Right", "Bottom Right", "Top Left", "Bottom Left", "Middle Right"], group=grp_settings)
+textSizeInput = input.string("Small", "Text Size", options=["Tiny", "Small", "Normal", "Large"], group=grp_settings)
+col_bg        = input.color(color.new(color.black, 50), "Background Color", group=grp_settings)
+col_header    = input.color(color.new(color.blue, 50), "Header Color", group=grp_settings)
+col_text      = input.color(color.white, "Text Color", group=grp_settings)
+
+// ==========================================
+// ─── LOGIC & MAPPING ───
+// ==========================================
+
+// Map user input string to internal position constant
+pos = position.top_right // default
+if tablePosInput == "Top Left"
+    pos := position.top_left
+else if tablePosInput == "Bottom Right"
+    pos := position.bottom_right
+else if tablePosInput == "Bottom Left"
+    pos := position.bottom_left
+else if tablePosInput == "Middle Right"
+    pos := position.middle_right
+
+// Map user input string to internal size constant
+txtSize = size.small // default
+if textSizeInput == "Tiny"
+    txtSize := size.tiny
+else if textSizeInput == "Normal"
+    txtSize := size.normal
+else if textSizeInput == "Large"
+    txtSize := size.large
+/*  */
+// ==========================================
+// ─── TABLE CREATION ───
+// ==========================================
+
+// Initialize the table (2 Columns, 6 Rows)
+var table strategyTable = table.new(pos, 2, 6, border_width=1, border_color=color.new(color.white, 80))
+
+// We only need to draw the table on the very last bar to save resources
+if barstate.islast
+    
+    // --- Header Row ---
+    table.cell(strategyTable, 0, 0, "Step", bgcolor=col_header, text_color=col_text, text_size=txtSize, text_halign=text.align_center)
+    table.cell(strategyTable, 1, 0, "SMC Strategy Rules", bgcolor=col_header, text_color=col_text, text_size=txtSize, text_halign=text.align_center)
+
+    // --- Row 1 ---
+    table.cell(strategyTable, 0, 1, "1", bgcolor=col_bg, text_color=col_text, text_size=txtSize)
+    table.cell(strategyTable, 1, 1, "Identify Liquidity Sweep", bgcolor=col_bg, text_color=col_text, text_size=txtSize, text_halign=text.align_left)
+
+    // --- Row 2 ---
+    table.cell(strategyTable, 0, 2, "2", bgcolor=col_bg, text_color=col_text, text_size=txtSize)
+    table.cell(strategyTable, 1, 2, "Wait for MSS (Break of Structure)", bgcolor=col_bg, text_color=col_text, text_size=txtSize, text_halign=text.align_left)
+
+    // --- Row 3 ---
+    table.cell(strategyTable, 0, 3, "3", bgcolor=col_bg, text_color=col_text, text_size=txtSize)
+    table.cell(strategyTable, 1, 3, "Mark the Order Block", bgcolor=col_bg, text_color=col_text, text_size=txtSize, text_halign=text.align_left)
+
+    // --- Row 4 ---
+    table.cell(strategyTable, 0, 4, "4", bgcolor=col_bg, text_color=col_text, text_size=txtSize)
+    table.cell(strategyTable, 1, 4, "Wait for Price Retracement", bgcolor=col_bg, text_color=col_text, text_size=txtSize, text_halign=text.align_left)
+
+    // --- Row 5 ---
+    table.cell(strategyTable, 0, 5, "5", bgcolor=col_bg, text_color=col_text, text_size=txtSize)
+    table.cell(strategyTable, 1, 5, "Enter on Confirmation", bgcolor=col_bg, text_color=col_text, text_size=txtSize, text_halign=text.align_left)
